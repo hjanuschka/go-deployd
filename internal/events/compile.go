@@ -97,13 +97,27 @@ go 1.21
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/shopspring/decimal v1.3.1
-	golang.org/x/crypto v0.18.0
+	github.com/shopspring/decimal v1.4.0
+	golang.org/x/crypto v0.39.0
 )
 `
 	
 	if err := os.WriteFile(modPath, []byte(modContent), 0644); err != nil {
 		return fmt.Errorf("failed to write go.mod: %w", err)
+	}
+
+	// Create a go.sum file with the required checksums
+	sumPath := filepath.Join(tempDir, "go.sum")
+	sumContent := `github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
+github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME=
+golang.org/x/crypto v0.39.0 h1:SHs+kF4LP+f+p14esP5jAoDpHU8Gu/v9lFRK6IT5imM=
+golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632U=
+`
+	
+	if err := os.WriteFile(sumPath, []byte(sumContent), 0644); err != nil {
+		return fmt.Errorf("failed to write go.sum: %w", err)
 	}
 
 	// Get the Go root and construct the path to the Go executable
