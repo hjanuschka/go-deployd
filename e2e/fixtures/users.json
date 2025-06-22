@@ -1,0 +1,82 @@
+[
+  {
+    "id": "user-1",
+    "name": "Alice Smith",
+    "email": "alice@example.com",
+    "age": 28,
+    "active": true,
+    "role": "admin",
+    "tags": ["developer", "manager"],
+    "profile": {
+      "bio": "Full-stack developer with 5 years experience",
+      "location": "San Francisco",
+      "website": "https://alice.dev"
+    },
+    "createdAt": "2023-01-15T10:30:00Z",
+    "lastLogin": "2024-06-22T09:15:00Z"
+  },
+  {
+    "id": "user-2", 
+    "name": "Bob Johnson",
+    "email": "bob@example.com",
+    "age": 34,
+    "active": true,
+    "role": "user",
+    "tags": ["designer", "frontend"],
+    "profile": {
+      "bio": "UI/UX designer passionate about user experience",
+      "location": "New York",
+      "website": "https://bobdesigns.com"
+    },
+    "createdAt": "2023-02-20T14:45:00Z",
+    "lastLogin": "2024-06-21T16:30:00Z"
+  },
+  {
+    "id": "user-3",
+    "name": "Carol Davis", 
+    "email": "carol@example.com",
+    "age": 31,
+    "active": false,
+    "role": "user",
+    "tags": ["backend", "devops"],
+    "profile": {
+      "bio": "Backend engineer specializing in microservices",
+      "location": "Austin",
+      "website": null
+    },
+    "createdAt": "2023-03-10T08:20:00Z",
+    "lastLogin": "2024-05-15T11:45:00Z"
+  },
+  {
+    "id": "user-4",
+    "name": "David Wilson",
+    "email": "david@example.com", 
+    "age": 25,
+    "active": true,
+    "role": "user",
+    "tags": ["mobile", "react-native"],
+    "profile": {
+      "bio": "Mobile app developer focusing on cross-platform solutions",
+      "location": "Seattle",
+      "website": "https://davidapps.io"
+    },
+    "createdAt": "2023-04-05T12:10:00Z",
+    "lastLogin": "2024-06-22T07:20:00Z"
+  },
+  {
+    "id": "user-5",
+    "name": "Eve Brown",
+    "email": "eve@example.com",
+    "age": 29,
+    "active": true,
+    "role": "admin",
+    "tags": ["security", "backend"],
+    "profile": {
+      "bio": "Security engineer with expertise in web application security",
+      "location": "Boston", 
+      "website": "https://evesec.com"
+    },
+    "createdAt": "2023-05-12T16:55:00Z",
+    "lastLogin": "2024-06-22T10:05:00Z"
+  }
+]

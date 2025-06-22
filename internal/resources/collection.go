@@ -40,7 +40,7 @@ func NewCollection(name string, config *CollectionConfig, db database.DatabaseIn
 	}
 }
 
-func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInterface) (*Collection, error) {
+func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInterface) (Resource, error) {
 	configFile := filepath.Join(configPath, "config.json")
 	data, err := os.ReadFile(configFile)
 	if err != nil {
@@ -52,6 +52,21 @@ func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInter
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 	
+	// Check if this is a user collection (special case)
+	if name == "users" || name == "user" {
+		userCollection := NewUserCollection(name, &config, db)
+		userCollection.configPath = configPath
+		
+		// Load event scripts
+		if err := userCollection.scriptManager.LoadScripts(configPath); err != nil {
+			// Scripts are optional, so don't fail if they don't exist
+			fmt.Printf("Warning: Failed to load scripts for %s: %v\n", name, err)
+		}
+		
+		return userCollection, nil
+	}
+	
+	// Regular collection
 	collection := NewCollection(name, &config, db)
 	collection.configPath = configPath
 	
@@ -426,6 +441,11 @@ func (c *Collection) sanitize(data map[string]interface{}) map[string]interface{
 	}
 	
 	sanitized := make(map[string]interface{})
+	
+	// Always preserve the ID field if provided
+	if id, exists := data["id"]; exists {
+		sanitized["id"] = id
+	}
 	
 	for name, prop := range c.config.Properties {
 		if value, exists := data[name]; exists {

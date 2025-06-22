@@ -127,7 +127,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	
 	// Create context
-	ctx := context.New(req, w, resource, session)
+	ctx := context.New(req, w, resource, session, r.sessions)
 	
 	// Handle the request
 	if err := resource.Handle(ctx); err != nil {

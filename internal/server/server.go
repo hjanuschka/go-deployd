@@ -88,7 +88,7 @@ func New(config *Config) (*Server, error) {
 		DatabaseName:   config.DatabaseName,
 		Development:    config.Development,
 	}
-	s.adminHandler = admin.NewAdminHandler(s.db, s.router, adminConfig)
+	s.adminHandler = admin.NewAdminHandler(s.db, s.router, adminConfig, s.sessions)
 
 	s.setupRoutes()
 

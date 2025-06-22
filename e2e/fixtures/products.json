@@ -1,0 +1,82 @@
+[
+  {
+    "id": "product-1",
+    "name": "Wireless Headphones",
+    "description": "High-quality wireless headphones with noise cancellation",
+    "price": 199.99,
+    "category": "electronics",
+    "inStock": true,
+    "quantity": 150,
+    "rating": 4.5,
+    "reviews": 89,
+    "features": ["bluetooth", "noise-cancellation", "wireless"],
+    "metadata": {
+      "brand": "TechSound",
+      "model": "TS-WH200",
+      "color": "black",
+      "weight": "250g"
+    },
+    "createdAt": "2024-01-10T09:00:00Z",
+    "updatedAt": "2024-06-15T14:30:00Z"
+  },
+  {
+    "id": "product-2",
+    "name": "Smartphone Case",
+    "description": "Protective case for smartphones with enhanced grip",
+    "price": 24.99,
+    "category": "accessories",
+    "inStock": true,
+    "quantity": 500,
+    "rating": 4.2,
+    "reviews": 156,
+    "features": ["protective", "grip-enhanced", "lightweight"],
+    "metadata": {
+      "brand": "CaseTech",
+      "model": "CT-SP01",
+      "color": "transparent",
+      "weight": "45g"
+    },
+    "createdAt": "2024-02-05T11:15:00Z",
+    "updatedAt": "2024-06-10T16:45:00Z"
+  },
+  {
+    "id": "product-3",
+    "name": "USB-C Cable",
+    "description": "Fast charging USB-C to USB-C cable, 2 meters long",
+    "price": 12.99,
+    "category": "accessories",
+    "inStock": false,
+    "quantity": 0,
+    "rating": 4.7,
+    "reviews": 234,
+    "features": ["fast-charging", "durable", "long"],
+    "metadata": {
+      "brand": "CablePro",
+      "model": "CP-UC200",
+      "color": "white",
+      "weight": "120g"
+    },
+    "createdAt": "2024-03-01T08:30:00Z",
+    "updatedAt": "2024-06-20T10:00:00Z"
+  },
+  {
+    "id": "product-4",
+    "name": "Bluetooth Speaker",
+    "description": "Portable Bluetooth speaker with 360-degree sound",
+    "price": 79.99,
+    "category": "electronics",
+    "inStock": true,
+    "quantity": 75,
+    "rating": 4.3,
+    "reviews": 67,
+    "features": ["bluetooth", "portable", "360-sound"],
+    "metadata": {
+      "brand": "SoundWave",
+      "model": "SW-BT360",
+      "color": "blue",
+      "weight": "680g"
+    },
+    "createdAt": "2024-04-12T13:20:00Z",
+    "updatedAt": "2024-06-18T09:15:00Z"
+  }
+]

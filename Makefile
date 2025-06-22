@@ -1,4 +1,4 @@
-.PHONY: build run test clean deps mongo-start mongo-stop mongo-status dashboard dashboard-dev dashboard-build
+.PHONY: build run test clean deps mongo-start mongo-stop mongo-status dashboard dashboard-dev dashboard-build e2e-test
 
 # Build the application
 build:
@@ -104,3 +104,21 @@ demo: mongo-start
 	@curl http://localhost:2403/todos || true
 	@echo "\n\n=== Demo complete ==="
 	@pkill -f "go run cmd/deployd/main.go" || true
+
+# Run end-to-end tests across multiple databases
+e2e-test:
+	@echo "🧪 Running E2E tests..."
+	@chmod +x e2e/scripts/run-e2e.sh
+	@./e2e/scripts/run-e2e.sh
+
+# Run E2E tests with MongoDB (requires MongoDB to be running)
+e2e-test-with-mongo: mongo-start
+	@echo "🧪 Running E2E tests with MongoDB..."
+	@chmod +x e2e/scripts/run-e2e.sh
+	@./e2e/scripts/run-e2e.sh
+
+# Run E2E tests SQLite only (no MongoDB required)
+e2e-test-sqlite:
+	@echo "🧪 Running E2E tests (SQLite only)..."
+	@chmod +x e2e/scripts/run-e2e.sh
+	@./e2e/scripts/run-e2e.sh

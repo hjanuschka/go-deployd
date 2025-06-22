@@ -1,0 +1,1 @@
+{"properties":{"name":{"type":"string","required":true},"email":{"type":"string","required":true},"age":{"type":"number"},"active":{"type":"boolean","default":true},"role":{"type":"string","default":"user"}}}

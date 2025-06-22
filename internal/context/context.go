@@ -7,20 +7,21 @@ import (
 	"strconv"
 	"strings"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"github.com/hjanuschka/go-deployd/internal/sessions"
 )
 
 type Context struct {
-	Request    *http.Request
-	Response   http.ResponseWriter
-	Resource   Resource
-	Session    Session
-	Router     Router
-	URL        string
-	Query      bson.M
-	Body       bson.M
-	Method     string
-	ctx        context.Context
+	Request      *http.Request
+	Response     http.ResponseWriter
+	Resource     Resource
+	Session      *sessions.Session
+	SessionStore *sessions.SessionStore
+	Router       Router
+	URL          string
+	Query        map[string]interface{}
+	Body         map[string]interface{}
+	Method       string
+	ctx          context.Context
 }
 
 type Resource interface {
@@ -28,25 +29,21 @@ type Resource interface {
 	GetPath() string
 }
 
-type Session interface {
-	GetID() string
-	IsRoot() bool
-	Get(key string) interface{}
-	Set(key string, value interface{})
-}
+// Remove old Session interface since we're using the sessions package directly
 
 type Router interface {
 	Route(ctx *Context) error
 }
 
-func New(req *http.Request, res http.ResponseWriter, resource Resource, session Session) *Context {
+func New(req *http.Request, res http.ResponseWriter, resource Resource, session *sessions.Session, sessionStore *sessions.SessionStore) *Context {
 	ctx := &Context{
-		Request:  req,
-		Response: res,
-		Resource: resource,
-		Session:  session,
-		Method:   req.Method,
-		ctx:      req.Context(),
+		Request:      req,
+		Response:     res,
+		Resource:     resource,
+		Session:      session,
+		SessionStore: sessionStore,
+		Method:       req.Method,
+		ctx:          req.Context(),
 	}
 
 	ctx.parseURL()
@@ -70,7 +67,7 @@ func (c *Context) parseURL() {
 }
 
 func (c *Context) parseQuery() {
-	c.Query = make(bson.M)
+	c.Query = make(map[string]interface{})
 	
 	for key, values := range c.Request.URL.Query() {
 		if len(values) == 1 {
@@ -116,7 +113,7 @@ func (c *Context) parseQuery() {
 }
 
 func (c *Context) parseBody() {
-	c.Body = make(bson.M)
+	c.Body = make(map[string]interface{})
 	
 	if c.Request.Body == nil {
 		return
@@ -142,6 +139,10 @@ func (c *Context) parseBody() {
 			}
 		}
 	}
+}
+
+func (c *Context) ParseJSON(v interface{}) error {
+	return json.NewDecoder(c.Request.Body).Decode(v)
 }
 
 func (c *Context) WriteJSON(data interface{}) error {

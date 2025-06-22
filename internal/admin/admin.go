@@ -12,10 +12,12 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/database"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 	"github.com/hjanuschka/go-deployd/internal/router"
 	"github.com/hjanuschka/go-deployd/internal/events"
+	"github.com/hjanuschka/go-deployd/internal/sessions"
 )
 
 type AdminHandler struct {
@@ -23,6 +25,7 @@ type AdminHandler struct {
 	router       *router.Router
 	config       *Config
 	resourcesDir string
+	authHandler  *AuthHandler
 }
 
 type Config struct {
@@ -49,18 +52,35 @@ type CollectionInfo struct {
 	LastModified  time.Time              `json:"lastModified"`
 }
 
-func NewAdminHandler(db database.DatabaseInterface, router *router.Router, config *Config) *AdminHandler {
+func NewAdminHandler(db database.DatabaseInterface, router *router.Router, adminConfig *Config, sessions *sessions.SessionStore) *AdminHandler {
+	// Load security configuration
+	securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
+	if err != nil {
+		fmt.Printf("Warning: Failed to load security config: %v\n", err)
+		securityConfig = config.DefaultSecurityConfig()
+	}
+	
+	authHandler := NewAuthHandler(db, sessions, securityConfig)
+	
 	return &AdminHandler{
 		db:           db,
 		router:       router,
-		config:       config,
+		config:       adminConfig,
 		resourcesDir: "./resources",
+		authHandler:  authHandler,
 	}
 }
 
 func (h *AdminHandler) RegisterRoutes(r *mux.Router) {
 	admin := r.PathPrefix("/_admin").Subrouter()
 	
+	// System authentication routes (master key based)
+	admin.HandleFunc("/auth/system-login", h.authHandler.HandleSystemLogin).Methods("POST")
+	admin.HandleFunc("/auth/validate-master-key", h.authHandler.HandleMasterKeyValidation).Methods("POST")
+	admin.HandleFunc("/auth/security-info", h.authHandler.HandleGetSecurityInfo).Methods("GET")
+	admin.HandleFunc("/auth/regenerate-master-key", h.authHandler.HandleRegenerateMasterKey).Methods("POST")
+	
+	// Existing admin routes
 	admin.HandleFunc("/info", h.getServerInfo).Methods("GET")
 	admin.HandleFunc("/collections", h.getCollections).Methods("GET")
 	admin.HandleFunc("/collections/{name}", h.getCollection).Methods("GET")
