@@ -2,10 +2,12 @@ package events
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dop251/goja"
 	"github.com/hjanuschka/go-deployd/internal/context"
@@ -265,6 +267,63 @@ func (sc *ScriptContext) setupEnvironment() error {
 	dpd := make(map[string]interface{})
 	// TODO: Add collection proxies to dpd object
 	vm.Set("dpd", dpd)
+
+	// Basic require() function for common utilities
+	vm.Set("require", func(module string) interface{} {
+		switch module {
+		case "crypto":
+			// Provide basic crypto utilities using Go's crypto
+			cryptoObj := make(map[string]interface{})
+			cryptoObj["randomUUID"] = func() string {
+				// Use Go's built-in random generation (simplified UUID-like)
+				rand.Seed(time.Now().UnixNano())
+				return fmt.Sprintf("%x-%x-%x-%x-%x", 
+					rand.Int63()&0xffffffff,
+					rand.Int63()&0xffff,
+					rand.Int63()&0xffff,
+					rand.Int63()&0xffff,
+					rand.Int63()&0xffffffffffff)
+			}
+			cryptoObj["randomBytes"] = func(size int) []byte {
+				bytes := make([]byte, size)
+				rand.Seed(time.Now().UnixNano())
+				for i := range bytes {
+					bytes[i] = byte(rand.Int63() % 256)
+				}
+				return bytes
+			}
+			return cryptoObj
+		case "util":
+			// Provide utility functions
+			utilObj := make(map[string]interface{})
+			utilObj["isArray"] = func(obj interface{}) bool {
+				_, ok := obj.([]interface{})
+				return ok
+			}
+			utilObj["isObject"] = func(obj interface{}) bool {
+				_, ok := obj.(map[string]interface{})
+				return ok
+			}
+			return utilObj
+		case "path":
+			// Basic path utilities
+			pathObj := make(map[string]interface{})
+			pathObj["extname"] = func(filePath string) string {
+				parts := strings.Split(filePath, ".")
+				if len(parts) > 1 {
+					return "." + parts[len(parts)-1]
+				}
+				return ""
+			}
+			pathObj["basename"] = func(filePath string) string {
+				parts := strings.Split(filePath, "/")
+				return parts[len(parts)-1]
+			}
+			return pathObj
+		default:
+			panic(vm.ToValue(fmt.Sprintf("Module '%s' not found", module)))
+		}
+	})
 
 	// deployd object with logging functionality
 	deployedObj := make(map[string]interface{})

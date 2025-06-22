@@ -95,6 +95,11 @@ func CompileGoPlugin(sourcePath, pluginPath string) error {
 
 go 1.21
 
+require (
+	github.com/google/uuid v1.6.0
+	github.com/shopspring/decimal v1.3.1
+	golang.org/x/crypto v0.18.0
+)
 `
 	
 	if err := os.WriteFile(modPath, []byte(modContent), 0644); err != nil {
