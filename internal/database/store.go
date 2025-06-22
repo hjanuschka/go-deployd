@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -33,6 +34,17 @@ func (s *Store) Insert(ctx context.Context, document interface{}) (interface{}, 
 			doc["_id"] = id
 			delete(doc, "id")
 		}
+	} else if doc, ok := document.(map[string]interface{}); ok {
+		bsonDoc := bson.M(doc)
+		if _, exists := bsonDoc["id"]; !exists {
+			bsonDoc["id"] = s.CreateUniqueIdentifier()
+		}
+		// Convert id to _id for MongoDB
+		if id, exists := bsonDoc["id"]; exists {
+			bsonDoc["_id"] = id
+			delete(bsonDoc, "id")
+		}
+		document = bsonDoc
 	}
 
 	result, err := s.collection.InsertOne(ctx, document)
@@ -231,7 +243,18 @@ func (s *Store) scrubQuery(query bson.M) {
 	}
 
 	if id, exists := query["id"]; exists {
-		query["_id"] = id
+		// Try to convert string ID to ObjectId first, fallback to string
+		if idStr, ok := id.(string); ok && len(idStr) == 24 {
+			if objId, err := primitive.ObjectIDFromHex(idStr); err == nil {
+				// Query for both ObjectID and string versions to handle mixed storage
+				query["_id"] = bson.M{"$in": []interface{}{objId, idStr}}
+			} else {
+				// If conversion fails, use as string (for custom IDs)
+				query["_id"] = id
+			}
+		} else {
+			query["_id"] = id
+		}
 		delete(query, "id")
 	}
 

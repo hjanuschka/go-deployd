@@ -7,18 +7,40 @@ import (
 
 // createGoWrapper creates a wrapper that implements the plugin interface
 func createGoWrapper(userCode string) string {
-	// Remove package declaration from user code
+	// Parse user code to extract imports and functions separately
 	lines := strings.Split(userCode, "\n")
-	var filteredLines []string
+	var imports []string
+	var functions []string
+	
+	inImportBlock := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		
+		// Skip package declaration
 		if strings.HasPrefix(trimmed, "package ") {
 			continue
 		}
-		filteredLines = append(filteredLines, line)
+		
+		// Handle import statements
+		if strings.HasPrefix(trimmed, "import ") {
+			inImportBlock = true
+			imports = append(imports, line)
+		} else if inImportBlock && (trimmed == ")" || strings.Contains(trimmed, ")")) {
+			imports = append(imports, line)
+			inImportBlock = false
+		} else if inImportBlock {
+			imports = append(imports, line)
+		} else if trimmed != "" {
+			// Regular code (functions, etc.) - skip empty lines at the beginning
+			functions = append(functions, line)
+		}
 	}
-	userCode = strings.Join(filteredLines, "\n")
+	
+	userImports := strings.Join(imports, "\n")
+	userFunctions := strings.Join(functions, "\n")
 	template := `package main
+
+%s
 
 // EventContext provides context for event scripts
 type EventContext struct {
@@ -88,5 +110,5 @@ func (h eventHandler) Run(ctx interface{}) error {
 	return Run(eventCtx)
 }
 `
-	return fmt.Sprintf(template, userCode)
+	return fmt.Sprintf(template, userImports, userFunctions)
 }

@@ -1,0 +1,36 @@
+{
+  "properties": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "number",
+      "default": 1
+    },
+    "status": {
+      "type": "string",
+      "default": "pending"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "tags": {
+      "type": "array"
+    }
+  },
+  "eventConfig": {
+    "validate": {
+      "runtime": "js"
+    },
+    "post": {
+      "runtime": "js"
+    },
+    "put": {
+      "runtime": "js"
+    }
+  }
+}

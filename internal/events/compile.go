@@ -117,6 +117,19 @@ require (
 		}
 	}
 	
+	// Download dependencies first
+	modCmd := exec.Command(goExe, "mod", "download")
+	modCmd.Env = append(os.Environ(), 
+		"GO111MODULE=on",
+		"GOWORK=off",
+	)
+	modCmd.Dir = tempDir
+	
+	if modOutput, err := modCmd.CombinedOutput(); err != nil {
+		// Log but don't fail - dependencies might already be available
+		fmt.Printf("Go mod download output: %s\n", modOutput)
+	}
+	
 	// Compile the plugin using the same Go version
 	cmd := exec.Command(goExe, "build", "-buildmode=plugin", "-o", pluginPath, "main.go")
 	cmd.Env = append(os.Environ(), 
@@ -201,6 +214,11 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 
 		if eventCtx.HasErrors() {
 			return &ValidationError{Errors: eventCtx.Errors}
+		}
+		
+		// Sync modified data back to the original data parameter
+		for key, value := range eventCtx.Data {
+			data[key] = value
 		}
 		
 		// Apply hidden fields
