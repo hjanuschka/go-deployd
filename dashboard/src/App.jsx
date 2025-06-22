@@ -17,11 +17,18 @@ import {
   useColorModeValue,
   useColorMode,
   Button,
+  Spinner,
+  Center,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
 } from '@chakra-ui/react'
 import {
   HamburgerIcon,
   MoonIcon,
   SunIcon,
+  ChevronDownIcon,
 } from '@chakra-ui/icons'
 import {
   FiHome,
@@ -29,6 +36,10 @@ import {
   FiTool,
   FiSettings,
   FiCode,
+  FiLogOut,
+  FiKey,
+  FiBook,
+  FiFileText,
 } from 'react-icons/fi'
 import { useNavigate, useLocation } from 'react-router-dom'
 
@@ -36,19 +47,26 @@ import Dashboard from './pages/Dashboard'
 import Collections from './pages/Collections'
 import CollectionDetail from './pages/CollectionDetail'
 import ApiTester from './pages/ApiTester'
+import Documentation from './pages/Documentation'
+import Logs from './pages/Logs'
 import Settings from './pages/Settings'
+import Login from './pages/Login'
 import Sidebar from './components/Sidebar'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 const menuItems = [
   { text: 'Dashboard', icon: FiHome, path: '/' },
   { text: 'Collections', icon: FiDatabase, path: '/collections' },
   { text: 'API Tester', icon: FiTool, path: '/api-tester' },
+  { text: 'Documentation', icon: FiBook, path: '/documentation' },
+  { text: 'Logs', icon: FiFileText, path: '/logs' },
   { text: 'Settings', icon: FiSettings, path: '/settings' }
 ]
 
-function App() {
+function AuthenticatedApp() {
   const { isOpen, onOpen, onClose } = useDisclosure()
   const { colorMode, toggleColorMode } = useColorMode()
+  const { logout, masterKey } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -58,6 +76,11 @@ function App() {
   const getCurrentPageTitle = () => {
     const currentItem = menuItems.find(item => item.path === location.pathname)
     return currentItem?.text || 'Dashboard'
+  }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
   }
 
   return (
@@ -117,6 +140,19 @@ function App() {
           </HStack>
 
           <HStack spacing={2}>
+            <Menu>
+              <MenuButton as={Button} rightIcon={<ChevronDownIcon />} variant="ghost" size="sm">
+                <HStack spacing={2}>
+                  <FiKey />
+                  <Text>Admin</Text>
+                </HStack>
+              </MenuButton>
+              <MenuList>
+                <MenuItem icon={<FiLogOut />} onClick={handleLogout}>
+                  Logout
+                </MenuItem>
+              </MenuList>
+            </Menu>
             <IconButton
               onClick={toggleColorMode}
               variant="ghost"
@@ -133,6 +169,8 @@ function App() {
             <Route path="/collections" element={<Collections />} />
             <Route path="/collections/:name" element={<CollectionDetail />} />
             <Route path="/api-tester" element={<ApiTester />} />
+            <Route path="/documentation" element={<Documentation />} />
+            <Route path="/logs" element={<Logs />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </Box>
@@ -141,4 +179,33 @@ function App() {
   )
 }
 
-export default App
+function App() {
+  const { isAuthenticated, loading, login } = useAuth()
+
+  if (loading) {
+    return (
+      <Center minH="100vh">
+        <VStack spacing={4}>
+          <Spinner size="xl" color="brand.500" />
+          <Text>Loading...</Text>
+        </VStack>
+      </Center>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <Login onLogin={login} />
+  }
+
+  return <AuthenticatedApp />
+}
+
+function AppWithAuth() {
+  return (
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  )
+}
+
+export default AppWithAuth

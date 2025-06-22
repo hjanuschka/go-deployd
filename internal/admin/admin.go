@@ -8,12 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/database"
+	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 	"github.com/hjanuschka/go-deployd/internal/router"
 	"github.com/hjanuschka/go-deployd/internal/events"
@@ -25,7 +27,7 @@ type AdminHandler struct {
 	router       *router.Router
 	config       *Config
 	resourcesDir string
-	authHandler  *AuthHandler
+	AuthHandler  *AuthHandler
 }
 
 type Config struct {
@@ -67,31 +69,44 @@ func NewAdminHandler(db database.DatabaseInterface, router *router.Router, admin
 		router:       router,
 		config:       adminConfig,
 		resourcesDir: "./resources",
-		authHandler:  authHandler,
+		AuthHandler:  authHandler,
 	}
 }
 
 func (h *AdminHandler) RegisterRoutes(r *mux.Router) {
 	admin := r.PathPrefix("/_admin").Subrouter()
 	
-	// System authentication routes (master key based)
-	admin.HandleFunc("/auth/system-login", h.authHandler.HandleSystemLogin).Methods("POST")
-	admin.HandleFunc("/auth/validate-master-key", h.authHandler.HandleMasterKeyValidation).Methods("POST")
-	admin.HandleFunc("/auth/security-info", h.authHandler.HandleGetSecurityInfo).Methods("GET")
-	admin.HandleFunc("/auth/regenerate-master-key", h.authHandler.HandleRegenerateMasterKey).Methods("POST")
+	// Public authentication routes (no master key required)
+	admin.HandleFunc("/auth/validate-master-key", h.AuthHandler.HandleMasterKeyValidation).Methods("POST")
+	admin.HandleFunc("/auth/dashboard-login", h.handleDashboardLogin).Methods("POST")
 	
-	// Existing admin routes
-	admin.HandleFunc("/info", h.getServerInfo).Methods("GET")
-	admin.HandleFunc("/collections", h.getCollections).Methods("GET")
-	admin.HandleFunc("/collections/{name}", h.getCollection).Methods("GET")
-	admin.HandleFunc("/collections/{name}", h.createCollection).Methods("POST")
-	admin.HandleFunc("/collections/{name}", h.updateCollection).Methods("PUT")
-	admin.HandleFunc("/collections/{name}", h.deleteCollection).Methods("DELETE")
+	// Protected authentication routes (master key required)
+	admin.HandleFunc("/auth/system-login", h.AuthHandler.RequireMasterKey(h.AuthHandler.HandleSystemLogin)).Methods("POST")
+	admin.HandleFunc("/auth/security-info", h.AuthHandler.RequireMasterKey(h.AuthHandler.HandleGetSecurityInfo)).Methods("GET")
+	admin.HandleFunc("/auth/regenerate-master-key", h.AuthHandler.RequireMasterKey(h.AuthHandler.HandleRegenerateMasterKey)).Methods("POST")
+	admin.HandleFunc("/auth/create-user", h.AuthHandler.RequireMasterKey(h.AuthHandler.HandleCreateUser)).Methods("POST")
 	
-	// Event management endpoints
-	admin.HandleFunc("/collections/{name}/events", h.getEvents).Methods("GET")
-	admin.HandleFunc("/collections/{name}/events/{event}", h.updateEvent).Methods("PUT")
-	admin.HandleFunc("/collections/{name}/events/{event}/test", h.testEvent).Methods("POST")
+	// Protected admin routes (master key required)
+	admin.HandleFunc("/info", h.AuthHandler.RequireMasterKey(h.getServerInfo)).Methods("GET")
+	admin.HandleFunc("/collections", h.AuthHandler.RequireMasterKey(h.getCollections)).Methods("GET")
+	admin.HandleFunc("/collections/{name}", h.AuthHandler.RequireMasterKey(h.getCollection)).Methods("GET")
+	admin.HandleFunc("/collections/{name}", h.AuthHandler.RequireMasterKey(h.createCollection)).Methods("POST")
+	admin.HandleFunc("/collections/{name}", h.AuthHandler.RequireMasterKey(h.updateCollection)).Methods("PUT")
+	admin.HandleFunc("/collections/{name}", h.AuthHandler.RequireMasterKey(h.deleteCollection)).Methods("DELETE")
+	
+	// Protected event management endpoints (master key required)
+	admin.HandleFunc("/collections/{name}/events", h.AuthHandler.RequireMasterKey(h.getEvents)).Methods("GET")
+	admin.HandleFunc("/collections/{name}/events/{event}", h.AuthHandler.RequireMasterKey(h.updateEvent)).Methods("PUT")
+	admin.HandleFunc("/collections/{name}/events/{event}/test", h.AuthHandler.RequireMasterKey(h.testEvent)).Methods("POST")
+	
+	// Security settings management (master key required)
+	admin.HandleFunc("/settings/security", h.AuthHandler.RequireMasterKey(h.getSecuritySettings)).Methods("GET")
+	admin.HandleFunc("/settings/security", h.AuthHandler.RequireMasterKey(h.updateSecuritySettings)).Methods("PUT")
+	
+	// Logging endpoints (master key required)
+	admin.HandleFunc("/logs", h.AuthHandler.RequireMasterKey(h.getLogs)).Methods("GET")
+	admin.HandleFunc("/logs/files", h.AuthHandler.RequireMasterKey(h.getLogFiles)).Methods("GET")
+	admin.HandleFunc("/logs/download", h.AuthHandler.RequireMasterKey(h.downloadLogs)).Methods("GET")
 }
 
 func (h *AdminHandler) getServerInfo(w http.ResponseWriter, r *http.Request) {
@@ -608,4 +623,214 @@ func (h *AdminHandler) testEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	json.NewEncoder(w).Encode(response)
+}
+
+// handleDashboardLogin handles dashboard login with master key
+func (h *AdminHandler) handleDashboardLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	var req struct {
+		MasterKey string `json:"masterKey"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid JSON body",
+		})
+		return
+	}
+	
+	// Validate master key
+	if !h.AuthHandler.Security.ValidateMasterKey(req.MasterKey) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid master key",
+		})
+		return
+	}
+	
+	// Set master key cookie for dashboard access
+	http.SetCookie(w, &http.Cookie{
+		Name:     "masterKey",
+		Value:    req.MasterKey,
+		Path:     "/_dashboard",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteStrictMode,
+	})
+	
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Dashboard login successful",
+	})
+}
+
+// getSecuritySettings returns the current security settings
+func (h *AdminHandler) getSecuritySettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	response := map[string]interface{}{
+		"sessionTTL":        h.AuthHandler.Security.SessionTTL,
+		"tokenTTL":          h.AuthHandler.Security.TokenTTL,
+		"allowRegistration": h.AuthHandler.Security.AllowRegistration,
+		"hasMasterKey":      h.AuthHandler.Security.MasterKey != "",
+	}
+	
+	json.NewEncoder(w).Encode(response)
+}
+
+// updateSecuritySettings updates the security settings
+func (h *AdminHandler) updateSecuritySettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	var req struct {
+		SessionTTL        int  `json:"sessionTTL"`
+		TokenTTL          int  `json:"tokenTTL"`
+		AllowRegistration bool `json:"allowRegistration"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid JSON body",
+		})
+		return
+	}
+	
+	// Update security config
+	h.AuthHandler.Security.SessionTTL = req.SessionTTL
+	h.AuthHandler.Security.TokenTTL = req.TokenTTL
+	h.AuthHandler.Security.AllowRegistration = req.AllowRegistration
+	
+	// Save updated configuration
+	if err := config.SaveSecurityConfig(h.AuthHandler.Security, config.GetConfigDir()); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to save security settings",
+		})
+		return
+	}
+	
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Security settings updated successfully",
+	})
+}
+
+// getLogs returns application logs with optional filtering
+func (h *AdminHandler) getLogs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	// Get query parameters
+	level := r.URL.Query().Get("level")
+	filename := r.URL.Query().Get("file")
+	limitStr := r.URL.Query().Get("limit")
+	
+	// Set default limit
+	limit := 100
+	if limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+	
+	logger := logging.GetLogger()
+	logLevel := logging.LogLevel(level)
+	
+	logs, err := logger.ReadLogs(filename, logLevel)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to read logs",
+			"error":   err.Error(),
+		})
+		return
+	}
+	
+	// Apply limit (get most recent entries)
+	if len(logs) > limit {
+		logs = logs[len(logs)-limit:]
+	}
+	
+	response := map[string]interface{}{
+		"success": true,
+		"logs":    logs,
+		"count":   len(logs),
+	}
+	
+	json.NewEncoder(w).Encode(response)
+}
+
+// getLogFiles returns available log files
+func (h *AdminHandler) getLogFiles(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	logger := logging.GetLogger()
+	files, err := logger.GetLogFiles()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to list log files",
+			"error":   err.Error(),
+		})
+		return
+	}
+	
+	response := map[string]interface{}{
+		"success": true,
+		"files":   files,
+	}
+	
+	json.NewEncoder(w).Encode(response)
+}
+
+// downloadLogs allows downloading log files
+func (h *AdminHandler) downloadLogs(w http.ResponseWriter, r *http.Request) {
+	// Get query parameters
+	level := r.URL.Query().Get("level")
+	filename := r.URL.Query().Get("file")
+	
+	logger := logging.GetLogger()
+	logPath := logger.GetLogPath(filename)
+	
+	// Check if file exists
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("Log file not found"))
+		return
+	}
+	
+	// Set headers for file download
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(logPath)))
+	
+	// If level filter is specified, filter the logs
+	if level != "" {
+		logs, err := logger.ReadLogs(filename, logging.LogLevel(level))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Failed to read logs"))
+			return
+		}
+		
+		// Write filtered logs as JSONL
+		for _, log := range logs {
+			data, _ := json.Marshal(log)
+			w.Write(data)
+			w.Write([]byte("\n"))
+		}
+		return
+	}
+	
+	// Otherwise, serve the raw file
+	http.ServeFile(w, r, logPath)
 }

@@ -1,1 +1,1 @@
-this.createdBy = "event-system"; this.priority = this.priority || 1;
+data.createdBy = "event-system"; data.priority = data.priority || 1;

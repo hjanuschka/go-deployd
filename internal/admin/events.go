@@ -264,9 +264,9 @@ func (eh *EventsHandler) saveScriptToFile(filePath, content, scriptType string) 
 		return err
 	}
 
-	// Add package declaration for Go files
+	// Add package declaration for Go files  
 	if scriptType == "go" && !strings.Contains(content, "package ") {
-		content = "package main\n\nimport (\n\t\"strings\"\n\t\"time\"\n\t\"github.com/hjanuschka/go-deployd/internal/events\"\n)\n\n" + content + "\n\n// main function required for plugins but not used\nfunc main() {}\n"
+		content = "package main\n\n" + content
 	}
 
 	return os.WriteFile(filePath, []byte(content), 0644)

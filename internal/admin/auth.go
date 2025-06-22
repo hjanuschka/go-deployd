@@ -9,13 +9,14 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/database"
 	"github.com/hjanuschka/go-deployd/internal/sessions"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // AuthHandler handles system-level authentication with master key
 type AuthHandler struct {
 	db       database.DatabaseInterface
 	sessions *sessions.SessionStore
-	security *config.SecurityConfig
+	Security *config.SecurityConfig
 }
 
 // NewAuthHandler creates a new auth handler
@@ -23,7 +24,7 @@ func NewAuthHandler(db database.DatabaseInterface, sessions *sessions.SessionSto
 	return &AuthHandler{
 		db:       db,
 		sessions: sessions,
-		security: security,
+		Security: security,
 	}
 }
 
@@ -68,7 +69,7 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 	}
 	
 	// Validate master key
-	if !ah.security.ValidateMasterKey(req.MasterKey) {
+	if !ah.Security.ValidateMasterKey(req.MasterKey) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -162,7 +163,7 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 	}
 	
 	// Calculate expiration time
-	expiresAt := time.Now().Add(time.Duration(ah.security.SessionTTL) * time.Second)
+	expiresAt := time.Now().Add(time.Duration(ah.Security.SessionTTL) * time.Second)
 	
 	response := SystemLoginResponse{
 		Success:   true,
@@ -203,7 +204,7 @@ func (ah *AuthHandler) HandleMasterKeyValidation(w http.ResponseWriter, r *http.
 		return
 	}
 	
-	valid := ah.security.ValidateMasterKey(req.MasterKey)
+	valid := ah.Security.ValidateMasterKey(req.MasterKey)
 	
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -231,21 +232,20 @@ func (ah *AuthHandler) HandleGetSecurityInfo(w http.ResponseWriter, r *http.Requ
 	
 	// Check if master key is provided for admin access
 	masterKey := r.Header.Get("X-Master-Key")
-	isAdmin := ah.security.ValidateMasterKey(masterKey)
+	isAdmin := ah.Security.ValidateMasterKey(masterKey)
 	
 	response := map[string]interface{}{
-		"sessionTTL":  ah.security.SessionTTL,
-		"tokenTTL":    ah.security.TokenTTL,
-		"enableSSO":   ah.security.EnableSSO,
-		"ssoEndpoint": ah.security.SSOEndpoint,
+		"sessionTTL":        ah.Security.SessionTTL,
+		"tokenTTL":          ah.Security.TokenTTL,
+		"allowRegistration": ah.Security.AllowRegistration,
 	}
 	
 	// Only show master key info to authenticated admin
 	if isAdmin {
-		response["hasMasterKey"] = ah.security.MasterKey != ""
+		response["hasMasterKey"] = ah.Security.MasterKey != ""
 		response["masterKeyPrefix"] = func() string {
-			if len(ah.security.MasterKey) > 10 {
-				return ah.security.MasterKey[:10] + "..."
+			if len(ah.Security.MasterKey) > 10 {
+				return ah.Security.MasterKey[:10] + "..."
 			}
 			return "***"
 		}()
@@ -282,7 +282,7 @@ func (ah *AuthHandler) HandleRegenerateMasterKey(w http.ResponseWriter, r *http.
 	}
 	
 	// Validate current master key
-	if !ah.security.ValidateMasterKey(req.CurrentMasterKey) {
+	if !ah.Security.ValidateMasterKey(req.CurrentMasterKey) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -293,10 +293,10 @@ func (ah *AuthHandler) HandleRegenerateMasterKey(w http.ResponseWriter, r *http.
 	
 	// Generate new master key
 	newMasterKey := generateNewMasterKey()
-	ah.security.MasterKey = newMasterKey
+	ah.Security.MasterKey = newMasterKey
 	
 	// Save updated configuration
-	if err := config.SaveSecurityConfig(ah.security, config.GetConfigDir()); err != nil {
+	if err := config.SaveSecurityConfig(ah.Security, config.GetConfigDir()); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -325,7 +325,14 @@ func (ah *AuthHandler) RequireMasterKey(next http.HandlerFunc) http.HandlerFunc 
 			}
 		}
 		
-		if !ah.security.ValidateMasterKey(masterKey) {
+		// Also check cookie for dashboard requests
+		if masterKey == "" {
+			if cookie, err := r.Cookie("masterKey"); err == nil {
+				masterKey = cookie.Value
+			}
+		}
+		
+		if !ah.Security.ValidateMasterKey(masterKey) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -335,8 +342,169 @@ func (ah *AuthHandler) RequireMasterKey(next http.HandlerFunc) http.HandlerFunc 
 			return
 		}
 		
+		// Master key authentication provides admin privileges automatically
+		// isRoot behavior is handled by the master key validation itself
+		
 		next(w, r)
 	}
+}
+
+// CreateUserRequest represents a request to create a user with master key
+type CreateUserRequest struct {
+	MasterKey string                 `json:"masterKey"`
+	UserData  map[string]interface{} `json:"userData"`
+}
+
+// HandleCreateUser creates a user with master key authentication
+func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Method not allowed",
+		})
+		return
+	}
+	
+	var req CreateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid JSON body",
+		})
+		return
+	}
+	
+	// Validate master key
+	if !ah.Security.ValidateMasterKey(req.MasterKey) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid master key",
+		})
+		return
+	}
+	
+	// Validate required user data
+	email, hasEmail := req.UserData["email"].(string)
+	username, hasUsername := req.UserData["username"].(string)
+	password, hasPassword := req.UserData["password"].(string)
+	
+	if !hasEmail && !hasUsername {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Username or email is required",
+		})
+		return
+	}
+	
+	if !hasPassword || password == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Password is required",
+		})
+		return
+	}
+	
+	// Check if user already exists
+	userStore := ah.db.CreateStore("users")
+	
+	if hasEmail {
+		query := database.NewQueryBuilder().Where("email", "$eq", email)
+		existing, err := userStore.FindOne(r.Context(), query)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "Database error",
+			})
+			return
+		}
+		if existing != nil {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "User with this email already exists",
+			})
+			return
+		}
+	}
+	
+	if hasUsername {
+		query := database.NewQueryBuilder().Where("username", "$eq", username)
+		existing, err := userStore.FindOne(r.Context(), query)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "Database error",
+			})
+			return
+		}
+		if existing != nil {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "User with this username already exists",
+			})
+			return
+		}
+	}
+	
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to hash password",
+		})
+		return
+	}
+	
+	// Set hashed password and default role
+	req.UserData["password"] = string(hashedPassword)
+	if _, hasRole := req.UserData["role"]; !hasRole {
+		req.UserData["role"] = "user"
+	}
+	
+	// Create user
+	result, err := userStore.Insert(r.Context(), req.UserData)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to create user",
+		})
+		return
+	}
+	
+	// Convert result to map and remove password from response
+	var userResult map[string]interface{}
+	if resultMap, ok := result.(map[string]interface{}); ok {
+		userResult = resultMap
+		delete(userResult, "password")
+	} else {
+		// Fallback - return the original user data without password
+		userResult = make(map[string]interface{})
+		for k, v := range req.UserData {
+			if k != "password" {
+				userResult[k] = v
+			}
+		}
+	}
+	
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "User created successfully",
+		"user":    userResult,
+	})
 }
 
 // Helper functions

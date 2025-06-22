@@ -9,6 +9,7 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/hjanuschka/go-deployd/internal/context"
+	"github.com/hjanuschka/go-deployd/internal/logging"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -116,15 +117,33 @@ func (s *Script) Run(ctx *context.Context, data bson.M) (*ScriptContext, error) 
 	}
 
 	// Execute the script
+	logging.Debug("Executing JavaScript script", "js-execution", map[string]interface{}{
+		"hasCompiledScript": s.compiled != nil,
+		"scriptSource":      s.source,
+		"scriptPath":        s.path,
+	})
+	
 	if s.compiled != nil {
 		if _, err := vm.RunProgram(s.compiled); err != nil {
+			logging.Debug("JavaScript execution failed (compiled)", "js-execution", map[string]interface{}{
+				"error": err.Error(),
+			})
 			return scriptCtx, fmt.Errorf("script error: %w", err)
 		}
 	} else {
 		if _, err := vm.RunString(s.source); err != nil {
+			logging.Debug("JavaScript execution failed (source)", "js-execution", map[string]interface{}{
+				"error": err.Error(),
+			})
 			return scriptCtx, fmt.Errorf("script error: %w", err)
 		}
 	}
+	
+	logging.Debug("JavaScript execution completed", "js-execution", map[string]interface{}{
+		"hasCancelled": scriptCtx.cancelled,
+		"hasErrors":    len(scriptCtx.errors) > 0,
+		"errors":       scriptCtx.errors,
+	})
 
 	return scriptCtx, nil
 }
@@ -133,7 +152,24 @@ func (s *Script) Run(ctx *context.Context, data bson.M) (*ScriptContext, error) 
 func (sc *ScriptContext) setupEnvironment() error {
 	vm := sc.vm
 
-	// Set 'this' to the data object
+	// Debug logging for script context setup
+	logging.Debug("Setting up JavaScript environment", "js-context", map[string]interface{}{
+		"dataKeys":   getMapKeys(sc.data),
+		"dataValues": sc.data,
+		"hasData":    sc.data != nil,
+		"dataLen":    len(sc.data),
+	})
+
+	// Set data object for structured access
+	logging.Debug("Setting JavaScript data object", "js-context", map[string]interface{}{
+		"dataKeys": getMapKeys(sc.data),
+		"dataValues": sc.data,
+	})
+	
+	// Set 'data' object for accessing fields like data.title
+	vm.Set("data", sc.data)
+	
+	// Also set 'this' object for backward compatibility
 	vm.Set("this", sc.data)
 
 	// cancel() function
@@ -230,6 +266,58 @@ func (sc *ScriptContext) setupEnvironment() error {
 	// TODO: Add collection proxies to dpd object
 	vm.Set("dpd", dpd)
 
+	// deployd object with logging functionality
+	deployedObj := make(map[string]interface{})
+	deployedObj["log"] = func(messageArgs ...interface{}) {
+		var message string
+		var data map[string]interface{}
+		
+		if len(messageArgs) == 0 {
+			return
+		}
+		
+		if len(messageArgs) >= 1 {
+			if msg, ok := messageArgs[0].(string); ok {
+				message = msg
+			} else {
+				message = fmt.Sprintf("%v", messageArgs[0])
+			}
+		}
+		
+		if len(messageArgs) >= 2 {
+			if dataObj, ok := messageArgs[1].(map[string]interface{}); ok {
+				data = dataObj
+			} else {
+				// Convert to map
+				data = map[string]interface{}{
+					"data": messageArgs[1],
+				}
+			}
+		}
+		
+		// Determine source from script path or context
+		source := "javascript"
+		if sc.ctx != nil && sc.ctx.Resource != nil {
+			source = fmt.Sprintf("js:%s", sc.ctx.Resource.GetName())
+		}
+		
+		logging.Info(message, source, data)
+	}
+	vm.Set("deployd", deployedObj)
+
+	// console.log function for debugging
+	consoleObj := make(map[string]interface{})
+	consoleObj["log"] = func(call goja.FunctionCall) goja.Value {
+		args := make([]interface{}, len(call.Arguments))
+		for i, arg := range call.Arguments {
+			args[i] = arg.Export()
+		}
+		message := fmt.Sprintf("JS Console: %v", args)
+		logging.Debug(message, "js-console", nil)
+		return goja.Undefined()
+	}
+	vm.Set("console", consoleObj)
+
 	// protect() function
 	vm.Set("protect", func(property string) {
 		// Remove property from data
@@ -296,4 +384,16 @@ func (e *ValidationError) Error() string {
 		parts = append(parts, fmt.Sprintf("%s: %s", field, msg))
 	}
 	return "validation errors: " + strings.Join(parts, ", ")
+}
+
+// Helper function to get map keys for logging
+func getMapKeys(data map[string]interface{}) []string {
+	if data == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	return keys
 }

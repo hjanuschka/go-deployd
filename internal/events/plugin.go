@@ -19,51 +19,7 @@ type EventPlugin interface {
 	Run(ctx *EventContext) error
 }
 
-// EventContext provides context for event execution
-type EventContext struct {
-	Ctx      *context.Context
-	Data     bson.M
-	Previous bson.M // For PUT requests
-	Errors   map[string]string
-	Cancel   func(message string, statusCode int)
-	Me       bson.M
-	Query    bson.M
-	Internal bool
-	IsRoot   bool
-}
-
-// Error adds a validation error
-func (ec *EventContext) Error(field, message string) {
-	if ec.Errors == nil {
-		ec.Errors = make(map[string]string)
-	}
-	ec.Errors[field] = message
-}
-
-// HasErrors returns true if there are validation errors
-func (ec *EventContext) HasErrors() bool {
-	return len(ec.Errors) > 0
-}
-
-// IsMe checks if the given ID matches the current user
-func (ec *EventContext) IsMe(id string) bool {
-	if ec.Me != nil {
-		if userID, ok := ec.Me["id"].(string); ok {
-			return userID == id
-		}
-	}
-	return false
-}
-
-// Protect removes a field from the data
-func (ec *EventContext) Protect(field string) {
-	delete(ec.Data, field)
-}
-
-// Hide is an alias for Protect
-func (ec *EventContext) Hide(field string) {
-	ec.Protect(field)
-}
+// EventContext is defined in compile.go
 
 // GoPluginManager manages Go plugin-based events
 type GoPluginManager struct {

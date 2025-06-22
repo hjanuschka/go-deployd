@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/database"
 	appcontext "github.com/hjanuschka/go-deployd/internal/context"
 	"golang.org/x/crypto/bcrypt"
@@ -14,6 +15,7 @@ import (
 // UserCollection extends Collection with authentication capabilities
 type UserCollection struct {
 	*Collection
+	securityConfig *config.SecurityConfig
 }
 
 // UserSessionData represents the session data stored for authenticated users
@@ -27,10 +29,19 @@ type UserSessionData struct {
 }
 
 // NewUserCollection creates a new user collection with authentication capabilities
-func NewUserCollection(name string, config *CollectionConfig, db database.DatabaseInterface) *UserCollection {
-	collection := NewCollection(name, config, db)
+func NewUserCollection(name string, collectionConfig *CollectionConfig, db database.DatabaseInterface) *UserCollection {
+	collection := NewCollection(name, collectionConfig, db)
+	
+	// Load security configuration
+	securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
+	if err != nil {
+		// Use default config if loading fails
+		securityConfig = config.DefaultSecurityConfig()
+	}
+	
 	return &UserCollection{
-		Collection: collection,
+		Collection:     collection,
+		securityConfig: securityConfig,
 	}
 }
 
@@ -116,7 +127,7 @@ func (uc *UserCollection) handleLogin(ctx *appcontext.Context) error {
 	
 	// Store session data
 	sessionData := UserSessionData{
-		UserID:    user["id"].(string),
+		UserID:    getStringField(user, "id"),
 		Username:  getStringField(user, "username"),
 		Email:     getStringField(user, "email"),
 		Role:      getStringField(user, "role"),
@@ -211,6 +222,11 @@ func (uc *UserCollection) handleMe(ctx *appcontext.Context) error {
 
 // handleRegister creates a new user account
 func (uc *UserCollection) handleRegister(ctx *appcontext.Context) error {
+	// Check if registration is allowed
+	if !uc.securityConfig.AllowRegistration {
+		return ctx.WriteError(403, "User registration is disabled. Please contact administrator.")
+	}
+	
 	// Get registration data from context body (already parsed)
 	userData := ctx.Body
 	if userData == nil || len(userData) == 0 {
@@ -254,7 +270,7 @@ func (uc *UserCollection) handleRegister(ctx *appcontext.Context) error {
 	}
 	
 	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		return ctx.WriteError(500, "Failed to hash password")
 	}

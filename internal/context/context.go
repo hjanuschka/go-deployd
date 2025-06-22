@@ -123,7 +123,8 @@ func (c *Context) parseBody() {
 	
 	if strings.Contains(contentType, "application/json") {
 		var jsonBody map[string]interface{}
-		if err := json.NewDecoder(c.Request.Body).Decode(&jsonBody); err == nil {
+		err := json.NewDecoder(c.Request.Body).Decode(&jsonBody)
+		if err == nil {
 			for k, v := range jsonBody {
 				c.Body[k] = v
 			}

@@ -1,6 +1,8 @@
 [
   {
     "id": "user-1",
+    "username": "alice",
+    "password": "alice123",
     "name": "Alice Smith",
     "email": "alice@example.com",
     "age": 28,
@@ -17,6 +19,8 @@
   },
   {
     "id": "user-2", 
+    "username": "bob",
+    "password": "bob123",
     "name": "Bob Johnson",
     "email": "bob@example.com",
     "age": 34,
@@ -33,6 +37,8 @@
   },
   {
     "id": "user-3",
+    "username": "carol",
+    "password": "carol123",
     "name": "Carol Davis", 
     "email": "carol@example.com",
     "age": 31,
@@ -49,6 +55,8 @@
   },
   {
     "id": "user-4",
+    "username": "david",
+    "password": "david123",
     "name": "David Wilson",
     "email": "david@example.com", 
     "age": 25,
@@ -65,6 +73,8 @@
   },
   {
     "id": "user-5",
+    "username": "eve",
+    "password": "eve123",
     "name": "Eve Brown",
     "email": "eve@example.com",
     "age": 29,

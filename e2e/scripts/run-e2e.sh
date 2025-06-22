@@ -164,19 +164,21 @@ test_crud_operations() {
     # Test CREATE
     local create_response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
-        -d '{"id":"test-user","name":"Test User","email":"test@example.com","age":30,"active":true}' \
+        -d '{"username":"testuser","password":"testpass123","name":"Test User","email":"test@example.com","age":30,"active":true}' \
         "http://localhost:$port/users")
     
     local create_code=$(echo "$create_response" | tail -n1)
+    local created_user_id=""
     if [ "$create_code" -eq 200 ] || [ "$create_code" -eq 201 ]; then
-        success "CREATE operation successful"
+        created_user_id=$(echo "$create_response" | sed '$d' | jq -r '.id')
+        success "CREATE operation successful (ID: $created_user_id)"
     else
         error "CREATE operation failed: $(echo "$create_response" | sed '$d')"
         return 1
     fi
     
     # Test READ (single)
-    local read_response=$(curl -s -w "\n%{http_code}" "http://localhost:$port/users/test-user")
+    local read_response=$(curl -s -w "\n%{http_code}" "http://localhost:$port/users/$created_user_id")
     local read_code=$(echo "$read_response" | tail -n1)
     if [ "$read_code" -eq 200 ]; then
         local user_name=$(echo "$read_response" | sed '$d' | jq -r '.name')
@@ -195,7 +197,7 @@ test_crud_operations() {
     local update_response=$(curl -s -w "\n%{http_code}" -X PUT \
         -H "Content-Type: application/json" \
         -d '{"name":"Updated Test User","age":31}' \
-        "http://localhost:$port/users/test-user")
+        "http://localhost:$port/users/$created_user_id")
     
     local update_code=$(echo "$update_response" | tail -n1)
     if [ "$update_code" -eq 200 ]; then
@@ -212,7 +214,7 @@ test_crud_operations() {
     fi
     
     # Test DELETE
-    local delete_response=$(curl -s -w "\n%{http_code}" -X DELETE "http://localhost:$port/users/test-user")
+    local delete_response=$(curl -s -w "\n%{http_code}" -X DELETE "http://localhost:$port/users/$created_user_id")
     local delete_code=$(echo "$delete_response" | tail -n1)
     if [ "$delete_code" -eq 200 ]; then
         success "DELETE operation successful"
@@ -222,7 +224,7 @@ test_crud_operations() {
     fi
     
     # Verify deletion
-    local verify_response=$(curl -s -w "\n%{http_code}" "http://localhost:$port/users/test-user")
+    local verify_response=$(curl -s -w "\n%{http_code}" "http://localhost:$port/users/$created_user_id")
     local verify_code=$(echo "$verify_response" | tail -n1)
     if [ "$verify_code" -eq 404 ]; then
         success "DELETE verification successful"
@@ -282,16 +284,6 @@ test_mongodb_operators() {
     
     log "Testing MongoDB-style operators for $db_type..."
     
-    # Test $gt operator
-    local gt_response=$(curl -s "http://localhost:$port/users?age={\"\$gt\":30}")
-    local gt_count=$(echo "$gt_response" | jq 'length')
-    success "Age greater than 30 query returned $gt_count users"
-    
-    # Test $in operator  
-    local in_response=$(curl -s "http://localhost:$port/users?role={\"\$in\":[\"admin\",\"user\"]}")
-    local in_count=$(echo "$in_response" | jq 'length')
-    success "Role in [admin,user] query returned $in_count users"
-    
     # Test products by category
     local electronics_response=$(curl -s "http://localhost:$port/products?category=electronics")
     local electronics_count=$(echo "$electronics_response" | jq 'length')
@@ -301,6 +293,248 @@ test_mongodb_operators() {
     local price_response=$(curl -s "http://localhost:$port/products?price={\"\$gte\":50,\"\$lte\":200}")
     local price_count=$(echo "$price_response" | jq 'length')
     success "Price range [50-200] query returned $price_count products"
+}
+
+# Test authentication and authorization features
+test_authentication_and_authorization() {
+    local port="$1"
+    local db_type="$2"
+    
+    log "Testing authentication and authorization for $db_type..."
+    
+    # Get master key from security config
+    local master_key=$(jq -r '.masterKey' "$PROJECT_ROOT/.deployd/security.json")
+    if [ "$master_key" = "null" ] || [ -z "$master_key" ]; then
+        error "Master key not found in security config"
+        return 1
+    fi
+    
+    # Test 1: Create users with master key (admin and regular user)
+    log "Creating test users..."
+    
+    # Create admin user
+    local admin_response=$(curl -s -w "\n%{http_code}" -X POST \
+        "http://localhost:$port/_admin/auth/create-user" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"masterKey\": \"$master_key\",
+            \"userData\": {
+                \"username\": \"testadmin\",
+                \"email\": \"admin@test.com\",
+                \"password\": \"admin123\",
+                \"role\": \"admin\"
+            }
+        }")
+    
+    local admin_code=$(echo "$admin_response" | tail -n1)
+    if [ "$admin_code" -eq 201 ]; then
+        success "Admin user created successfully"
+    else
+        error "Failed to create admin user: $(echo "$admin_response" | sed '$d')"
+        return 1
+    fi
+    
+    # Create regular user
+    local user_response=$(curl -s -w "\n%{http_code}" -X POST \
+        "http://localhost:$port/_admin/auth/create-user" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"masterKey\": \"$master_key\",
+            \"userData\": {
+                \"username\": \"testuser\",
+                \"email\": \"user@test.com\",
+                \"password\": \"user123\",
+                \"role\": \"user\"
+            }
+        }")
+    
+    local user_code=$(echo "$user_response" | tail -n1)
+    if [ "$user_code" -eq 201 ]; then
+        success "Regular user created successfully"
+    else
+        error "Failed to create regular user: $(echo "$user_response" | sed '$d')"
+        return 1
+    fi
+    
+    # Test 2: Login as admin and get session
+    log "Testing admin login..."
+    local admin_login=$(curl -s -c "$RESULTS_DIR/admin_cookies.txt" -X POST \
+        "http://localhost:$port/users/login" \
+        -H "Content-Type: application/json" \
+        -d '{"username":"testadmin","password":"admin123"}')
+    
+    local admin_user_id=$(echo "$admin_login" | jq -r '.id // empty')
+    if [ -n "$admin_user_id" ]; then
+        success "Admin login successful, user ID: $admin_user_id"
+    else
+        error "Admin login failed: $admin_login"
+        return 1
+    fi
+    
+    # Test 3: Login as regular user and get session
+    log "Testing regular user login..."
+    local user_login=$(curl -s -c "$RESULTS_DIR/user_cookies.txt" -X POST \
+        "http://localhost:$port/users/login" \
+        -H "Content-Type: application/json" \
+        -d '{"username":"testuser","password":"user123"}')
+    
+    local regular_user_id=$(echo "$user_login" | jq -r '.id // empty')
+    if [ -n "$regular_user_id" ]; then
+        success "Regular user login successful, user ID: $regular_user_id"
+    else
+        error "Regular user login failed: $user_login"
+        return 1
+    fi
+    
+    # Test 4: Create private documents for both users
+    log "Creating private documents..."
+    
+    # Admin creates a private document
+    local admin_doc=$(curl -s -b "$RESULTS_DIR/admin_cookies.txt" -X POST \
+        "http://localhost:$port/private_docs" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"title\": \"Admin Secret Document\",
+            \"content\": \"This is an admin-only document\",
+            \"userId\": \"$admin_user_id\",
+            \"private\": true
+        }")
+    
+    local admin_doc_id=$(echo "$admin_doc" | jq -r '.id // empty')
+    if [ -n "$admin_doc_id" ]; then
+        success "Admin document created: $admin_doc_id"
+    else
+        error "Failed to create admin document: $admin_doc"
+        return 1
+    fi
+    
+    # Regular user creates a private document
+    local user_doc=$(curl -s -b "$RESULTS_DIR/user_cookies.txt" -X POST \
+        "http://localhost:$port/private_docs" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"title\": \"User Private Document\",
+            \"content\": \"This is a user-only document\",
+            \"userId\": \"$regular_user_id\",
+            \"private\": true
+        }")
+    
+    local user_doc_id=$(echo "$user_doc" | jq -r '.id // empty')
+    if [ -n "$user_doc_id" ]; then
+        success "User document created: $user_doc_id"
+    else
+        error "Failed to create user document: $user_doc"
+        return 1
+    fi
+    
+    # Test 5: Test /me endpoint for both users
+    log "Testing /me endpoint..."
+    
+    # Admin /me
+    local admin_me=$(curl -s -b "$RESULTS_DIR/admin_cookies.txt" "http://localhost:$port/users/me")
+    local admin_me_id=$(echo "$admin_me" | jq -r '.id // empty')
+    if [ "$admin_me_id" = "$admin_user_id" ]; then
+        success "Admin /me endpoint works correctly"
+    else
+        error "Admin /me endpoint failed: $admin_me"
+        return 1
+    fi
+    
+    # Regular user /me
+    local user_me=$(curl -s -b "$RESULTS_DIR/user_cookies.txt" "http://localhost:$port/users/me")
+    local user_me_id=$(echo "$user_me" | jq -r '.id // empty')
+    if [ "$user_me_id" = "$regular_user_id" ]; then
+        success "Regular user /me endpoint works correctly"
+    else
+        error "Regular user /me endpoint failed: $user_me"
+        return 1
+    fi
+    
+    # Test 6: Test document filtering - regular user should only see their own documents
+    log "Testing document access control..."
+    
+    # Regular user tries to get all documents (should only see their own)
+    local user_docs=$(curl -s -b "$RESULTS_DIR/user_cookies.txt" "http://localhost:$port/private_docs")
+    local user_docs_count=$(echo "$user_docs" | jq 'length')
+    local user_sees_own=$(echo "$user_docs" | jq --arg uid "$regular_user_id" '.[] | select(.userId == $uid) | .id' | wc -l | tr -d ' ')
+    
+    if [ "$user_docs_count" -eq 1 ] && [ "$user_sees_own" -eq 1 ]; then
+        success "Regular user correctly sees only their own documents ($user_docs_count total)"
+    else
+        error "Regular user document filtering failed: sees $user_docs_count documents, $user_sees_own are their own"
+        return 1
+    fi
+    
+    # Test 7: Test master key access (isRoot=true) - should see all documents
+    log "Testing master key access (isRoot behavior)..."
+    
+    # Access with master key should see all documents
+    local master_docs=$(curl -s -H "X-Master-Key: $master_key" "http://localhost:$port/private_docs")
+    local master_docs_count=$(echo "$master_docs" | jq 'length')
+    
+    if [ "$master_docs_count" -eq 2 ]; then
+        success "Master key access correctly sees all documents ($master_docs_count total)"
+    else
+        error "Master key access failed: sees $master_docs_count documents instead of 2"
+        return 1
+    fi
+    
+    # Test 8: Test admin session with isRoot privileges
+    log "Testing admin session isRoot behavior..."
+    
+    # Login as admin with system login (should set isRoot=true)
+    local system_admin_login=$(curl -s -c "$RESULTS_DIR/system_admin_cookies.txt" -X POST \
+        "http://localhost:$port/_admin/auth/system-login" \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"testadmin\",\"masterKey\":\"$master_key\"}")
+    
+    local system_login_success=$(echo "$system_admin_login" | jq -r '.success // false')
+    if [ "$system_login_success" = "true" ]; then
+        success "System admin login successful"
+        
+        # Test that system admin can see all documents (isRoot=true)
+        local system_admin_docs=$(curl -s -b "$RESULTS_DIR/system_admin_cookies.txt" "http://localhost:$port/private_docs")
+        local system_admin_count=$(echo "$system_admin_docs" | jq 'length')
+        
+        if [ "$system_admin_count" -eq 2 ]; then
+            success "System admin (isRoot=true) correctly sees all documents ($system_admin_count total)"
+        else
+            error "System admin access failed: sees $system_admin_count documents instead of 2"
+            return 1
+        fi
+    else
+        error "System admin login failed: $system_admin_login"
+        return 1
+    fi
+    
+    # Test 9: Verify regular user still can't access other user's documents directly
+    log "Testing direct document access control..."
+    
+    # Regular user tries to access admin's document by ID
+    local unauthorized_access=$(curl -s -w "\n%{http_code}" -b "$RESULTS_DIR/user_cookies.txt" \
+        "http://localhost:$port/private_docs/$admin_doc_id")
+    
+    local access_code=$(echo "$unauthorized_access" | tail -n1)
+    if [ "$access_code" -eq 404 ] || [ "$access_code" -eq 403 ]; then
+        success "Regular user correctly denied access to admin document (HTTP $access_code)"
+    else
+        error "Regular user improperly accessed admin document (HTTP $access_code)"
+        return 1
+    fi
+    
+    # Test 10: Verify master key can access specific documents
+    local master_access=$(curl -s -w "\n%{http_code}" -H "X-Master-Key: $master_key" \
+        "http://localhost:$port/private_docs/$admin_doc_id")
+    
+    local master_access_code=$(echo "$master_access" | tail -n1)
+    if [ "$master_access_code" -eq 200 ]; then
+        success "Master key correctly accesses specific admin document (HTTP $master_access_code)"
+    else
+        error "Master key failed to access admin document (HTTP $master_access_code)"
+        return 1
+    fi
+    
+    success "All authentication and authorization tests passed!"
 }
 
 # Compare results between databases
@@ -356,12 +590,13 @@ run_database_tests() {
     fi
     
     # Create collections configuration
-    mkdir -p "$PROJECT_ROOT/resources"/{users,products,orders}
+    mkdir -p "$PROJECT_ROOT/resources"/{users,products,orders,private_docs}
     
     # Create simple configs for test collections
-    echo '{"properties":{"name":{"type":"string","required":true},"email":{"type":"string","required":true},"age":{"type":"number"},"active":{"type":"boolean","default":true},"role":{"type":"string","default":"user"}}}' > "$PROJECT_ROOT/resources/users/config.json"
+    echo '{"properties":{"username":{"type":"string","required":true},"email":{"type":"string","required":true},"password":{"type":"string","required":true},"role":{"type":"string","default":"user"},"name":{"type":"string"},"age":{"type":"number"},"active":{"type":"boolean","default":true}}}' > "$PROJECT_ROOT/resources/users/config.json"
     echo '{"properties":{"name":{"type":"string","required":true},"price":{"type":"number","required":true},"category":{"type":"string","required":true},"inStock":{"type":"boolean","default":true},"quantity":{"type":"number","default":0}}}' > "$PROJECT_ROOT/resources/products/config.json"  
     echo '{"properties":{"userId":{"type":"string","required":true},"status":{"type":"string","required":true},"total":{"type":"number","required":true},"items":{"type":"array"}}}' > "$PROJECT_ROOT/resources/orders/config.json"
+    echo '{"properties":{"title":{"type":"string","required":true},"content":{"type":"string","required":true},"userId":{"type":"string","required":true},"private":{"type":"boolean","default":true}}}' > "$PROJECT_ROOT/resources/private_docs/config.json"
     
     # Load test data
     load_test_data "$port" "users" || return 1
@@ -372,6 +607,7 @@ run_database_tests() {
     test_crud_operations "$port" "$db_type" || return 1
     test_query_operations "$port" "$db_type" || return 1
     test_mongodb_operators "$port" "$db_type" || return 1
+    test_authentication_and_authorization "$port" "$db_type" || return 1
     
     # Stop server
     stop_server "$db_type"

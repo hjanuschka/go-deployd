@@ -42,6 +42,7 @@ import {
   FiMoon,
 } from 'react-icons/fi'
 import { apiService } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 function Settings() {
   const [serverInfo, setServerInfo] = useState(null)
@@ -53,35 +54,73 @@ function Settings() {
     maxConnections: 100,
     sessionSecret: '***hidden***'
   })
+  const [securitySettings, setSecuritySettings] = useState({
+    sessionTTL: 86400,
+    tokenTTL: 2592000,
+    allowRegistration: false
+  })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [securityLoading, setSecurityLoading] = useState(false)
 
   const toast = useToast()
   const { colorMode, toggleColorMode } = useColorMode()
+  const { authFetch } = useAuth()
   const cardBg = useColorModeValue('white', 'gray.700')
 
   useEffect(() => {
     loadServerInfo()
+    loadSecuritySettings()
   }, [])
 
   const loadServerInfo = async () => {
     try {
       setLoading(true)
-      const info = await apiService.getServerInfo()
-      setServerInfo(info)
+      const response = await authFetch('/_admin/info')
+      if (response.ok) {
+        const info = await response.json()
+        setServerInfo(info)
+      } else {
+        throw new Error('Failed to load server info')
+      }
     } catch (err) {
       // Server info endpoint might not exist yet, show mock data
       setServerInfo({
         version: '1.0.0',
-        nodeVersion: 'Go 1.21',
+        goVersion: 'Go 1.21',
         uptime: '2h 15m',
-        memory: '45.2 MB',
+        database: 'Connected',
         collections: 2,
         totalDocuments: 156,
         environment: 'development'
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadSecuritySettings = async () => {
+    try {
+      setSecurityLoading(true)
+      const response = await authFetch('/_admin/settings/security')
+      if (response.ok) {
+        const settings = await response.json()
+        setSecuritySettings({
+          sessionTTL: settings.sessionTTL || 86400,
+          tokenTTL: settings.tokenTTL || 2592000,
+          allowRegistration: settings.allowRegistration || false
+        })
+      }
+    } catch (err) {
+      toast({
+        title: 'Error Loading Security Settings',
+        description: err.message,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setSecurityLoading(false)
     }
   }
 
@@ -111,8 +150,51 @@ function Settings() {
     }
   }
 
+  const saveSecuritySettings = async () => {
+    setSaving(true)
+    try {
+      const response = await authFetch('/_admin/settings/security', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(securitySettings),
+      })
+
+      if (response.ok) {
+        toast({
+          title: 'Security Settings Saved',
+          description: 'Security settings have been updated successfully.',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+      } else {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to save settings')
+      }
+    } catch (err) {
+      toast({
+        title: 'Error Saving Security Settings',
+        description: err.message,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({
+      ...prev,
+      [key]: value
+    }))
+  }
+
+  const handleSecuritySettingChange = (key, value) => {
+    setSecuritySettings(prev => ({
       ...prev,
       [key]: value
     }))
@@ -165,7 +247,7 @@ function Settings() {
                         </Stat>
                         <Stat>
                           <StatLabel>Runtime</StatLabel>
-                          <StatNumber fontSize="lg">{serverInfo.nodeVersion}</StatNumber>
+                          <StatNumber fontSize="lg">{serverInfo.goVersion}</StatNumber>
                         </Stat>
                         <Stat>
                           <StatLabel>Uptime</StatLabel>
@@ -321,61 +403,105 @@ function Settings() {
               <Alert status="warning" variant="left-accent">
                 <AlertIcon />
                 <AlertDescription>
-                  Changing security settings affects all active sessions.
+                  Changing security settings affects all active sessions and authentication behavior.
                 </AlertDescription>
               </Alert>
 
               <Card bg={cardBg}>
                 <CardHeader>
-                  <Heading size="md">Session & Authentication</Heading>
+                  <Heading size="md">Authentication & Session Settings</Heading>
                 </CardHeader>
                 <CardBody>
-                  <VStack align="stretch" spacing={4}>
-                    <FormControl>
-                      <FormLabel>Session Secret</FormLabel>
-                      <Input
-                        type="password"
-                        value={settings.sessionSecret}
-                        onChange={(e) => handleSettingChange('sessionSecret', e.target.value)}
-                        placeholder="Enter session secret"
-                      />
-                      <Text fontSize="sm" color="gray.500" mt={1}>
-                        Used to sign session cookies. Keep this secret!
-                      </Text>
-                    </FormControl>
+                  {securityLoading ? (
+                    <Text color="gray.500">Loading security settings...</Text>
+                  ) : (
+                    <VStack align="stretch" spacing={6}>
+                      <FormControl>
+                        <FormLabel>Session Timeout (seconds)</FormLabel>
+                        <Input
+                          type="number"
+                          value={securitySettings.sessionTTL}
+                          onChange={(e) => handleSecuritySettingChange('sessionTTL', parseInt(e.target.value))}
+                          min="300"
+                          max="2592000"
+                        />
+                        <Text fontSize="sm" color="gray.500" mt={1}>
+                          How long user sessions remain active (default: 86400 = 24 hours)
+                        </Text>
+                      </FormControl>
 
-                    <Box>
-                      <Text fontWeight="medium" mb={2}>Security Features</Text>
-                      <VStack align="start" spacing={2}>
-                        <HStack>
-                          <Badge colorScheme="green">✓</Badge>
-                          <Text fontSize="sm">HTTPS Ready</Text>
-                        </HStack>
-                        <HStack>
-                          <Badge colorScheme="green">✓</Badge>
-                          <Text fontSize="sm">CORS Protection</Text>
-                        </HStack>
-                        <HStack>
-                          <Badge colorScheme="green">✓</Badge>
-                          <Text fontSize="sm">Session Management</Text>
-                        </HStack>
-                        <HStack>
-                          <Badge colorScheme="green">✓</Badge>
-                          <Text fontSize="sm">Input Validation</Text>
-                        </HStack>
-                      </VStack>
-                    </Box>
+                      <FormControl>
+                        <FormLabel>API Token Timeout (seconds)</FormLabel>
+                        <Input
+                          type="number"
+                          value={securitySettings.tokenTTL}
+                          onChange={(e) => handleSecuritySettingChange('tokenTTL', parseInt(e.target.value))}
+                          min="3600"
+                          max="31536000"
+                        />
+                        <Text fontSize="sm" color="gray.500" mt={1}>
+                          How long API tokens remain valid (default: 2592000 = 30 days)
+                        </Text>
+                      </FormControl>
 
-                    <Button
-                      leftIcon={<FiSave />}
-                      colorScheme="brand"
-                      onClick={saveSettings}
-                      isLoading={saving}
-                      loadingText="Saving"
-                    >
-                      Save Security Settings
-                    </Button>
-                  </VStack>
+                      <FormControl display="flex" alignItems="center" justifyContent="space-between">
+                        <Box>
+                          <FormLabel mb="0">Allow Public Registration</FormLabel>
+                          <Text fontSize="sm" color="gray.500">
+                            When disabled, only administrators can create users via master key
+                          </Text>
+                        </Box>
+                        <Switch
+                          isChecked={securitySettings.allowRegistration}
+                          onChange={(e) => handleSecuritySettingChange('allowRegistration', e.target.checked)}
+                          colorScheme="brand"
+                        />
+                      </FormControl>
+
+                      <Divider />
+
+                      <Box>
+                        <Text fontWeight="medium" mb={2}>Master Key Security</Text>
+                        <VStack align="start" spacing={2}>
+                          <HStack>
+                            <Badge colorScheme="green">✓</Badge>
+                            <Text fontSize="sm">Master key generated and secured</Text>
+                          </HStack>
+                          <HStack>
+                            <Badge colorScheme="green">✓</Badge>
+                            <Text fontSize="sm">Dashboard authentication protected</Text>
+                          </HStack>
+                          <HStack>
+                            <Badge colorScheme="green">✓</Badge>
+                            <Text fontSize="sm">Admin API endpoints secured</Text>
+                          </HStack>
+                          <HStack>
+                            <Badge colorScheme="green">✓</Badge>
+                            <Text fontSize="sm">bcrypt password hashing (cost 12)</Text>
+                          </HStack>
+                        </VStack>
+                      </Box>
+
+                      <Alert status="info" variant="left-accent">
+                        <AlertIcon />
+                        <AlertDescription>
+                          Master key is stored in <Code>.deployd/security.json</Code> with 600 permissions.
+                          Keep this file secure and do not commit it to version control.
+                        </AlertDescription>
+                      </Alert>
+
+                      <Button
+                        leftIcon={<FiSave />}
+                        colorScheme="brand"
+                        onClick={saveSecuritySettings}
+                        isLoading={saving}
+                        loadingText="Saving Security Settings"
+                        size="lg"
+                      >
+                        Save Security Settings
+                      </Button>
+                    </VStack>
+                  )}
                 </CardBody>
               </Card>
             </VStack>

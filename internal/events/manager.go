@@ -29,6 +29,11 @@ const (
 	ScriptTypeGo ScriptType = "go"
 )
 
+// EventConfiguration represents per-event runtime configuration
+type EventConfiguration struct {
+	Runtime string `json:"runtime"` // "js" or "go"
+}
+
 // CompiledGoScript represents a compiled Go script
 type CompiledGoScript struct {
 	SourcePath   string
@@ -46,14 +51,9 @@ func NewUniversalScriptManager() *UniversalScriptManager {
 	}
 }
 
-// LoadScripts loads all event scripts from the given config path
-func (usm *UniversalScriptManager) LoadScripts(configPath string) error {
+// LoadScriptsWithConfig loads event scripts with runtime configuration
+func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, eventConfig map[string]EventConfiguration) error {
 	usm.configPath = configPath
-	
-	// Initialize hot-reload manager if needed
-	if usm.hotReloadManager == nil {
-		usm.hotReloadManager = NewHotReloadGoManager(configPath)
-	}
 	
 	eventNames := map[EventType]string{
 		EventGet:           "get",
@@ -73,32 +73,53 @@ func (usm *UniversalScriptManager) LoadScripts(configPath string) error {
 	os.MkdirAll(pluginDir, 0755)
 	
 	for eventType, baseName := range eventNames {
-		// Check for Go script first
-		goPath := filepath.Join(configPath, baseName+".go")
-		if content, err := os.ReadFile(goPath); err == nil {
-			// Load Go script for hot-reloading
-			if err := usm.hotReloadManager.LoadScript(eventType, string(content)); err != nil {
-				fmt.Printf("Warning: Failed to load Go script %s: %v\n", goPath, err)
-			} else {
-				usm.scriptTypes[eventType] = ScriptTypeGo
-				continue
-			}
+		// Get preferred runtime from config
+		preferredRuntime := "go" // default to Go
+		if config, exists := eventConfig[baseName]; exists && config.Runtime != "" {
+			preferredRuntime = config.Runtime
 		}
 		
-		// Check for JavaScript script
-		jsPath := filepath.Join(configPath, baseName+".js")
-		if content, err := os.ReadFile(jsPath); err == nil {
-			// Load JavaScript script
-			script := &Script{
-				source: string(content),
-				path:   jsPath,
+		// Load only the configured runtime - no fallback
+		if preferredRuntime == "go" {
+			// Only try Go script - compile to plugin on startup
+			goPath := filepath.Join(configPath, baseName+".go")
+			if _, err := os.ReadFile(goPath); err == nil {
+				fmt.Printf("📦 Compiling Go event script: %s/%s.go\n", filepath.Base(configPath), baseName)
+				// Compile Go script to plugin
+				pluginPath := filepath.Join(configPath, ".plugins", baseName+".so")
+				if err := CompileGoPlugin(goPath, pluginPath); err != nil {
+					fmt.Printf("❌ Failed to compile Go script %s: %v\n", goPath, err)
+					// Don't load this event script at all if Go compilation fails
+				} else {
+					fmt.Printf("✅ Successfully compiled Go event script: %s/%s.go\n", filepath.Base(configPath), baseName)
+					usm.goPlugins[eventType] = &CompiledGoScript{
+						SourcePath:   goPath,
+						PluginPath:   pluginPath,
+						LastModified: 0, // Not used for startup compilation
+					}
+					usm.scriptTypes[eventType] = ScriptTypeGo
+				}
 			}
-			// Pre-compile if possible
-			if prog, err := CompileJS(jsPath, script.source); err == nil {
-				script.compiled = prog
+			// If no .go file exists, that's fine - just don't load any script for this event
+		} else {
+			// Only try JavaScript - fail if compilation fails
+			jsPath := filepath.Join(configPath, baseName+".js")
+			if content, err := os.ReadFile(jsPath); err == nil {
+				script := &Script{
+					source: string(content),
+					path:   jsPath,
+				}
+				// Fail if JavaScript compilation fails
+				if prog, err := CompileJS(jsPath, script.source); err != nil {
+					fmt.Printf("Error: Failed to compile JavaScript script %s: %v\n", jsPath, err)
+					// Don't load this event script at all if JS compilation fails
+				} else {
+					script.compiled = prog
+					usm.jsScripts[eventType] = script
+					usm.scriptTypes[eventType] = ScriptTypeJS
+				}
 			}
-			usm.jsScripts[eventType] = script
-			usm.scriptTypes[eventType] = ScriptTypeJS
+			// If no .js file exists, that's fine - just don't load any script for this event
 		}
 	}
 	
@@ -149,10 +170,11 @@ func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Co
 	
 	switch scriptType {
 	case ScriptTypeGo:
+		goScript := usm.goPlugins[eventType]
 		usm.mu.RUnlock()
-		// Use hot-reload manager for Go scripts
-		if usm.hotReloadManager != nil {
-			return usm.hotReloadManager.RunScript(eventType, ctx, data)
+		// Use compiled plugin for Go scripts
+		if goScript != nil {
+			return RunGoPlugin(goScript.PluginPath, ctx, data)
 		}
 		return nil
 		
@@ -212,28 +234,45 @@ func (usm *UniversalScriptManager) GetScriptInfo() map[string]interface{} {
 	return info
 }
 
+// LoadScripts loads all event scripts from the given config path (backward compatibility)
+func (usm *UniversalScriptManager) LoadScripts(configPath string) error {
+	return usm.LoadScriptsWithConfig(configPath, make(map[string]EventConfiguration))
+}
+
 // ReloadScript reloads a specific event script
 func (usm *UniversalScriptManager) ReloadScript(eventType EventType) error {
 	// This would allow hot-reloading of scripts during development
 	return usm.LoadScripts(usm.configPath)
 }
 
-// LoadHotReloadScript loads a Go script for hot-reloading
+// LoadHotReloadScript compiles and hot-loads a Go script
 func (usm *UniversalScriptManager) LoadHotReloadScript(eventType EventType, source string) error {
 	usm.mu.Lock()
 	defer usm.mu.Unlock()
 	
-	// Initialize hot-reload manager if needed
-	if usm.hotReloadManager == nil {
-		usm.hotReloadManager = NewHotReloadGoManager(usm.configPath)
-	}
-	
-	// Load the script for hot-reloading
-	if err := usm.hotReloadManager.LoadScript(eventType, source); err != nil {
+	// Write source to the actual file location
+	eventName := strings.ToLower(string(eventType))
+	sourcePath := filepath.Join(usm.configPath, eventName+".go")
+	if err := os.WriteFile(sourcePath, []byte(source), 0644); err != nil {
 		return err
 	}
 	
-	// Update script type
+	// Compile to plugin
+	pluginPath := filepath.Join(usm.configPath, ".plugins", eventName+".so")
+	fmt.Printf("🔄 Hot-reloading Go event script: %s/%s.go\n", filepath.Base(usm.configPath), eventName)
+	if err := CompileGoPlugin(sourcePath, pluginPath); err != nil {
+		fmt.Printf("❌ Failed to hot-reload Go script: %v\n", err)
+		return err
+	}
+	
+	fmt.Printf("✅ Successfully hot-reloaded Go event script: %s/%s.go\n", filepath.Base(usm.configPath), eventName)
+	
+	// Update plugin reference
+	usm.goPlugins[eventType] = &CompiledGoScript{
+		SourcePath:   sourcePath,
+		PluginPath:   pluginPath,
+		LastModified: 0,
+	}
 	usm.scriptTypes[eventType] = ScriptTypeGo
 	return nil
 }

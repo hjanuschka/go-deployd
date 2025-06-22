@@ -19,5 +19,16 @@
     "description": {
       "type": "string"
     }
+  },
+  "eventConfig": {
+    "validate": {
+      "runtime": "js"
+    },
+    "post": {
+      "runtime": "js"
+    },
+    "get": {
+      "runtime": "go"
+    }
   }
 }

@@ -11,21 +11,19 @@ import (
 
 // SecurityConfig holds security-related configuration
 type SecurityConfig struct {
-	MasterKey    string `json:"masterKey"`
-	SessionTTL   int    `json:"sessionTTL"`   // in seconds
-	TokenTTL     int    `json:"tokenTTL"`     // in seconds
-	EnableSSO    bool   `json:"enableSSO"`
-	SSOEndpoint  string `json:"ssoEndpoint"`
+	MasterKey           string `json:"masterKey"`
+	SessionTTL          int    `json:"sessionTTL"`          // in seconds
+	TokenTTL            int    `json:"tokenTTL"`            // in seconds
+	AllowRegistration   bool   `json:"allowRegistration"`   // allow public user registration
 }
 
 // DefaultSecurityConfig returns the default security configuration
 func DefaultSecurityConfig() *SecurityConfig {
 	return &SecurityConfig{
-		MasterKey:   "",
-		SessionTTL:  86400,  // 24 hours
-		TokenTTL:    2592000, // 30 days
-		EnableSSO:   false,
-		SSOEndpoint: "",
+		MasterKey:         "",
+		SessionTTL:        86400,  // 24 hours
+		TokenTTL:          2592000, // 30 days
+		AllowRegistration: true,   // allow registration by default
 	}
 }
 

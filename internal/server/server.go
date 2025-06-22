@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hjanuschka/go-deployd/internal/admin"
 	"github.com/hjanuschka/go-deployd/internal/database"
+	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/router"
 	"github.com/hjanuschka/go-deployd/internal/sessions"
 )
@@ -66,6 +67,18 @@ func New(config *Config) (*Server, error) {
 
 	sessionStore := sessions.New(db, config.Development)
 
+	// Initialize logging system
+	if err := logging.InitializeLogger("./logs"); err != nil {
+		return nil, fmt.Errorf("failed to initialize logging: %w", err)
+	}
+
+	// Log server startup
+	logging.Info("Starting go-deployd server", "server", map[string]interface{}{
+		"port":         config.Port,
+		"database":     config.DatabaseType,
+		"development":  config.Development,
+	})
+
 	s := &Server{
 		config:   config,
 		db:       db,
@@ -105,29 +118,9 @@ func (s *Server) setupRoutes() {
 	// Built-in API routes (like original Deployd)
 	s.setupBuiltinRoutes()
 
-	// Serve dashboard static files
+	// Serve dashboard static files with authentication
 	dashboardPath := filepath.Join("web", "dashboard")
-	s.httpMux.PathPrefix("/_dashboard/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/_dashboard/")
-		if path == "" || path == "/" {
-			// Serve index.html for dashboard root
-			path = "index.html"
-		}
-		fullPath := filepath.Join(dashboardPath, path)
-		
-		// Check if file exists
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			// If file doesn't exist and it's not an asset, serve index.html (SPA routing)
-			if !strings.HasPrefix(path, "assets/") {
-				fullPath = filepath.Join(dashboardPath, "index.html")
-			} else {
-				http.NotFound(w, r)
-				return
-			}
-		}
-		
-		http.ServeFile(w, r, fullPath)
-	})
+	s.httpMux.PathPrefix("/_dashboard/").HandlerFunc(s.serveDashboardWithAuth(dashboardPath))
 
 	// Root route handling
 	s.setupRootRoute()
@@ -230,4 +223,75 @@ func (s *Server) Close() error {
 
 func (s *Server) CreateStore(namespace string) database.StoreInterface {
 	return s.db.CreateStore(namespace)
+}
+
+// serveDashboardWithAuth returns a handler that serves dashboard files with master key authentication
+func (s *Server) serveDashboardWithAuth(dashboardPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract path
+		path := strings.TrimPrefix(r.URL.Path, "/_dashboard/")
+		
+		// Allow login page without authentication
+		if path == "login" || path == "login/" || strings.HasPrefix(path, "assets/") {
+			s.serveDashboardFile(w, r, dashboardPath, path)
+			return
+		}
+		
+		// Check for master key authentication
+		masterKey := r.Header.Get("X-Master-Key")
+		if masterKey == "" {
+			// Also check cookie
+			if cookie, err := r.Cookie("masterKey"); err == nil {
+				masterKey = cookie.Value
+			}
+		}
+		
+		// Validate master key
+		if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+			// Redirect to login page for dashboard requests
+			if path == "" || path == "/" || !strings.HasPrefix(path, "assets/") {
+				http.Redirect(w, r, "/_dashboard/login", http.StatusTemporaryRedirect)
+				return
+			}
+			
+			// For API requests, return 401
+			if strings.HasPrefix(path, "api/") {
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Authentication required",
+					"message": "Master key required for dashboard access",
+				})
+				return
+			}
+			
+			// For other requests, serve login page
+			path = "login"
+		}
+		
+		s.serveDashboardFile(w, r, dashboardPath, path)
+	}
+}
+
+// serveDashboardFile serves a specific dashboard file
+func (s *Server) serveDashboardFile(w http.ResponseWriter, r *http.Request, dashboardPath, path string) {
+	if path == "" || path == "/" {
+		// Serve index.html for dashboard root
+		path = "index.html"
+	}
+	
+	fullPath := filepath.Join(dashboardPath, path)
+	
+	// Check if file exists
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		// If file doesn't exist and it's not an asset, serve index.html (SPA routing)
+		if !strings.HasPrefix(path, "assets/") {
+			fullPath = filepath.Join(dashboardPath, "index.html")
+		} else {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	
+	http.ServeFile(w, r, fullPath)
 }

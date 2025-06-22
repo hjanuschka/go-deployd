@@ -156,9 +156,80 @@ curl "http://localhost:2403/todos?\$in[status]=todo,done"
 curl "http://localhost:2403/todos/count"
 ```
 
-## Sessions & Authentication
+## Authentication & Security
 
-The server automatically manages sessions via cookies. In development mode (`-dev` flag), all sessions have root privileges.
+### Master Key System
+
+Go-Deployd uses a secure master key system for administrative access and programmatic user management:
+
+- **Master key is auto-generated** on first startup and stored in `.deployd/security.json`
+- **File permissions** are set to 600 (owner read/write only) for security
+- **Dashboard access** requires master key authentication
+- **Admin API endpoints** are protected by master key validation
+
+#### Configuration Location
+
+All security settings are stored in `.deployd/security.json`:
+
+```json
+{
+  "masterKey": "mk_...",
+  "sessionTTL": 86400,
+  "tokenTTL": 2592000,
+  "allowRegistration": false
+}
+```
+
+#### Settings:
+- `masterKey` - Auto-generated cryptographically secure key (96 hex chars)
+- `sessionTTL` - Session timeout in seconds (default: 24 hours)
+- `tokenTTL` - API token timeout in seconds (default: 30 days)  
+- `allowRegistration` - Allow public user registration (default: true, set to false for admin-only user creation)
+
+#### Dashboard Authentication
+
+1. Visit `http://localhost:2403/_dashboard`
+2. You'll be redirected to the login page
+3. Enter your master key (displayed in console on first startup)
+4. Access the dashboard with full administrative privileges
+
+#### API Authentication
+
+For programmatic access, include the master key in your requests:
+
+```bash
+# Via header
+curl -H "X-Master-Key: mk_your_master_key_here" http://localhost:2403/_admin/info
+
+# Via Authorization header
+curl -H "Authorization: Bearer mk_your_master_key_here" http://localhost:2403/_admin/info
+```
+
+#### User Management
+
+When `allowRegistration` is disabled, users can only be created via master key:
+
+```bash
+# Create user with master key
+curl -X POST http://localhost:2403/_admin/auth/create-user \
+  -H "Content-Type: application/json" \
+  -d '{
+    "masterKey": "mk_your_master_key_here",
+    "userData": {
+      "username": "admin",
+      "email": "admin@example.com", 
+      "password": "secure123",
+      "role": "admin"
+    }
+  }'
+```
+
+#### Session Management
+
+The server automatically manages sessions via cookies. With master key authentication:
+- **isRoot** is automatically set to `true` for admin privileges
+- Sessions persist across requests for seamless dashboard usage
+- In development mode (`-dev` flag), additional debugging features are available
 
 ## Architecture
 

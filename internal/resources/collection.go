@@ -13,10 +13,12 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/database"
 	appcontext "github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/events"
+	"github.com/hjanuschka/go-deployd/internal/logging"
 )
 
 type CollectionConfig struct {
-	Properties map[string]Property `json:"properties"`
+	Properties   map[string]Property                        `json:"properties"`
+	EventConfig  map[string]events.EventConfiguration       `json:"eventConfig,omitempty"`
 }
 
 type Collection struct {
@@ -57,8 +59,8 @@ func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInter
 		userCollection := NewUserCollection(name, &config, db)
 		userCollection.configPath = configPath
 		
-		// Load event scripts
-		if err := userCollection.scriptManager.LoadScripts(configPath); err != nil {
+		// Load event scripts with configuration
+		if err := userCollection.scriptManager.LoadScriptsWithConfig(configPath, config.EventConfig); err != nil {
 			// Scripts are optional, so don't fail if they don't exist
 			fmt.Printf("Warning: Failed to load scripts for %s: %v\n", name, err)
 		}
@@ -70,8 +72,8 @@ func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInter
 	collection := NewCollection(name, &config, db)
 	collection.configPath = configPath
 	
-	// Load event scripts
-	if err := collection.scriptManager.LoadScripts(configPath); err != nil {
+	// Load event scripts with configuration
+	if err := collection.scriptManager.LoadScriptsWithConfig(configPath, config.EventConfig); err != nil {
 		// Scripts are optional, so don't fail if they don't exist
 		fmt.Printf("Warning: Failed to load scripts for %s: %v\n", name, err)
 	}
@@ -161,6 +163,11 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 }
 
 func (c *Collection) handlePost(ctx *appcontext.Context) error {
+	logging.Debug("POST request started", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+		"requestBodyKeys": getDataKeys(ctx.Body),
+		"requestBody":     ctx.Body,
+	})
+
 	// Run BeforeRequest event
 	if err := c.runBeforeRequestEvent(ctx, "POST"); err != nil {
 		if scriptErr, ok := err.(*events.ScriptError); ok {
@@ -169,12 +176,30 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 		return ctx.WriteError(500, err.Error())
 	}
 
+	logging.Debug("Starting Go validation", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+		"bodyKeys": getDataKeys(ctx.Body),
+		"body":     ctx.Body,
+	})
+
 	// Validate and sanitize body
 	if err := c.validate(ctx.Body, true); err != nil {
+		logging.Debug("Go validation failed", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"error": err.Error(),
+		})
 		return ctx.WriteError(400, err.Error())
 	}
 	
+	logging.Debug("Go validation passed, starting sanitization", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+		"bodyKeys": getDataKeys(ctx.Body),
+		"body":     ctx.Body,
+	})
+	
 	sanitized := c.sanitize(ctx.Body)
+	
+	logging.Debug("Sanitization complete", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+		"sanitizedKeys": getDataKeys(sanitized),
+		"sanitized":     sanitized,
+	})
 	
 	// Set default values
 	c.setDefaults(sanitized)
@@ -201,8 +226,18 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 	// Insert document
 	result, err := c.store.Insert(ctx.Context(), sanitized)
 	if err != nil {
+		logging.Error("Failed to insert document", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"error": err.Error(),
+			"data":  sanitized,
+		})
 		return ctx.WriteError(500, err.Error())
 	}
+
+	// Log successful document creation
+	logging.Info("Document created", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+		"documentId": result,
+		"fields":     len(sanitized),
+	})
 	
 	// Run AfterCommit event
 	if resultDoc, ok := result.(map[string]interface{}); ok {
@@ -397,7 +432,12 @@ func (c *Collection) validate(data map[string]interface{}, isCreate bool) error 
 	}
 	
 	if len(errors) > 0 {
-		return fmt.Errorf("validation errors: %v", errors)
+		// Format errors as field: message pairs
+		var errorStrings []string
+		for field, message := range errors {
+			errorStrings = append(errorStrings, fmt.Sprintf("%s: %s", field, message))
+		}
+		return fmt.Errorf("validation errors: %s", strings.Join(errorStrings, ", "))
 	}
 	
 	return nil
@@ -454,6 +494,18 @@ func (c *Collection) sanitize(data map[string]interface{}) map[string]interface{
 	}
 	
 	return sanitized
+}
+
+// Helper function to get map keys for logging
+func getDataKeys(data map[string]interface{}) []string {
+	if data == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (c *Collection) coerceType(value interface{}, targetType string) interface{} {
@@ -634,7 +686,25 @@ func (c *Collection) runBeforeRequestEvent(ctx *appcontext.Context, event string
 }
 
 func (c *Collection) runValidateEvent(ctx *appcontext.Context, data map[string]interface{}) error {
-	return c.scriptManager.RunEvent(events.EventValidate, ctx, data)
+	logging.Debug("Running validate event", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+		"dataKeys":   getDataKeys(data),
+		"dataValues": data,
+		"hasData":    data != nil,
+		"dataLen":    len(data),
+	})
+	
+	err := c.scriptManager.RunEvent(events.EventValidate, ctx, data)
+	
+	if err != nil {
+		logging.Debug("Validate event returned error", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"error":     err.Error(),
+			"errorType": fmt.Sprintf("%T", err),
+		})
+	} else {
+		logging.Debug("Validate event completed successfully", fmt.Sprintf("collection:%s", c.name), nil)
+	}
+	
+	return err
 }
 
 func (c *Collection) runGetEvent(ctx *appcontext.Context, data map[string]interface{}) error {

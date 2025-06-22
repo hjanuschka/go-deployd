@@ -6,12 +6,60 @@ import (
 	"os/exec"
 	"path/filepath"
 	"plugin"
+	"runtime"
 	"strings"
 
 	"github.com/dop251/goja"
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+// EventContext provides context for event scripts (mirrored from plugin)
+type EventContext struct {
+	Ctx        *context.Context // For compatibility with existing code
+	Data       map[string]interface{}
+	Query      map[string]interface{}
+	Me         map[string]interface{}
+	Previous   map[string]interface{} // For PUT requests
+	IsRoot     bool
+	Internal   bool
+	Errors     map[string]string
+	Cancel     func(message string, statusCode int)
+	hideFields []string
+}
+
+func (ctx *EventContext) HasErrors() bool {
+	return len(ctx.Errors) > 0
+}
+
+func (ctx *EventContext) GetHiddenFields() []string {
+	return ctx.hideFields
+}
+
+func (ctx *EventContext) Error(field, message string) {
+	if ctx.Errors == nil {
+		ctx.Errors = make(map[string]string)
+	}
+	ctx.Errors[field] = message
+}
+
+func (ctx *EventContext) Hide(field string) {
+	ctx.hideFields = append(ctx.hideFields, field)
+	delete(ctx.Data, field)
+}
+
+func (ctx *EventContext) Protect(field string) {
+	delete(ctx.Data, field)
+}
+
+func (ctx *EventContext) IsMe(id string) bool {
+	if ctx.Me != nil {
+		if userID, ok := ctx.Me["id"].(string); ok {
+			return userID == id
+		}
+	}
+	return false
+}
 
 // CompileJS compiles JavaScript source code
 func CompileJS(filename, source string) (*goja.Program, error) {
@@ -26,40 +74,51 @@ func CompileGoPlugin(sourcePath, pluginPath string) error {
 		return fmt.Errorf("failed to read source: %w", err)
 	}
 
-	// Create a temporary wrapper file
-	wrapperPath := strings.TrimSuffix(pluginPath, ".so") + "_wrapper.go"
+	// Create a temporary directory for plugin compilation
+	tempDir := filepath.Join(filepath.Dir(pluginPath), "temp_"+filepath.Base(strings.TrimSuffix(pluginPath, ".so")))
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+	
+	// Create a temporary wrapper file in the temp directory
+	wrapperPath := filepath.Join(tempDir, "main.go")
 	wrapper := createGoWrapper(string(source))
 	
 	if err := os.WriteFile(wrapperPath, []byte(wrapper), 0644); err != nil {
 		return fmt.Errorf("failed to write wrapper: %w", err)
 	}
-	defer os.Remove(wrapperPath)
 
 	// Create a temporary go.mod file for the plugin
-	modPath := strings.TrimSuffix(pluginPath, ".so") + "_go.mod"
-	modContent := `module plugin
+	modPath := filepath.Join(tempDir, "go.mod")
+	modContent := `module eventplugin
 
 go 1.21
 
-require (
-	github.com/hjanuschka/go-deployd v0.0.0
-	go.mongodb.org/mongo-driver v1.13.0
-)
-
-replace github.com/hjanuschka/go-deployd => ` + getProjectRoot()
+`
 	
 	if err := os.WriteFile(modPath, []byte(modContent), 0644); err != nil {
 		return fmt.Errorf("failed to write go.mod: %w", err)
 	}
-	defer os.Remove(modPath)
 
-	// Compile the plugin
-	cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", pluginPath, wrapperPath)
+	// Get the Go root and construct the path to the Go executable
+	goRoot := runtime.GOROOT()
+	goExe := filepath.Join(goRoot, "bin", "go")
+	
+	// Fallback to PATH lookup if GOROOT doesn't work
+	if _, err := os.Stat(goExe); err != nil {
+		if goExe, err = exec.LookPath("go"); err != nil {
+			return fmt.Errorf("failed to find go executable: %w", err)
+		}
+	}
+	
+	// Compile the plugin using the same Go version
+	cmd := exec.Command(goExe, "build", "-buildmode=plugin", "-o", pluginPath, "main.go")
 	cmd.Env = append(os.Environ(), 
 		"GO111MODULE=on",
 		"GOWORK=off", // Disable workspace mode
 	)
-	cmd.Dir = filepath.Dir(wrapperPath)
+	cmd.Dir = tempDir
 	
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("compilation failed: %w\nOutput: %s", err, output)
@@ -68,30 +127,7 @@ replace github.com/hjanuschka/go-deployd => ` + getProjectRoot()
 	return nil
 }
 
-// createGoWrapper creates a wrapper that implements the plugin interface
-func createGoWrapper(userCode string) string {
-	return fmt.Sprintf(`package main
-
-import (
-	"time"
-	"strings"
-	"github.com/hjanuschka/go-deployd/internal/events"
-	"go.mongodb.org/mongo-driver/bson"
-)
-
-%s
-
-// EventHandler is the exported plugin handler
-var EventHandler eventHandler
-
-type eventHandler struct{}
-
-// Run implements the plugin interface
-func (h eventHandler) Run(ctx *events.EventContext) error {
-	return Run(ctx)
-}
-`, userCode)
-}
+// createGoWrapper is defined in compile_wrapper.go
 
 // RunGoPlugin loads and executes a Go plugin
 func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
@@ -113,13 +149,11 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 		Data:     data,
 		Errors:   make(map[string]string),
 		Query:    ctx.Query,
-		Internal: false, // TODO: Add Internal field to Context if needed
+		Internal: false,
 		IsRoot:   ctx.Session != nil && ctx.Session.IsRoot(),
 	}
 
 	if ctx.Session != nil {
-		// TODO: Add User field to Session interface if needed
-		// For now, try to get user from session data
 		if user := ctx.Session.Get("user"); user != nil {
 			if userMap, ok := user.(bson.M); ok {
 				eventCtx.Me = userMap
@@ -139,7 +173,7 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 
 	// Use reflection to call the Run method
 	handler := symHandler.(interface{})
-	if runnable, ok := handler.(interface{ Run(*EventContext) error }); ok {
+	if runnable, ok := handler.(interface{ Run(interface{}) error }); ok {
 		// Run with panic recovery
 		func() {
 			defer func() {
@@ -162,6 +196,13 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 
 		if eventCtx.HasErrors() {
 			return &ValidationError{Errors: eventCtx.Errors}
+		}
+		
+		// Apply hidden fields
+		if hiddenFields := eventCtx.GetHiddenFields(); hiddenFields != nil {
+			for _, field := range hiddenFields {
+				delete(data, field)
+			}
 		}
 	} else {
 		return fmt.Errorf("plugin does not implement Run method")
