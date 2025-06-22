@@ -24,7 +24,7 @@ go-deployd dev
 
 - **⚡ Zero Config** - JSON APIs in seconds, not hours
 - **🔥 Hot Reload** - JavaScript AND Go events with instant reload
-- **🎨 Beautiful Dashboard** - CodeMirror editor with syntax highlighting
+- **🎨 Beautiful Dashboard** - Professional editor with syntax highlighting
 - **📊 Production Ready** - Built for scale with Go's performance
 - **🔒 Security First** - Built-in authentication, validation, and CORS
 - **🌐 MongoDB Native** - Full MongoDB query support with `$sort`, `$limit`, `$fields`
@@ -192,7 +192,7 @@ internal/
 ### Completed Features
 - [x] JavaScript and Go event hooks with hot reload
 - [x] Modern admin dashboard with Chakra UI
-- [x] Professional CodeMirror editor with syntax highlighting  
+- [x] Professional code editor with syntax highlighting  
 - [x] Comprehensive event documentation with examples
 - [x] MongoDB query operators ($sort, $limit, $skip, $fields)
 - [x] Full CRUD operations with event lifecycle hooks
@@ -229,4 +229,4 @@ This project aims to maintain the spirit and simplicity of the original deployd 
 
 ## License
 
-Apache 2.0 (same as original deployd)
+MIT
