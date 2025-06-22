@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	v8 "rogchap.com/v8go"
 	"github.com/hjanuschka/go-deployd/internal/context"
@@ -16,10 +17,11 @@ import (
 
 // Script represents a JavaScript event script using V8 (compatible with goja interface)
 type Script struct {
-	source   string
-	path     string
-	compiled *v8.UnboundScript
-	mu       sync.RWMutex
+	source        string
+	path          string
+	compiled      *v8.UnboundScript
+	isPrecompiled bool // Indicates if script is precompiled in V8 pool
+	mu            sync.RWMutex
 }
 
 // EventType represents the type of event
@@ -101,6 +103,69 @@ func (s *Script) Run(ctx *context.Context, data bson.M) (*ScriptContext, error) 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	scriptCtx := &ScriptContext{
+		ctx:    ctx,
+		data:   data,
+		errors: make(map[string]string),
+	}
+
+	// Use V8 pool if script is precompiled for better performance
+	if s.isPrecompiled {
+		return s.runWithPool(scriptCtx)
+	}
+
+	// Fallback to traditional method for non-precompiled scripts
+	return s.runTraditional(scriptCtx)
+}
+
+// runWithPool executes the script using the V8 pool (optimized path)
+func (s *Script) runWithPool(scriptCtx *ScriptContext) (*ScriptContext, error) {
+	pool := GetV8Pool()
+	if pool == nil {
+		// Fallback to traditional execution if pool is not available
+		return s.runTraditional(scriptCtx)
+	}
+
+	// Acquire a context from the pool with timeout
+	eventCtx, err := pool.AcquireContext(5 * time.Second)
+	if err != nil {
+		logging.Debug("Failed to acquire V8 context from pool, falling back", "js-execution", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return s.runTraditional(scriptCtx)
+	}
+	defer pool.ReleaseContext(eventCtx)
+
+	// Execute the precompiled script
+	logging.Debug("Executing precompiled JavaScript script with V8 pool", "js-execution", map[string]interface{}{
+		"scriptPath": s.path,
+	})
+
+	if err := pool.ExecuteScript(eventCtx, s.path, scriptCtx); err != nil {
+		// Check if it's a cancellation (our custom exception)
+		if strings.Contains(err.Error(), "CANCEL") {
+			logging.Debug("JavaScript execution cancelled (V8 pool)", "js-execution", map[string]interface{}{
+				"cancelMsg": scriptCtx.cancelMsg,
+			})
+		} else {
+			logging.Debug("JavaScript execution failed (V8 pool)", "js-execution", map[string]interface{}{
+				"error": err.Error(),
+			})
+			return scriptCtx, fmt.Errorf("script error: %w", err)
+		}
+	}
+
+	logging.Debug("JavaScript execution completed (V8 pool)", "js-execution", map[string]interface{}{
+		"hasCancelled": scriptCtx.cancelled,
+		"hasErrors":    len(scriptCtx.errors) > 0,
+		"errors":       scriptCtx.errors,
+	})
+
+	return scriptCtx, nil
+}
+
+// runTraditional executes the script using traditional V8 method (fallback)
+func (s *Script) runTraditional(scriptCtx *ScriptContext) (*ScriptContext, error) {
 	// Create a new isolate for each script execution to avoid conflicts
 	isolate := v8.NewIsolate()
 	defer isolate.Dispose()
@@ -108,19 +173,13 @@ func (s *Script) Run(ctx *context.Context, data bson.M) (*ScriptContext, error) 
 	v8ctx := v8.NewContext(isolate)
 	defer v8ctx.Close()
 
-	scriptCtx := &ScriptContext{
-		ctx:    ctx,
-		data:   data,
-		errors: make(map[string]string),
-	}
-
 	// Set up the script environment
 	if err := setupV8Environment(v8ctx, scriptCtx); err != nil {
 		return nil, err
 	}
 
 	// Execute the script
-	logging.Debug("Executing JavaScript script with V8", "js-execution", map[string]interface{}{
+	logging.Debug("Executing JavaScript script with V8 (traditional)", "js-execution", map[string]interface{}{
 		"hasCompiledScript": s.compiled != nil,
 		"scriptPath":        s.path,
 	})
@@ -136,11 +195,11 @@ func (s *Script) Run(ctx *context.Context, data bson.M) (*ScriptContext, error) 
 		// Check if it's a cancellation (our custom exception)
 		if strings.Contains(err.Error(), "CANCEL") {
 			// This is expected for cancel() calls
-			logging.Debug("JavaScript execution cancelled (V8)", "js-execution", map[string]interface{}{
+			logging.Debug("JavaScript execution cancelled (V8 traditional)", "js-execution", map[string]interface{}{
 				"cancelMsg": scriptCtx.cancelMsg,
 			})
 		} else {
-			logging.Debug("JavaScript execution failed (V8)", "js-execution", map[string]interface{}{
+			logging.Debug("JavaScript execution failed (V8 traditional)", "js-execution", map[string]interface{}{
 				"error": err.Error(),
 			})
 			return scriptCtx, fmt.Errorf("script error: %w", err)
@@ -154,7 +213,7 @@ func (s *Script) Run(ctx *context.Context, data bson.M) (*ScriptContext, error) 
 		})
 	}
 
-	logging.Debug("JavaScript execution completed (V8)", "js-execution", map[string]interface{}{
+	logging.Debug("JavaScript execution completed (V8 traditional)", "js-execution", map[string]interface{}{
 		"hasCancelled": scriptCtx.cancelled,
 		"hasErrors":    len(scriptCtx.errors) > 0,
 		"errors":       scriptCtx.errors,

@@ -14,23 +14,12 @@
     "status": {
       "type": "string",
       "default": "pending"
-    },
-    "metadata": {
-      "type": "object"
-    },
-    "tags": {
-      "type": "array"
     }
   },
-  "eventConfig": {
+  "events": {
     "validate": {
-      "runtime": "js"
-    },
-    "post": {
-      "runtime": "js"
-    },
-    "put": {
       "runtime": "js"
     }
   }
 }
+EOF < /dev/null

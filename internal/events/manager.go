@@ -18,6 +18,7 @@ type UniversalScriptManager struct {
 	hotReloadManager *HotReloadGoManager
 	scriptTypes      map[EventType]ScriptType
 	configPath       string
+	v8Pool           *V8Pool
 	mu               sync.RWMutex
 }
 
@@ -43,11 +44,15 @@ type CompiledGoScript struct {
 
 // NewUniversalScriptManager creates a manager that supports both JS and Go
 func NewUniversalScriptManager() *UniversalScriptManager {
+	// Initialize V8 pool for JavaScript events
+	v8Pool := GetV8Pool()
+	
 	return &UniversalScriptManager{
 		jsScripts:        make(map[EventType]*Script),
 		goPlugins:        make(map[EventType]*CompiledGoScript),
 		scriptTypes:      make(map[EventType]ScriptType),
 		hotReloadManager: nil, // Will be initialized when needed
+		v8Pool:           v8Pool,
 	}
 }
 
@@ -109,7 +114,18 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 					source: string(content),
 					path:   jsPath,
 				}
-				// Compilation is handled in Script.Run() method
+				
+				// Pre-compile the script in V8 pool for better performance
+				if usm.v8Pool != nil {
+					if precompileErr := usm.v8Pool.PrecompileScript(jsPath, string(content)); precompileErr != nil {
+						// Log error but continue - fallback to runtime compilation
+						fmt.Printf("Warning: Failed to precompile JavaScript %s: %v\n", jsPath, precompileErr)
+					} else {
+						// Mark script as compiled for optimized execution
+						script.isPrecompiled = true
+					}
+				}
+				
 				usm.jsScripts[eventType] = script
 				usm.scriptTypes[eventType] = ScriptTypeJS
 			}

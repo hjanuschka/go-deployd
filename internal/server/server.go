@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hjanuschka/go-deployd/internal/admin"
 	"github.com/hjanuschka/go-deployd/internal/database"
+	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/router"
 	"github.com/hjanuschka/go-deployd/internal/sessions"
@@ -215,6 +216,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Close() error {
+	// Shutdown V8 pool for JavaScript events
+	if v8Pool := events.GetV8Pool(); v8Pool != nil {
+		v8Pool.Shutdown()
+		logging.Info("V8 pool shut down", "server", nil)
+	}
+	
 	if s.db != nil {
 		return s.db.Close()
 	}

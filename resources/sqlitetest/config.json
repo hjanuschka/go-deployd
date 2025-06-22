@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "number",
+      "default": 1
+    },
+    "status": {
+      "type": "string",
+      "default": "pending"
+    },
+    "completed": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}
