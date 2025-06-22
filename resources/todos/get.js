@@ -1,0 +1,1 @@
+console.log("GET event triggered for:", this.id);

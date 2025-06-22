@@ -1,0 +1,1 @@
+if (this.count < 0) cancel("Count cannot be negative", 422);
