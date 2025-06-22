@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"github.com/hjanuschka/go-deployd/internal/database"
 	appcontext "github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/events"
@@ -24,14 +22,14 @@ type CollectionConfig struct {
 type Collection struct {
 	*BaseResource
 	config           *CollectionConfig
-	store            *database.Store
-	db               *database.Database
+	store            database.StoreInterface
+	db               database.DatabaseInterface
 	scriptManager    *events.UniversalScriptManager
 	hotReloadManager *events.HotReloadGoManager
 	configPath       string
 }
 
-func NewCollection(name string, config *CollectionConfig, db *database.Database) *Collection {
+func NewCollection(name string, config *CollectionConfig, db database.DatabaseInterface) *Collection {
 	return &Collection{
 		BaseResource:     NewBaseResource(name),
 		config:           config,
@@ -42,7 +40,7 @@ func NewCollection(name string, config *CollectionConfig, db *database.Database)
 	}
 }
 
-func LoadCollectionFromConfig(name, configPath string, db *database.Database) (*Collection, error) {
+func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInterface) (*Collection, error) {
 	configFile := filepath.Join(configPath, "config.json")
 	data, err := os.ReadFile(configFile)
 	if err != nil {
@@ -99,7 +97,8 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 	
 	if id != "" {
 		// Get single document
-		doc, err := c.store.FindOne(ctx.Context(), bson.M{"id": id})
+		query := database.NewQueryBuilder().Where("id", "$eq", id)
+		doc, err := c.store.FindOne(ctx.Context(), query)
 		if err != nil {
 			return ctx.WriteError(500, err.Error())
 		}
@@ -122,16 +121,17 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 	// First extract query options like $sort, $limit, $skip
 	opts, cleanQuery := c.extractQueryOptions(ctx.Query)
 	
-	// Then sanitize the remaining query
+	// Then sanitize the remaining query and convert to QueryBuilder
 	sanitizedQuery := c.sanitizeQuery(cleanQuery)
+	query := c.mapToQueryBuilder(sanitizedQuery)
 	
-	docs, err := c.store.Find(ctx.Context(), sanitizedQuery, opts)
+	docs, err := c.store.Find(ctx.Context(), query, opts)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
 	
 	// Run Get event for each document
-	filteredDocs := make([]bson.M, 0)
+	filteredDocs := make([]map[string]interface{}, 0)
 	for _, doc := range docs {
 		if err := c.runGetEvent(ctx, doc); err != nil {
 			// Skip documents that fail the Get event
@@ -190,7 +190,7 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 	}
 	
 	// Run AfterCommit event
-	if resultDoc, ok := result.(bson.M); ok {
+	if resultDoc, ok := result.(map[string]interface{}); ok {
 		go c.runAfterCommitEvent(ctx, resultDoc, "POST")
 	}
 	
@@ -217,7 +217,8 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 	}
 	
 	// Get the existing document for the 'previous' object
-	previous, err := c.store.FindOne(ctx.Context(), bson.M{"id": id})
+	query := database.NewQueryBuilder().Where("id", "$eq", id)
+	previous, err := c.store.FindOne(ctx.Context(), query)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
@@ -233,7 +234,7 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 	sanitized := c.sanitize(ctx.Body)
 	
 	// Merge with existing document
-	merged := make(bson.M)
+	merged := make(map[string]interface{})
 	for k, v := range previous {
 		merged[k] = v
 	}
@@ -260,19 +261,24 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 		return ctx.WriteError(500, err.Error())
 	}
 	
-	// Update document
-	update := bson.M{"$set": sanitized}
-	result, err := c.store.Update(ctx.Context(), bson.M{"id": id}, update)
+	// Update document - for SQLite we need to update individual fields, not set the entire data
+	updateQuery := database.NewQueryBuilder().Where("id", "$eq", id)
+	updateBuilder := database.NewUpdateBuilder()
+	for key, value := range sanitized {
+		updateBuilder.Set(key, value)
+	}
+	result, err := c.store.Update(ctx.Context(), updateQuery, updateBuilder)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
 	
-	if result.MatchedCount == 0 {
+	if result.ModifiedCount() == 0 {
 		return ctx.WriteError(404, "Document not found")
 	}
 	
 	// Return updated document
-	doc, err := c.store.FindOne(ctx.Context(), bson.M{"id": id})
+	findQuery := database.NewQueryBuilder().Where("id", "$eq", id)
+	doc, err := c.store.FindOne(ctx.Context(), findQuery)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
@@ -298,7 +304,8 @@ func (c *Collection) handleDelete(ctx *appcontext.Context) error {
 	}
 	
 	// Get the document to delete
-	doc, err := c.store.FindOne(ctx.Context(), bson.M{"id": id})
+	query := database.NewQueryBuilder().Where("id", "$eq", id)
+	doc, err := c.store.FindOne(ctx.Context(), query)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
@@ -315,12 +322,13 @@ func (c *Collection) handleDelete(ctx *appcontext.Context) error {
 	}
 	
 	// Delete the document
-	result, err := c.store.Remove(ctx.Context(), bson.M{"id": id})
+	deleteQuery := database.NewQueryBuilder().Where("id", "$eq", id)
+	result, err := c.store.Remove(ctx.Context(), deleteQuery)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
 	
-	if result.DeletedCount == 0 {
+	if result.DeletedCount() == 0 {
 		return ctx.WriteError(404, "Document not found")
 	}
 	
@@ -328,7 +336,7 @@ func (c *Collection) handleDelete(ctx *appcontext.Context) error {
 	go c.runAfterCommitEvent(ctx, doc, "DELETE")
 	
 	return ctx.WriteJSON(map[string]interface{}{
-		"deleted": result.DeletedCount,
+		"deleted": result.DeletedCount(),
 	})
 }
 
@@ -337,10 +345,11 @@ func (c *Collection) handleCount(ctx *appcontext.Context) error {
 		return ctx.WriteError(403, "Must be root to count")
 	}
 	
-	query := c.sanitizeQuery(ctx.Query)
-	delete(query, "id") // Remove id from query for count
+	sanitizedQuery := c.sanitizeQuery(ctx.Query)
+	delete(sanitizedQuery, "id") // Remove id from query for count
+	countQuery := c.mapToQueryBuilder(sanitizedQuery)
 	
-	count, err := c.store.Count(ctx.Context(), query)
+	count, err := c.store.Count(ctx.Context(), countQuery)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
@@ -350,7 +359,7 @@ func (c *Collection) handleCount(ctx *appcontext.Context) error {
 	})
 }
 
-func (c *Collection) validate(data bson.M, isCreate bool) error {
+func (c *Collection) validate(data map[string]interface{}, isCreate bool) error {
 	if c.config == nil || c.config.Properties == nil {
 		return nil
 	}
@@ -404,19 +413,19 @@ func (c *Collection) validateType(value interface{}, expectedType string) bool {
 	case "object":
 		_, ok := value.(map[string]interface{})
 		if !ok {
-			_, ok = value.(bson.M)
+			_, ok = value.(map[string]interface{})
 		}
 		return ok
 	}
 	return false
 }
 
-func (c *Collection) sanitize(data bson.M) bson.M {
+func (c *Collection) sanitize(data map[string]interface{}) map[string]interface{} {
 	if c.config == nil || c.config.Properties == nil {
 		return data
 	}
 	
-	sanitized := make(bson.M)
+	sanitized := make(map[string]interface{})
 	
 	for name, prop := range c.config.Properties {
 		if value, exists := data[name]; exists {
@@ -455,12 +464,12 @@ func (c *Collection) coerceType(value interface{}, targetType string) interface{
 	}
 }
 
-func (c *Collection) sanitizeQuery(query bson.M) bson.M {
+func (c *Collection) sanitizeQuery(query map[string]interface{}) map[string]interface{} {
 	if c.config == nil || c.config.Properties == nil {
 		return query
 	}
 	
-	sanitized := make(bson.M)
+	sanitized := make(map[string]interface{})
 	
 	for key, value := range query {
 		// Allow MongoDB operators and id field
@@ -478,66 +487,67 @@ func (c *Collection) sanitizeQuery(query bson.M) bson.M {
 	return sanitized
 }
 
-func (c *Collection) extractQueryOptions(query bson.M) (*options.FindOptions, bson.M) {
-	opts := options.Find()
-	cleanQuery := make(bson.M)
+func (c *Collection) extractQueryOptions(query map[string]interface{}) (database.QueryOptions, map[string]interface{}) {
+	opts := database.QueryOptions{
+		Sort:   make(map[string]int),
+		Fields: make(map[string]int),
+	}
+	cleanQuery := make(map[string]interface{})
 	
 	for key, value := range query {
 		switch key {
 		case "$sort", "$orderby":
 			// Handle different value types for sort specification
-			if sortSpec, ok := value.(bson.M); ok {
-				opts.SetSort(sortSpec)
-			} else if sortMap, ok := value.(map[string]interface{}); ok {
-				// Convert map[string]interface{} to bson.M
-				sortSpec := make(bson.M)
+			if sortMap, ok := value.(map[string]interface{}); ok {
 				for k, v := range sortMap {
-					sortSpec[k] = v
+					if sortDir, ok := v.(int); ok {
+						opts.Sort[k] = sortDir
+					} else if sortDir, ok := v.(float64); ok {
+						opts.Sort[k] = int(sortDir)
+					}
 				}
-				opts.SetSort(sortSpec)
 			}
 		case "$limit":
 			if limit, ok := value.(int64); ok {
-				opts.SetLimit(limit)
+				opts.Limit = &limit
 			} else if limitFloat, ok := value.(float64); ok {
-				opts.SetLimit(int64(limitFloat))
+				limit := int64(limitFloat)
+				opts.Limit = &limit
 			} else if limitStr, ok := value.(string); ok {
 				if limit, err := strconv.ParseInt(limitStr, 10, 64); err == nil {
-					opts.SetLimit(limit)
+					opts.Limit = &limit
 				}
 			}
 		case "$skip":
 			if skip, ok := value.(int64); ok {
-				opts.SetSkip(skip)
+				opts.Skip = &skip
 			} else if skipFloat, ok := value.(float64); ok {
-				opts.SetSkip(int64(skipFloat))
+				skip := int64(skipFloat)
+				opts.Skip = &skip
 			} else if skipStr, ok := value.(string); ok {
 				if skip, err := strconv.ParseInt(skipStr, 10, 64); err == nil {
-					opts.SetSkip(skip)
+					opts.Skip = &skip
 				}
 			}
 		case "$fields":
 			// Handle field projection - support both object and string formats
-			if fieldsSpec, ok := value.(bson.M); ok {
-				opts.SetProjection(fieldsSpec)
-			} else if fieldsMap, ok := value.(map[string]interface{}); ok {
-				// Convert map[string]interface{} to bson.M
-				fieldsSpec := make(bson.M)
+			if fieldsMap, ok := value.(map[string]interface{}); ok {
 				for k, v := range fieldsMap {
-					fieldsSpec[k] = v
+					if include, ok := v.(int); ok {
+						opts.Fields[k] = include
+					} else if include, ok := v.(float64); ok {
+						opts.Fields[k] = int(include)
+					}
 				}
-				opts.SetProjection(fieldsSpec)
 			} else if fieldsStr, ok := value.(string); ok {
 				// Handle comma-separated field list like "title,content,id"
-				fieldsSpec := make(bson.M)
 				fields := strings.Split(fieldsStr, ",")
 				for _, field := range fields {
 					field = strings.TrimSpace(field)
 					if field != "" {
-						fieldsSpec[field] = 1
+						opts.Fields[field] = 1
 					}
 				}
-				opts.SetProjection(fieldsSpec)
 			}
 		default:
 			cleanQuery[key] = value
@@ -547,7 +557,41 @@ func (c *Collection) extractQueryOptions(query bson.M) (*options.FindOptions, bs
 	return opts, cleanQuery
 }
 
-func (c *Collection) setDefaults(data bson.M) {
+func (c *Collection) mapToQueryBuilder(query map[string]interface{}) database.QueryBuilder {
+	builder := database.NewQueryBuilder()
+	
+	for field, value := range query {
+		if strings.HasPrefix(field, "$") {
+			// Handle special MongoDB operators at root level
+			continue
+		}
+		
+		if valueMap, ok := value.(map[string]interface{}); ok {
+			// Field has operators like {"age": {"$gt": 18}}
+			for op, opValue := range valueMap {
+				switch op {
+				case "$in":
+					if values, ok := opValue.([]interface{}); ok {
+						builder.WhereIn(field, values)
+					}
+				case "$nin":
+					if values, ok := opValue.([]interface{}); ok {
+						builder.WhereNotIn(field, values)
+					}
+				default:
+					builder.Where(field, op, opValue)
+				}
+			}
+		} else {
+			// Simple equality
+			builder.Where(field, "$eq", value)
+		}
+	}
+	
+	return builder
+}
+
+func (c *Collection) setDefaults(data map[string]interface{}) {
 	if c.config == nil || c.config.Properties == nil {
 		return
 	}
@@ -565,31 +609,31 @@ func (c *Collection) setDefaults(data bson.M) {
 
 // Event runner methods
 func (c *Collection) runBeforeRequestEvent(ctx *appcontext.Context, event string) error {
-	data := bson.M{"event": event}
+	data := map[string]interface{}{"event": event}
 	return c.scriptManager.RunEvent(events.EventBeforeRequest, ctx, data)
 }
 
-func (c *Collection) runValidateEvent(ctx *appcontext.Context, data bson.M) error {
+func (c *Collection) runValidateEvent(ctx *appcontext.Context, data map[string]interface{}) error {
 	return c.scriptManager.RunEvent(events.EventValidate, ctx, data)
 }
 
-func (c *Collection) runGetEvent(ctx *appcontext.Context, data bson.M) error {
+func (c *Collection) runGetEvent(ctx *appcontext.Context, data map[string]interface{}) error {
 	return c.scriptManager.RunEvent(events.EventGet, ctx, data)
 }
 
-func (c *Collection) runPostEvent(ctx *appcontext.Context, data bson.M) error {
+func (c *Collection) runPostEvent(ctx *appcontext.Context, data map[string]interface{}) error {
 	return c.scriptManager.RunEvent(events.EventPost, ctx, data)
 }
 
-func (c *Collection) runPutEvent(ctx *appcontext.Context, data bson.M) error {
+func (c *Collection) runPutEvent(ctx *appcontext.Context, data map[string]interface{}) error {
 	return c.scriptManager.RunEvent(events.EventPut, ctx, data)
 }
 
-func (c *Collection) runDeleteEvent(ctx *appcontext.Context, data bson.M) error {
+func (c *Collection) runDeleteEvent(ctx *appcontext.Context, data map[string]interface{}) error {
 	return c.scriptManager.RunEvent(events.EventDelete, ctx, data)
 }
 
-func (c *Collection) runAfterCommitEvent(ctx *appcontext.Context, data bson.M, event string) {
+func (c *Collection) runAfterCommitEvent(ctx *appcontext.Context, data map[string]interface{}, event string) {
 	// AfterCommit runs asynchronously and errors are ignored
 	c.scriptManager.RunEvent(events.EventAfterCommit, ctx, data)
 }
@@ -599,11 +643,11 @@ func (c *Collection) LoadHotReloadScript(eventType events.EventType, source stri
 	return c.scriptManager.LoadHotReloadScript(eventType, source)
 }
 
-func (c *Collection) TestHotReloadScript(eventType events.EventType, ctx *appcontext.Context, data bson.M) error {
+func (c *Collection) TestHotReloadScript(eventType events.EventType, ctx *appcontext.Context, data map[string]interface{}) error {
 	return c.scriptManager.RunEvent(eventType, ctx, data)
 }
 
-func (c *Collection) TestScript(eventType events.EventType, ctx *appcontext.Context, data bson.M) error {
+func (c *Collection) TestScript(eventType events.EventType, ctx *appcontext.Context, data map[string]interface{}) error {
 	return c.scriptManager.RunEvent(eventType, ctx, data)
 }
 
@@ -620,7 +664,7 @@ func (c *Collection) ReloadScripts() error {
 }
 
 // isMongoCommand checks if the request body contains MongoDB operators
-func (c *Collection) isMongoCommand(body bson.M) bool {
+func (c *Collection) isMongoCommand(body map[string]interface{}) bool {
 	for key := range body {
 		if strings.HasPrefix(key, "$") {
 			return true
@@ -631,7 +675,7 @@ func (c *Collection) isMongoCommand(body bson.M) bool {
 
 // handleMongoCommand processes MongoDB command operations
 func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) error {
-	query := bson.M{"id": id}
+	query := database.NewQueryBuilder().Where("id", "$eq", id)
 	
 	// Get the existing document for events
 	previous, err := c.store.FindOne(ctx.Context(), query)
@@ -643,7 +687,7 @@ func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) erro
 	}
 	
 	// Create a copy for the Put event (with anticipated changes)
-	merged := make(bson.M)
+	merged := make(map[string]interface{})
 	for k, v := range previous {
 		merged[k] = v
 	}
@@ -670,17 +714,33 @@ func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) erro
 		return ctx.WriteError(500, err.Error())
 	}
 	
-	// Execute the actual MongoDB operation
-	result, err := c.store.UpdateOne(ctx.Context(), query, ctx.Body)
+	// Execute the actual MongoDB operation - convert body to UpdateBuilder
+	updateBuilder := database.NewUpdateBuilder()
+	for op, value := range ctx.Body {
+		if valueMap, ok := value.(map[string]interface{}); ok {
+			for field, fieldValue := range valueMap {
+				switch op {
+				case "$set":
+					updateBuilder.Set(field, fieldValue)
+				case "$inc":
+					updateBuilder.Inc(field, fieldValue)
+				case "$unset":
+					updateBuilder.Unset(field)
+				}
+			}
+		}
+	}
+	result, err := c.store.Update(ctx.Context(), query, updateBuilder)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
 	
-	if result.MatchedCount == 0 {
+	if result.ModifiedCount() == 0 {
 		return ctx.WriteError(404, "Document not found")
 	}
 	
 	// Return updated document
+	query = database.NewQueryBuilder().Where("id", "$eq", id)
 	doc, err := c.store.FindOne(ctx.Context(), query)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
@@ -693,11 +753,11 @@ func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) erro
 }
 
 // simulateMongoOperations applies MongoDB operations to a document for validation
-func (c *Collection) simulateMongoOperations(doc bson.M, operations bson.M) {
+func (c *Collection) simulateMongoOperations(doc map[string]interface{}, operations map[string]interface{}) {
 	for op, value := range operations {
 		switch op {
 		case "$inc":
-			if incOps, ok := value.(bson.M); ok {
+			if incOps, ok := value.(map[string]interface{}); ok {
 				for field, incValue := range incOps {
 					if currentVal, exists := doc[field]; exists {
 						if currentNum, ok := currentVal.(float64); ok {
@@ -709,19 +769,19 @@ func (c *Collection) simulateMongoOperations(doc bson.M, operations bson.M) {
 				}
 			}
 		case "$set":
-			if setOps, ok := value.(bson.M); ok {
+			if setOps, ok := value.(map[string]interface{}); ok {
 				for field, setValue := range setOps {
 					doc[field] = setValue
 				}
 			}
 		case "$unset":
-			if unsetOps, ok := value.(bson.M); ok {
+			if unsetOps, ok := value.(map[string]interface{}); ok {
 				for field := range unsetOps {
 					delete(doc, field)
 				}
 			}
 		case "$push":
-			if pushOps, ok := value.(bson.M); ok {
+			if pushOps, ok := value.(map[string]interface{}); ok {
 				for field, pushValue := range pushOps {
 					if currentVal, exists := doc[field]; exists {
 						if currentArray, ok := currentVal.([]interface{}); ok {
@@ -733,7 +793,7 @@ func (c *Collection) simulateMongoOperations(doc bson.M, operations bson.M) {
 				}
 			}
 		case "$pull":
-			if pullOps, ok := value.(bson.M); ok {
+			if pullOps, ok := value.(map[string]interface{}); ok {
 				for field, pullValue := range pullOps {
 					if currentVal, exists := doc[field]; exists {
 						if currentArray, ok := currentVal.([]interface{}); ok {
@@ -749,7 +809,7 @@ func (c *Collection) simulateMongoOperations(doc bson.M, operations bson.M) {
 				}
 			}
 		case "$addToSet":
-			if addOps, ok := value.(bson.M); ok {
+			if addOps, ok := value.(map[string]interface{}); ok {
 				for field, addValue := range addOps {
 					if currentVal, exists := doc[field]; exists {
 						if currentArray, ok := currentVal.([]interface{}); ok {

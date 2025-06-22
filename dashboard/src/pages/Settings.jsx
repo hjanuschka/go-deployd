@@ -46,7 +46,7 @@ import { apiService } from '../services/api'
 function Settings() {
   const [serverInfo, setServerInfo] = useState(null)
   const [settings, setSettings] = useState({
-    databaseUrl: 'localhost:27017/deployd',
+    databaseUrl: 'sqlite://data/deployd.db',
     port: 2403,
     enableCors: true,
     enableLogging: true,
@@ -283,10 +283,10 @@ function Settings() {
                       <Input
                         value={settings.databaseUrl}
                         onChange={(e) => handleSettingChange('databaseUrl', e.target.value)}
-                        placeholder="localhost:27017/deployd"
+                        placeholder="sqlite://data/deployd.db"
                       />
                       <Text fontSize="sm" color="gray.500" mt={1}>
-                        MongoDB connection string
+                        Database connection string (supports MongoDB, SQLite, MySQL, PostgreSQL)
                       </Text>
                     </FormControl>
 
@@ -295,7 +295,7 @@ function Settings() {
                       <HStack>
                         <Badge colorScheme="green">Connected</Badge>
                         <Text fontSize="sm" color="gray.500">
-                          Connected to MongoDB
+                          Database connected
                         </Text>
                       </HStack>
                     </Box>

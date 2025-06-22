@@ -19,6 +19,7 @@ import (
 
 type Config struct {
 	Port           int
+	DatabaseType   string
 	DatabaseHost   string
 	DatabasePort   int
 	DatabaseName   string
@@ -28,7 +29,7 @@ type Config struct {
 
 type Server struct {
 	config      *Config
-	db          *database.Database
+	db          database.DatabaseInterface
 	sessions    *sessions.SessionStore
 	router      *router.Router
 	adminHandler *admin.AdminHandler
@@ -43,7 +44,22 @@ func New(config *Config) (*Server, error) {
 		Name: config.DatabaseName,
 	}
 
-	db, err := database.New(dbConfig)
+	// Determine database type
+	var dbType database.DatabaseType
+	switch config.DatabaseType {
+	case "mongodb":
+		dbType = database.DatabaseTypeMongoDB
+	case "sqlite":
+		dbType = database.DatabaseTypeSQLite
+	case "mysql":
+		dbType = database.DatabaseTypeMySQL
+	case "postgres":
+		dbType = database.DatabaseTypePostgres
+	default:
+		dbType = database.DatabaseTypeMongoDB // Default to MongoDB
+	}
+
+	db, err := database.NewDatabase(dbType, dbConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -212,6 +228,6 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s *Server) CreateStore(namespace string) *database.Store {
+func (s *Server) CreateStore(namespace string) database.StoreInterface {
 	return s.db.CreateStore(namespace)
 }

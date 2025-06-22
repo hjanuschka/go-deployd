@@ -58,7 +58,7 @@ function Dashboard() {
           version: '1.0.0',
           goVersion: '1.21',
           uptime: '2h 15m',
-          mongodb: 'Connected'
+          database: 'Connected'
         })),
         apiService.getCollectionData('todos').catch(() => [])
       ])
@@ -189,10 +189,10 @@ function Dashboard() {
             title="Database"
             value={
               <Badge
-                colorScheme={stats.serverInfo?.mongodb === 'Connected' ? 'green' : 'red'}
+                colorScheme={stats.serverInfo?.database === 'Connected' ? 'green' : 'red'}
                 fontSize="sm"
               >
-                {stats.serverInfo?.mongodb || 'Unknown'}
+                {stats.serverInfo?.database || 'Unknown'}
               </Badge>
             }
             icon={FiInfo}
@@ -252,7 +252,7 @@ function Dashboard() {
                 </Box>
                 <Box>
                   <Text fontSize="sm" color="gray.500">Database</Text>
-                  <Text fontWeight="medium">MongoDB</Text>
+                  <Text fontWeight="medium">{stats.serverInfo?.database?.split(' ')[0] || 'Unknown'}</Text>
                 </Box>
                 <Box>
                   <Text fontSize="sm" color="gray.500">Environment</Text>

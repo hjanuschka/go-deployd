@@ -19,7 +19,7 @@ import (
 )
 
 type AdminHandler struct {
-	db           *database.Database
+	db           database.DatabaseInterface
 	router       *router.Router
 	config       *Config
 	resourcesDir string
@@ -37,7 +37,7 @@ type ServerInfo struct {
 	Version     string    `json:"version"`
 	GoVersion   string    `json:"goVersion"`
 	Uptime      string    `json:"uptime"`
-	MongoDB     string    `json:"mongodb"`
+	Database    string    `json:"database"`
 	Environment string    `json:"environment"`
 	StartTime   time.Time `json:"startTime"`
 }
@@ -49,7 +49,7 @@ type CollectionInfo struct {
 	LastModified  time.Time              `json:"lastModified"`
 }
 
-func NewAdminHandler(db *database.Database, router *router.Router, config *Config) *AdminHandler {
+func NewAdminHandler(db database.DatabaseInterface, router *router.Router, config *Config) *AdminHandler {
 	return &AdminHandler{
 		db:           db,
 		router:       router,
@@ -80,7 +80,7 @@ func (h *AdminHandler) getServerInfo(w http.ResponseWriter, r *http.Request) {
 	info := ServerInfo{
 		Version:     "1.0.0",
 		GoVersion:   runtime.Version(),
-		MongoDB:     "Connected",
+		Database:    string(h.db.GetType()) + " - Connected",
 		Environment: "development",
 		StartTime:   time.Now().Add(-2 * time.Hour), // Mock uptime
 		Uptime:      "2h 15m",
@@ -124,7 +124,7 @@ func (h *AdminHandler) getCollections(w http.ResponseWriter, r *http.Request) {
 					// Get document count from database
 					collectionName := filepath.Base(path)
 					store := h.db.CreateStore(collectionName)
-					count, _ := store.Count(r.Context(), map[string]interface{}{})
+					count, _ := store.Count(r.Context(), database.NewQueryBuilder())
 					
 					// Get file modification time
 					stat, _ := os.Stat(configFile)
@@ -194,7 +194,7 @@ func (h *AdminHandler) getCollection(w http.ResponseWriter, r *http.Request) {
 	
 	// Get document count from database
 	store := h.db.CreateStore(name)
-	count, _ := store.Count(r.Context(), map[string]interface{}{})
+	count, _ := store.Count(r.Context(), database.NewQueryBuilder())
 	
 	// Get file modification time
 	stat, _ := os.Stat(configFile)
@@ -378,7 +378,7 @@ func (h *AdminHandler) updateCollection(w http.ResponseWriter, r *http.Request) 
 	
 	// Get document count from database
 	store := h.db.CreateStore(name)
-	count, _ := store.Count(r.Context(), map[string]interface{}{})
+	count, _ := store.Count(r.Context(), database.NewQueryBuilder())
 	
 	response := CollectionInfo{
 		Name:          name,

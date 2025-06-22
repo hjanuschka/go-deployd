@@ -17,23 +17,43 @@ import (
 func main() {
 	var (
 		port    = flag.Int("port", 2403, "server port")
-		dbHost  = flag.String("db-host", "localhost", "MongoDB host")
-		dbPort  = flag.Int("db-port", 27017, "MongoDB port")
-		dbName  = flag.String("db-name", "deployd", "MongoDB database name")
+		dbType  = flag.String("db-type", "mongodb", "database type (mongodb, sqlite, mysql, postgres)")
+		dbHost  = flag.String("db-host", "localhost", "database host")
+		dbPort  = flag.Int("db-port", 0, "database port (0 = use default for db-type)")
+		dbName  = flag.String("db-name", "deployd", "database name")
 		config  = flag.String("config", "", "configuration file path")
 		dev     = flag.Bool("dev", false, "development mode")
 	)
 	flag.Parse()
 
+	// Set default ports based on database type
+	if *dbPort == 0 {
+		switch *dbType {
+		case "mongodb":
+			*dbPort = 27017
+		case "mysql":
+			*dbPort = 3306
+		case "postgres":
+			*dbPort = 5432
+		case "sqlite":
+			*dbPort = 0 // SQLite doesn't use ports
+		}
+	}
+
 	fmt.Printf("🚀 Starting go-deployd server...\n")
 	fmt.Printf("   Port: %d\n", *port)
-	fmt.Printf("   Database: %s:%d/%s\n", *dbHost, *dbPort, *dbName)
+	if *dbType == "sqlite" {
+		fmt.Printf("   Database: %s (SQLite file: %s)\n", *dbType, *dbName)
+	} else {
+		fmt.Printf("   Database: %s://%s:%d/%s\n", *dbType, *dbHost, *dbPort, *dbName)
+	}
 	if *dev {
 		fmt.Printf("   Mode: development\n")
 	}
 
 	srv, err := server.New(&server.Config{
 		Port:           *port,
+		DatabaseType:   *dbType,
 		DatabaseHost:   *dbHost,
 		DatabasePort:   *dbPort,
 		DatabaseName:   *dbName,

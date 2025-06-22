@@ -8,24 +8,23 @@ import (
 	"net/http"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"github.com/hjanuschka/go-deployd/internal/database"
 )
 
 type SessionStore struct {
-	store       *database.Store
+	store       database.StoreInterface
 	development bool
 }
 
 type Session struct {
-	ID          string                 `bson:"id" json:"id"`
-	Data        map[string]interface{} `bson:"data" json:"data"`
-	CreatedAt   time.Time              `bson:"createdAt" json:"createdAt"`
-	UpdatedAt   time.Time              `bson:"updatedAt" json:"updatedAt"`
+	ID          string                 `json:"id"`
+	Data        map[string]interface{} `json:"data"`
+	CreatedAt   time.Time              `json:"createdAt"`
+	UpdatedAt   time.Time              `json:"updatedAt"`
 	development bool
 }
 
-func New(db *database.Database, development bool) *SessionStore {
+func New(db database.DatabaseInterface, development bool) *SessionStore {
 	return &SessionStore{
 		store:       db.CreateStore("sessions"),
 		development: development,
@@ -37,7 +36,8 @@ func (ss *SessionStore) CreateSession(sessionID string) (*Session, error) {
 	
 	if sessionID != "" {
 		// Try to find existing session
-		existing, err := ss.store.FindOne(ctx, bson.M{"id": sessionID})
+		query := database.NewQueryBuilder().Where("id", "$eq", sessionID)
+		existing, err := ss.store.FindOne(ctx, query)
 		if err == nil && existing != nil {
 			session := &Session{
 				ID:          sessionID,
@@ -80,7 +80,7 @@ func (ss *SessionStore) CreateSession(sessionID string) (*Session, error) {
 	}
 	
 	// Save to database
-	sessionDoc := bson.M{
+	sessionDoc := map[string]interface{}{
 		"id":        session.ID,
 		"data":      session.Data,
 		"createdAt": session.CreatedAt,
@@ -131,14 +131,12 @@ func (s *Session) Set(key string, value interface{}) {
 func (s *Session) Save(store *SessionStore) error {
 	ctx := context.Background()
 	
-	update := bson.M{
-		"$set": bson.M{
-			"data":      s.Data,
-			"updatedAt": s.UpdatedAt,
-		},
-	}
+	query := database.NewQueryBuilder().Where("id", "$eq", s.ID)
+	update := database.NewUpdateBuilder().
+		Set("data", s.Data).
+		Set("updatedAt", s.UpdatedAt)
 	
-	_, err := store.store.Update(ctx, bson.M{"id": s.ID}, update)
+	_, err := store.store.Update(ctx, query, update)
 	return err
 }
 

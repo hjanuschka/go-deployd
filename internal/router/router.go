@@ -17,13 +17,13 @@ import (
 
 type Router struct {
 	resources     []resources.Resource
-	db            *database.Database
+	db            database.DatabaseInterface
 	sessions      *sessions.SessionStore
 	development   bool
 	configPath    string
 }
 
-func New(db *database.Database, sessions *sessions.SessionStore, development bool, configPath string) *Router {
+func New(db database.DatabaseInterface, sessions *sessions.SessionStore, development bool, configPath string) *Router {
 	r := &Router{
 		db:          db,
 		sessions:    sessions,
