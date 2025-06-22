@@ -1,53 +1,77 @@
-// Test JavaScript event capabilities with require() support
-const crypto = require('crypto');
-const util = require('util');
-const path = require('path');
+// Test npm module loading with V8 engine
+console.log('Testing npm modules with V8...');
 
-// Basic validation
+// Test lodash (utility library)
+try {
+    const _ = require('lodash');
+    data.lodashTest = {
+        loaded: true,
+        capitalize: _.capitalize('hello world'),
+        chunk: _.chunk([1, 2, 3, 4, 5], 2),
+        random: _.random(1, 100)
+    };
+    console.log('✅ Lodash loaded successfully');
+} catch (e) {
+    data.lodashTest = { loaded: false, error: e.message };
+    console.log('❌ Lodash failed:', e.message);
+}
+
+// Test moment (date library)
+try {
+    const moment = require('moment');
+    data.momentTest = {
+        loaded: true,
+        now: moment().format('YYYY-MM-DD HH:mm:ss'),
+        relative: moment().fromNow(),
+        future: moment().add(7, 'days').format('YYYY-MM-DD')
+    };
+    console.log('✅ Moment loaded successfully');
+} catch (e) {
+    data.momentTest = { loaded: false, error: e.message };
+    console.log('❌ Moment failed:', e.message);
+}
+
+// Test uuid (UUID generation)
+try {
+    const { v4: uuidv4, v1: uuidv1 } = require('uuid');
+    data.uuidTest = {
+        loaded: true,
+        v4: uuidv4(),
+        v1: uuidv1()
+    };
+    console.log('✅ UUID loaded successfully');
+} catch (e) {
+    data.uuidTest = { loaded: false, error: e.message };
+    console.log('❌ UUID failed:', e.message);
+}
+
+// Test validator (string validation)
+try {
+    const validator = require('validator');
+    data.validatorTest = {
+        loaded: true,
+        isEmail: validator.isEmail('test@example.com'),
+        isURL: validator.isURL('https://example.com'),
+        isJSON: validator.isJSON('{"valid": true}')
+    };
+    console.log('✅ Validator loaded successfully');
+} catch (e) {
+    data.validatorTest = { loaded: false, error: e.message };
+    console.log('❌ Validator failed:', e.message);
+}
+
+// Basic validation (existing)
 if (!data.title || data.title.trim() === '') {
-  error('title', 'Title is required');
+    error('title', 'Title is required');
 }
 
-if (data.title && data.title.length < 3) {
-  error('title', 'Title must be at least 3 characters');
-}
+// Enhanced with npm modules
+data.npmTestCompleted = true;
+data.npmTestTimestamp = new Date().toISOString();
 
-// Use require('crypto') for UUID generation
-if (!data.uniqueId) {
-  data.uniqueId = crypto.randomUUID();
-  data.trackingId = 'js_' + data.uniqueId.substring(0, 8);
-}
-
-// Use require('util') for type checking
-if (data.metadata) {
-  if (util.isArray(data.metadata)) {
-    data.metadataType = 'array';
-    data.metadataCount = data.metadata.length;
-  } else if (util.isObject(data.metadata)) {
-    data.metadataType = 'object';
-    data.metadataKeys = Object.keys(data.metadata);
-  } else {
-    data.metadataType = typeof data.metadata;
-  }
-}
-
-// Use require('path') for filename operations
-if (data.filename) {
-  data.fileExtension = path.extname(data.filename);
-  data.fileName = path.basename(data.filename);
-}
-
-// Test array operations with built-in methods
-if (data.tags && Array.isArray(data.tags)) {
-  data.tagCount = data.tags.length;
-  data.uppercaseTags = data.tags.map(tag => tag.toUpperCase());
-  data.tagHash = crypto.randomBytes(4).toString('hex');
-}
-
-// Email validation
-if (data.email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(data.email)) {
-    error('email', 'Invalid email format');
-  }
-}
+deployd.log('NPM module test completed', {
+    lodash: data.lodashTest?.loaded,
+    moment: data.momentTest?.loaded,
+    uuid: data.uuidTest?.loaded,
+    validator: data.validatorTest?.loaded
+});

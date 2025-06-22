@@ -29,6 +29,9 @@
     },
     "get": {
       "runtime": "go"
+    },
+    "put": {
+      "runtime": "js"
     }
   }
 }

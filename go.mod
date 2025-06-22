@@ -11,6 +11,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.28
 	go.mongodb.org/mongo-driver v1.13.1
 	golang.org/x/crypto v0.39.0
+	rogchap.com/v8go v0.9.0
 )
 
 require (

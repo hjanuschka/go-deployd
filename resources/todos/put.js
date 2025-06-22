@@ -1,45 +1,29 @@
-// Example PUT event script for todos collection (JavaScript version)
+// Test V8 implementation with require() modules
+const crypto = require('crypto');
+const util = require('util');
+const path = require('path');
 
-// Track what changed
-var changed = [];
-if (previous) {
-    Object.keys(data).forEach(function(key) {
-        if (data[key] !== previous[key]) {
-            changed.push(key);
-        }
-    });
+// Test built-in modules
+data.v8Test = {
+    cryptoUUID: crypto.randomUUID(),
+    cryptoBytes: crypto.randomBytes(8),
+    utilIsArray: util.isArray([1, 2, 3]),
+    utilIsObject: util.isObject({key: 'value'}),
+    pathExt: path.extname('test.js'),
+    pathBase: path.basename('/path/to/file.txt')
+};
+
+// Test npm module (should return undefined for now)
+try {
+    const lodash = require('lodash');
+    data.v8Test.lodashLoaded = lodash !== undefined;
+} catch (e) {
+    data.v8Test.lodashError = e.message;
 }
 
-// Don't allow changing the creation date
-if (previous && data.createdAt !== previous.createdAt) {
-    error('createdAt', 'Cannot modify creation date');
-}
+// Test console and deployd logging
+console.log('V8 test script executed successfully');
+deployd.log('V8 engine is working!', {engine: 'v8', modules: 'crypto,util,path'});
 
-// Update the lastModified timestamp
-data.updatedAt = new Date().toISOString();
-
-// If status changed to completed, set completedAt
-if (changed.includes('completed') && data.completed === true) {
-    data.completedAt = new Date().toISOString();
-} else if (changed.includes('completed') && data.completed === false) {
-    delete data.completedAt;
-}
-
-// Track who made the change
-if (me) {
-    data.updatedBy = me.id;
-}
-
-// Validate that completed todos have a title
-if (data.completed && !data.title) {
-    error('title', 'Completed todos must have a title');
-}
-
-// Example: Emit event when todo is completed
-if (changed.includes('completed') && data.completed) {
-    emit('todoCompleted', {
-        id: data.id,
-        title: data.title,
-        completedBy: me ? me.id : null
-    });
-}
+data.v8Test.timestamp = new Date().toISOString();
+data.v8Test.engine = 'V8';

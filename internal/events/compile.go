@@ -62,7 +62,7 @@ func (ctx *EventContext) IsMe(id string) bool {
 }
 
 // CompileJS compiles JavaScript source code
-func CompileJS(filename, source string) (*goja.Program, error) {
+func CompileJSLegacy(filename, source string) (*goja.Program, error) {
 	return goja.Compile(filename, source, true)
 }
 

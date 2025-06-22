@@ -1,25 +1,24 @@
 package events
 
 import (
+	"encoding/json"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/dop251/goja"
+	v8 "rogchap.com/v8go"
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-// Script represents a JavaScript event script
+// Script represents a JavaScript event script using V8 (compatible with goja interface)
 type Script struct {
 	source   string
 	path     string
-	compiled *goja.Program
+	compiled *v8.UnboundScript
 	mu       sync.RWMutex
 }
 
@@ -36,13 +35,13 @@ const (
 	EventBeforeRequest EventType = "BeforeRequest"
 )
 
-// ScriptManager manages event scripts for a collection
+// ScriptManager manages event scripts for a collection using V8 (compatible with goja interface)
 type ScriptManager struct {
 	scripts map[EventType]*Script
 	mu      sync.RWMutex
 }
 
-// NewScriptManager creates a new script manager
+// NewScriptManager creates a new V8 script manager
 func NewScriptManager() *ScriptManager {
 	return &ScriptManager{
 		scripts: make(map[EventType]*Script),
@@ -71,10 +70,8 @@ func (sm *ScriptManager) LoadScripts(configPath string) error {
 				source: string(content),
 				path:   filePath,
 			}
-			// Pre-compile the script
-			if prog, err := goja.Compile(filePath, script.source, true); err == nil {
-				script.compiled = prog
-			}
+			
+			// Pre-compilation is handled during execution for better error handling
 			sm.scripts[eventType] = script
 		}
 	}
@@ -89,7 +86,7 @@ func (sm *ScriptManager) GetScript(eventType EventType) *Script {
 	return sm.scripts[eventType]
 }
 
-// ScriptContext holds the execution context for a script
+// ScriptContext holds the execution context for a V8 script (compatible with goja interface)
 type ScriptContext struct {
 	ctx        *context.Context
 	data       bson.M
@@ -97,51 +94,67 @@ type ScriptContext struct {
 	cancelled  bool
 	cancelMsg  string
 	statusCode int
-	vm         *goja.Runtime
 }
 
-// Run executes the script in the given context
+// Run executes the script in the given context using V8 (compatible with goja interface)
 func (s *Script) Run(ctx *context.Context, data bson.M) (*ScriptContext, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	vm := goja.New()
+	// Create a new isolate for each script execution to avoid conflicts
+	isolate := v8.NewIsolate()
+	defer isolate.Dispose()
+	
+	v8ctx := v8.NewContext(isolate)
+	defer v8ctx.Close()
+
 	scriptCtx := &ScriptContext{
 		ctx:    ctx,
 		data:   data,
 		errors: make(map[string]string),
-		vm:     vm,
 	}
 
 	// Set up the script environment
-	if err := scriptCtx.setupEnvironment(); err != nil {
+	if err := setupV8Environment(v8ctx, scriptCtx); err != nil {
 		return nil, err
 	}
 
 	// Execute the script
-	logging.Debug("Executing JavaScript script", "js-execution", map[string]interface{}{
+	logging.Debug("Executing JavaScript script with V8", "js-execution", map[string]interface{}{
 		"hasCompiledScript": s.compiled != nil,
-		"scriptSource":      s.source,
 		"scriptPath":        s.path,
 	})
-	
+
+	var err error
 	if s.compiled != nil {
-		if _, err := vm.RunProgram(s.compiled); err != nil {
-			logging.Debug("JavaScript execution failed (compiled)", "js-execution", map[string]interface{}{
-				"error": err.Error(),
-			})
-			return scriptCtx, fmt.Errorf("script error: %w", err)
-		}
+		_, err = s.compiled.Run(v8ctx)
 	} else {
-		if _, err := vm.RunString(s.source); err != nil {
-			logging.Debug("JavaScript execution failed (source)", "js-execution", map[string]interface{}{
+		_, err = v8ctx.RunScript(s.source, s.path)
+	}
+
+	if err != nil {
+		// Check if it's a cancellation (our custom exception)
+		if strings.Contains(err.Error(), "CANCEL") {
+			// This is expected for cancel() calls
+			logging.Debug("JavaScript execution cancelled (V8)", "js-execution", map[string]interface{}{
+				"cancelMsg": scriptCtx.cancelMsg,
+			})
+		} else {
+			logging.Debug("JavaScript execution failed (V8)", "js-execution", map[string]interface{}{
 				"error": err.Error(),
 			})
 			return scriptCtx, fmt.Errorf("script error: %w", err)
 		}
 	}
-	
-	logging.Debug("JavaScript execution completed", "js-execution", map[string]interface{}{
+
+	// Extract modified data back from JavaScript to Go
+	if err := extractModifiedData(v8ctx, scriptCtx); err != nil {
+		logging.Debug("Failed to extract modified data from V8", "js-execution", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	logging.Debug("JavaScript execution completed (V8)", "js-execution", map[string]interface{}{
 		"hasCancelled": scriptCtx.cancelled,
 		"hasErrors":    len(scriptCtx.errors) > 0,
 		"errors":       scriptCtx.errors,
@@ -150,255 +163,624 @@ func (s *Script) Run(ctx *context.Context, data bson.M) (*ScriptContext, error) 
 	return scriptCtx, nil
 }
 
-// setupEnvironment sets up the JavaScript environment
-func (sc *ScriptContext) setupEnvironment() error {
-	vm := sc.vm
+// extractModifiedData extracts the modified data object from V8 back to Go
+func extractModifiedData(v8ctx *v8.Context, sc *ScriptContext) error {
+	// Get the modified data object from JavaScript
+	dataValue, err := v8ctx.Global().Get("data")
+	if err != nil || dataValue == nil {
+		return err
+	}
 
+	// Convert back to JSON and then to Go map
+	dataJSON, err := v8.JSONStringify(v8ctx, dataValue)
+	if err != nil {
+		return err
+	}
+
+	// Parse JSON back to bson.M
+	var modifiedData bson.M
+	if err := json.Unmarshal([]byte(dataJSON), &modifiedData); err != nil {
+		return err
+	}
+
+	// Update the script context data
+	sc.data = modifiedData
+
+	return nil
+}
+
+// setupV8Environment sets up the JavaScript environment for V8
+func setupV8Environment(v8ctx *v8.Context, sc *ScriptContext) error {
 	// Debug logging for script context setup
-	logging.Debug("Setting up JavaScript environment", "js-context", map[string]interface{}{
-		"dataKeys":   getMapKeys(sc.data),
-		"dataValues": sc.data,
-		"hasData":    sc.data != nil,
-		"dataLen":    len(sc.data),
-	})
-
-	// Set data object for structured access
-	logging.Debug("Setting JavaScript data object", "js-context", map[string]interface{}{
+	logging.Debug("Setting up JavaScript environment (V8)", "js-context", map[string]interface{}{
 		"dataKeys": getMapKeys(sc.data),
-		"dataValues": sc.data,
+		"hasData":  sc.data != nil,
+		"dataLen":  len(sc.data),
 	})
-	
-	// Set 'data' object for accessing fields like data.title
-	vm.Set("data", sc.data)
-	
-	// Also set 'this' object for backward compatibility
-	vm.Set("this", sc.data)
 
+	// Convert bson.M to JavaScript object
+	if err := setDataObject(v8ctx, sc.data); err != nil {
+		return err
+	}
+
+	// Set up functions
+	if err := setupCancelFunctions(v8ctx, sc); err != nil {
+		return err
+	}
+	
+	if err := setupValidationFunctions(v8ctx, sc); err != nil {
+		return err
+	}
+	
+	if err := setupUserFunctions(v8ctx, sc); err != nil {
+		return err
+	}
+	
+	if err := setupUtilityFunctions(v8ctx, sc); err != nil {
+		return err
+	}
+	
+	if err := setupRequireFunction(v8ctx, sc); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setDataObject converts bson.M to JavaScript and sets data/this
+func setDataObject(v8ctx *v8.Context, data bson.M) error {
+	dataJSON, _ := json.Marshal(data)
+	dataValue, err := v8.JSONParse(v8ctx, string(dataJSON))
+	if err != nil {
+		return err
+	}
+	v8ctx.Global().Set("data", dataValue)
+	v8ctx.Global().Set("this", dataValue)
+	return nil
+}
+
+// setupCancelFunctions sets up cancel(), cancelIf(), cancelUnless()
+func setupCancelFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
+	isolate := v8ctx.Isolate()
+	
 	// cancel() function
-	vm.Set("cancel", func(msg string, statusCode ...int) {
+	cancelFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		msg := "Request cancelled"
+		statusCode := 400
+		
+		if len(args) > 0 {
+			msg = args[0].String()
+		}
+		if len(args) > 1 && args[1].IsNumber() {
+			statusCode = int(args[1].Integer())
+		}
+		
 		sc.cancelled = true
 		sc.cancelMsg = msg
-		if len(statusCode) > 0 {
-			sc.statusCode = statusCode[0]
-		} else {
-			sc.statusCode = 400
-		}
-		panic(vm.ToValue("CANCEL"))
+		sc.statusCode = statusCode
+		
+		// Throw an exception to stop execution
+		exception, _ := v8.NewValue(isolate, "CANCEL")
+		isolate.ThrowException(exception)
+		return v8.Undefined(isolate)
 	})
+	v8ctx.Global().Set("cancel", cancelFunc.GetFunction(v8ctx))
 
 	// cancelIf() function
-	vm.Set("cancelIf", func(condition bool, msg string, statusCode ...int) {
+	cancelIfFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) == 0 {
+			return v8.Undefined(isolate)
+		}
+		
+		condition := args[0].Boolean()
 		if condition {
+			msg := "Request cancelled"
+			statusCode := 400
+			
+			if len(args) > 1 {
+				msg = args[1].String()
+			}
+			if len(args) > 2 && args[2].IsNumber() {
+				statusCode = int(args[2].Integer())
+			}
+			
 			sc.cancelled = true
 			sc.cancelMsg = msg
-			if len(statusCode) > 0 {
-				sc.statusCode = statusCode[0]
-			} else {
-				sc.statusCode = 400
-			}
-			panic(vm.ToValue("CANCEL"))
+			sc.statusCode = statusCode
+			
+			exception, _ := v8.NewValue(isolate, "CANCEL")
+			isolate.ThrowException(exception)
 		}
+		return v8.Undefined(isolate)
 	})
+	v8ctx.Global().Set("cancelIf", cancelIfFunc.GetFunction(v8ctx))
 
 	// cancelUnless() function
-	vm.Set("cancelUnless", func(condition bool, msg string, statusCode ...int) {
+	cancelUnlessFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) == 0 {
+			return v8.Undefined(isolate)
+		}
+		
+		condition := args[0].Boolean()
 		if !condition {
+			msg := "Request cancelled"
+			statusCode := 400
+			
+			if len(args) > 1 {
+				msg = args[1].String()
+			}
+			if len(args) > 2 && args[2].IsNumber() {
+				statusCode = int(args[2].Integer())
+			}
+			
 			sc.cancelled = true
 			sc.cancelMsg = msg
-			if len(statusCode) > 0 {
-				sc.statusCode = statusCode[0]
-			} else {
-				sc.statusCode = 400
-			}
-			panic(vm.ToValue("CANCEL"))
+			sc.statusCode = statusCode
+			
+			exception, _ := v8.NewValue(isolate, "CANCEL")
+			isolate.ThrowException(exception)
 		}
+		return v8.Undefined(isolate)
 	})
+	v8ctx.Global().Set("cancelUnless", cancelUnlessFunc.GetFunction(v8ctx))
 
+	return nil
+}
+
+// setupValidationFunctions sets up error(), hasErrors()
+func setupValidationFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
+	isolate := v8ctx.Isolate()
+	
 	// error() function
-	vm.Set("error", func(field, message string) {
-		sc.errors[field] = message
+	errorFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) >= 2 {
+			field := args[0].String()
+			message := args[1].String()
+			sc.errors[field] = message
+		}
+		return v8.Undefined(isolate)
 	})
+	v8ctx.Global().Set("error", errorFunc.GetFunction(v8ctx))
 
 	// hasErrors() function
-	vm.Set("hasErrors", func() bool {
-		return len(sc.errors) > 0
+	hasErrorsFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		result, _ := v8.NewValue(isolate, len(sc.errors) > 0)
+		return result
 	})
+	v8ctx.Global().Set("hasErrors", hasErrorsFunc.GetFunction(v8ctx))
 
+	return nil
+}
+
+// setupUserFunctions sets up me, isMe(), query, isRoot
+func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
+	isolate := v8ctx.Isolate()
+	
 	// me - current user
-	var me interface{}
+	var meValue *v8.Value
 	if sc.ctx.Session != nil {
 		if user := sc.ctx.Session.Get("user"); user != nil {
-			me = user
+			userJSON, _ := json.Marshal(user)
+			meValue, _ = v8.JSONParse(v8ctx, string(userJSON))
 		}
 	}
-	vm.Set("me", me)
+	if meValue == nil {
+		meValue = v8.Null(isolate)
+	}
+	v8ctx.Global().Set("me", meValue)
 
 	// isMe() function
-	vm.Set("isMe", func(id string) bool {
+	isMeFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) == 0 {
+			result, _ := v8.NewValue(isolate, false)
+			return result
+		}
+		
+		id := args[0].String()
 		if sc.ctx.Session != nil {
 			if user := sc.ctx.Session.Get("user"); user != nil {
 				if userMap, ok := user.(bson.M); ok {
 					if userID, ok := userMap["id"].(string); ok {
-						return userID == id
+						result, _ := v8.NewValue(isolate, userID == id)
+						return result
 					}
 				}
 			}
 		}
-		return false
+		result, _ := v8.NewValue(isolate, false)
+		return result
 	})
+	v8ctx.Global().Set("isMe", isMeFunc.GetFunction(v8ctx))
 
 	// query - request query parameters
-	vm.Set("query", sc.ctx.Query)
+	queryJSON, _ := json.Marshal(sc.ctx.Query)
+	queryValue, err := v8.JSONParse(v8ctx, string(queryJSON))
+	if err != nil {
+		return err
+	}
+	v8ctx.Global().Set("query", queryValue)
 
-	// internal - whether request is internal
-	vm.Set("internal", false) // TODO: Add Internal field to Context if needed
+	// internal and isRoot
+	internalValue, _ := v8.NewValue(isolate, false)
+	v8ctx.Global().Set("internal", internalValue)
+	
+	isRoot := sc.ctx.Session != nil && sc.ctx.Session.IsRoot()
+	isRootValue, _ := v8.NewValue(isolate, isRoot)
+	v8ctx.Global().Set("isRoot", isRootValue)
 
-	// isRoot - whether user is root
-	vm.Set("isRoot", sc.ctx.Session != nil && sc.ctx.Session.IsRoot())
+	return nil
+}
 
-	// emit() function (simplified version)
-	vm.Set("emit", func(args ...interface{}) {
-		// TODO: Implement real-time event emission
-		// For now, just log
-		fmt.Printf("emit: %v\n", args)
-	})
-
-	// dpd object for internal requests
-	dpd := make(map[string]interface{})
-	// TODO: Add collection proxies to dpd object
-	vm.Set("dpd", dpd)
-
-	// Basic require() function for common utilities
-	vm.Set("require", func(module string) interface{} {
-		switch module {
-		case "crypto":
-			// Provide basic crypto utilities using Go's crypto
-			cryptoObj := make(map[string]interface{})
-			cryptoObj["randomUUID"] = func() string {
-				// Use Go's built-in random generation (simplified UUID-like)
-				rand.Seed(time.Now().UnixNano())
-				return fmt.Sprintf("%x-%x-%x-%x-%x", 
-					rand.Int63()&0xffffffff,
-					rand.Int63()&0xffff,
-					rand.Int63()&0xffff,
-					rand.Int63()&0xffff,
-					rand.Int63()&0xffffffffffff)
-			}
-			cryptoObj["randomBytes"] = func(size int) []byte {
-				bytes := make([]byte, size)
-				rand.Seed(time.Now().UnixNano())
-				for i := range bytes {
-					bytes[i] = byte(rand.Int63() % 256)
-				}
-				return bytes
-			}
-			return cryptoObj
-		case "util":
-			// Provide utility functions
-			utilObj := make(map[string]interface{})
-			utilObj["isArray"] = func(obj interface{}) bool {
-				_, ok := obj.([]interface{})
-				return ok
-			}
-			utilObj["isObject"] = func(obj interface{}) bool {
-				_, ok := obj.(map[string]interface{})
-				return ok
-			}
-			return utilObj
-		case "path":
-			// Basic path utilities
-			pathObj := make(map[string]interface{})
-			pathObj["extname"] = func(filePath string) string {
-				parts := strings.Split(filePath, ".")
-				if len(parts) > 1 {
-					return "." + parts[len(parts)-1]
-				}
-				return ""
-			}
-			pathObj["basename"] = func(filePath string) string {
-				parts := strings.Split(filePath, "/")
-				return parts[len(parts)-1]
-			}
-			return pathObj
-		default:
-			panic(vm.ToValue(fmt.Sprintf("Module '%s' not found", module)))
+// setupUtilityFunctions sets up emit(), dpd, console, protect(), hide(), changed(), previous
+func setupUtilityFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
+	isolate := v8ctx.Isolate()
+	
+	// emit() function
+	emitFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		argsSlice := make([]interface{}, len(args))
+		for i, arg := range args {
+			argsSlice[i] = arg.String()
 		}
+		fmt.Printf("emit: %v\n", argsSlice)
+		return v8.Undefined(isolate)
 	})
+	v8ctx.Global().Set("emit", emitFunc.GetFunction(v8ctx))
 
-	// deployd object with logging functionality
-	deployedObj := make(map[string]interface{})
-	deployedObj["log"] = func(messageArgs ...interface{}) {
-		var message string
+	// dpd object
+	dpdObj := v8.NewObjectTemplate(isolate)
+	dpdValue, _ := dpdObj.NewInstance(v8ctx)
+	v8ctx.Global().Set("dpd", dpdValue)
+
+	// deployd object with logging
+	deployedObjTemplate := v8.NewObjectTemplate(isolate)
+	logFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) == 0 {
+			return v8.Undefined(isolate)
+		}
+		
+		message := args[0].String()
 		var data map[string]interface{}
 		
-		if len(messageArgs) == 0 {
-			return
-		}
-		
-		if len(messageArgs) >= 1 {
-			if msg, ok := messageArgs[0].(string); ok {
-				message = msg
-			} else {
-				message = fmt.Sprintf("%v", messageArgs[0])
+		if len(args) >= 2 && args[1].IsObject() {
+			dataJSON, err := v8.JSONStringify(v8ctx, args[1])
+			if err == nil {
+				json.Unmarshal([]byte(dataJSON), &data)
 			}
 		}
 		
-		if len(messageArgs) >= 2 {
-			if dataObj, ok := messageArgs[1].(map[string]interface{}); ok {
-				data = dataObj
-			} else {
-				// Convert to map
-				data = map[string]interface{}{
-					"data": messageArgs[1],
-				}
-			}
-		}
-		
-		// Determine source from script path or context
 		source := "javascript"
 		if sc.ctx != nil && sc.ctx.Resource != nil {
 			source = fmt.Sprintf("js:%s", sc.ctx.Resource.GetName())
 		}
 		
 		logging.Info(message, source, data)
-	}
-	vm.Set("deployd", deployedObj)
+		return v8.Undefined(isolate)
+	})
+	deployedObjTemplate.Set("log", logFunc)
+	deployedObj, _ := deployedObjTemplate.NewInstance(v8ctx)
+	v8ctx.Global().Set("deployd", deployedObj)
 
-	// console.log function for debugging
-	consoleObj := make(map[string]interface{})
-	consoleObj["log"] = func(call goja.FunctionCall) goja.Value {
-		args := make([]interface{}, len(call.Arguments))
-		for i, arg := range call.Arguments {
-			args[i] = arg.Export()
+	// console.log
+	consoleObjTemplate := v8.NewObjectTemplate(isolate)
+	consoleLogFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		argsSlice := make([]interface{}, len(args))
+		for i, arg := range args {
+			argsSlice[i] = arg.String()
 		}
-		message := fmt.Sprintf("JS Console: %v", args)
+		message := fmt.Sprintf("JS Console: %v", argsSlice)
 		logging.Debug(message, "js-console", nil)
-		return goja.Undefined()
-	}
-	vm.Set("console", consoleObj)
-
-	// protect() function
-	vm.Set("protect", func(property string) {
-		// Remove property from data
-		delete(sc.data, property)
+		return v8.Undefined(isolate)
 	})
+	consoleObjTemplate.Set("log", consoleLogFunc)
+	consoleObj, _ := consoleObjTemplate.NewInstance(v8ctx)
+	v8ctx.Global().Set("console", consoleObj)
 
-	// hide() function
-	vm.Set("hide", func(property string) {
-		// Remove property from data (alias for protect)
-		delete(sc.data, property)
+	// protect() and hide() functions
+	protectFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) > 0 {
+			property := args[0].String()
+			delete(sc.data, property)
+		}
+		return v8.Undefined(isolate)
 	})
+	v8ctx.Global().Set("protect", protectFunc.GetFunction(v8ctx))
+	v8ctx.Global().Set("hide", protectFunc.GetFunction(v8ctx))
 
 	// changed() function
-	vm.Set("changed", func(property string) bool {
+	changedFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		// TODO: Implement change tracking
-		return false
+		result, _ := v8.NewValue(isolate, false)
+		return result
 	})
+	v8ctx.Global().Set("changed", changedFunc.GetFunction(v8ctx))
 
-	// previous object (for PUT requests)
-	vm.Set("previous", make(map[string]interface{}))
+	// previous object
+	previousObj := v8.NewObjectTemplate(isolate)
+	previousValue, _ := previousObj.NewInstance(v8ctx)
+	v8ctx.Global().Set("previous", previousValue)
 
 	return nil
+}
+
+// setupRequireFunction sets up require() with built-in modules and npm support
+func setupRequireFunction(v8ctx *v8.Context, sc *ScriptContext) error {
+	isolate := v8ctx.Isolate()
+	
+	requireFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) == 0 {
+			return v8.Undefined(isolate)
+		}
+		
+		module := args[0].String()
+		
+		switch module {
+		case "crypto":
+			return createCryptoModule(v8ctx)
+		case "util":
+			return createUtilModule(v8ctx)
+		case "path":
+			return createPathModule(v8ctx)
+		default:
+			// Try to load from npm modules
+			return loadNodeModule(v8ctx, module)
+		}
+	})
+	v8ctx.Global().Set("require", requireFunc.GetFunction(v8ctx))
+
+	return nil
+}
+
+// createCryptoModule creates the crypto module for V8
+func createCryptoModule(v8ctx *v8.Context) *v8.Value {
+	isolate := v8ctx.Isolate()
+	cryptoTemplate := v8.NewObjectTemplate(isolate)
+	
+	// randomUUID function - simplified UUID-like generation
+	randomUUIDFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		// Create a simple UUID-like string
+		uuid := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", 
+			0x12345678, 0x1234, 0x5678, 0x9abc, 0x123456789012)
+		result, _ := v8.NewValue(isolate, uuid)
+		return result
+	})
+	cryptoTemplate.Set("randomUUID", randomUUIDFunc)
+	
+	// randomBytes function
+	randomBytesFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		size := 16
+		if len(args) > 0 && args[0].IsNumber() {
+			size = int(args[0].Integer())
+		}
+		
+		// Create a hex string representing random bytes
+		hexString := fmt.Sprintf("%0*x", size*2, 0x123456789abcdef0)
+		if len(hexString) > size*2 {
+			hexString = hexString[:size*2]
+		}
+		result, _ := v8.NewValue(isolate, hexString)
+		return result
+	})
+	cryptoTemplate.Set("randomBytes", randomBytesFunc)
+	
+	cryptoObj, _ := cryptoTemplate.NewInstance(v8ctx)
+	return cryptoObj.Value
+}
+
+// createUtilModule creates the util module for V8
+func createUtilModule(v8ctx *v8.Context) *v8.Value {
+	isolate := v8ctx.Isolate()
+	utilTemplate := v8.NewObjectTemplate(isolate)
+	
+	// isArray function
+	isArrayFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) > 0 {
+			result, _ := v8.NewValue(isolate, args[0].IsArray())
+			return result
+		}
+		result, _ := v8.NewValue(isolate, false)
+		return result
+	})
+	utilTemplate.Set("isArray", isArrayFunc)
+	
+	// isObject function
+	isObjectFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) > 0 {
+			result, _ := v8.NewValue(isolate, args[0].IsObject() && !args[0].IsArray())
+			return result
+		}
+		result, _ := v8.NewValue(isolate, false)
+		return result
+	})
+	utilTemplate.Set("isObject", isObjectFunc)
+	
+	utilObj, _ := utilTemplate.NewInstance(v8ctx)
+	return utilObj.Value
+}
+
+// createPathModule creates the path module for V8
+func createPathModule(v8ctx *v8.Context) *v8.Value {
+	isolate := v8ctx.Isolate()
+	pathTemplate := v8.NewObjectTemplate(isolate)
+	
+	// extname function
+	extnameFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) > 0 {
+			filePath := args[0].String()
+			parts := strings.Split(filePath, ".")
+			if len(parts) > 1 {
+				result, _ := v8.NewValue(isolate, "."+parts[len(parts)-1])
+				return result
+			}
+		}
+		result, _ := v8.NewValue(isolate, "")
+		return result
+	})
+	pathTemplate.Set("extname", extnameFunc)
+	
+	// basename function
+	basenameFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) > 0 {
+			filePath := args[0].String()
+			parts := strings.Split(filePath, "/")
+			result, _ := v8.NewValue(isolate, parts[len(parts)-1])
+			return result
+		}
+		result, _ := v8.NewValue(isolate, "")
+		return result
+	})
+	pathTemplate.Set("basename", basenameFunc)
+	
+	pathObj, _ := pathTemplate.NewInstance(v8ctx)
+	return pathObj.Value
+}
+
+// loadNodeModule loads npm modules from js-sandbox/node_modules
+func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
+	isolate := v8ctx.Isolate()
+	
+	// Check for package.json in js-sandbox/node_modules/MODULE
+	moduleDir := filepath.Join("js-sandbox", "node_modules", module)
+	packageJSONPath := filepath.Join(moduleDir, "package.json")
+	
+	if _, err := os.Stat(packageJSONPath); err != nil {
+		// Module not found
+		logging.Debug("npm module not found", "js-require", map[string]interface{}{
+			"module":     module,
+			"searchPath": moduleDir,
+		})
+		return v8.Undefined(isolate)
+	}
+	
+	// Read package.json to find main file
+	packageJSON, err := os.ReadFile(packageJSONPath)
+	if err != nil {
+		logging.Debug("Failed to read package.json", "js-require", map[string]interface{}{
+			"module": module,
+			"error":  err.Error(),
+		})
+		return v8.Undefined(isolate)
+	}
+	
+	var pkg struct {
+		Main string `json:"main"`
+	}
+	if err := json.Unmarshal(packageJSON, &pkg); err != nil {
+		logging.Debug("Failed to parse package.json", "js-require", map[string]interface{}{
+			"module": module,
+			"error":  err.Error(),
+		})
+		return v8.Undefined(isolate)
+	}
+	
+	mainFile := pkg.Main
+	if mainFile == "" {
+		mainFile = "index.js"
+	}
+	
+	// Load the main file
+	mainPath := filepath.Join(moduleDir, mainFile)
+	moduleCode, err := os.ReadFile(mainPath)
+	if err != nil {
+		logging.Debug("Failed to read module main file", "js-require", map[string]interface{}{
+			"module":   module,
+			"mainPath": mainPath,
+			"error":    err.Error(),
+		})
+		return v8.Undefined(isolate)
+	}
+	
+	// Create a new context for the module execution
+	moduleCtx := v8.NewContext(isolate)
+	defer moduleCtx.Close()
+	
+	// Set up minimal Node.js environment for the module
+	exportsObj := v8.NewObjectTemplate(isolate)
+	exports, _ := exportsObj.NewInstance(moduleCtx)
+	moduleCtx.Global().Set("exports", exports)
+	
+	// Set up module object
+	moduleObjTemplate := v8.NewObjectTemplate(isolate)
+	moduleObjInstance, _ := moduleObjTemplate.NewInstance(moduleCtx)
+	moduleObjInstance.Set("exports", exports)
+	moduleCtx.Global().Set("module", moduleObjInstance)
+	
+	// Set up require function for nested dependencies
+	requireFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) == 0 {
+			return v8.Undefined(isolate)
+		}
+		
+		depModule := args[0].String()
+		// For now, only support direct dependencies, not nested requires
+		logging.Debug("Nested require not fully supported", "js-require", map[string]interface{}{
+			"parentModule": module,
+			"dependency":   depModule,
+		})
+		return v8.Undefined(isolate)
+	})
+	moduleCtx.Global().Set("require", requireFunc.GetFunction(moduleCtx))
+	
+	// Execute the module code
+	_, err = moduleCtx.RunScript(string(moduleCode), mainPath)
+	if err != nil {
+		logging.Debug("Failed to execute npm module", "js-require", map[string]interface{}{
+			"module": module,
+			"error":  err.Error(),
+		})
+		return v8.Undefined(isolate)
+	}
+	
+	// Get the exports from the module
+	exportsValue, err := moduleCtx.Global().Get("exports")
+	if err != nil {
+		logging.Debug("Failed to get module exports", "js-require", map[string]interface{}{
+			"module": module,
+			"error":  err.Error(),
+		})
+		return v8.Undefined(isolate)
+	}
+	
+	// Convert exports to JSON and back to ensure it works in the main context
+	exportsJSON, err := v8.JSONStringify(moduleCtx, exportsValue)
+	if err != nil {
+		logging.Debug("Failed to stringify module exports", "js-require", map[string]interface{}{
+			"module": module,
+			"error":  err.Error(),
+		})
+		return v8.Undefined(isolate)
+	}
+	
+	// Parse back in the main context
+	result, err := v8.JSONParse(v8ctx, exportsJSON)
+	if err != nil {
+		logging.Debug("Failed to parse module exports in main context", "js-require", map[string]interface{}{
+			"module": module,
+			"error":  err.Error(),
+		})
+		return v8.Undefined(isolate)
+	}
+	
+	logging.Debug("Successfully loaded npm module", "js-require", map[string]interface{}{
+		"module": module,
+	})
+	
+	return result
 }
 
 // IsCancelled returns whether the script execution was cancelled

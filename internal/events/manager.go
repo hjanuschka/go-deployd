@@ -102,22 +102,16 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 			}
 			// If no .go file exists, that's fine - just don't load any script for this event
 		} else {
-			// Only try JavaScript - fail if compilation fails
+			// Only try JavaScript
 			jsPath := filepath.Join(configPath, baseName+".js")
 			if content, err := os.ReadFile(jsPath); err == nil {
 				script := &Script{
 					source: string(content),
 					path:   jsPath,
 				}
-				// Fail if JavaScript compilation fails
-				if prog, err := CompileJS(jsPath, script.source); err != nil {
-					fmt.Printf("Error: Failed to compile JavaScript script %s: %v\n", jsPath, err)
-					// Don't load this event script at all if JS compilation fails
-				} else {
-					script.compiled = prog
-					usm.jsScripts[eventType] = script
-					usm.scriptTypes[eventType] = ScriptTypeJS
-				}
+				// Compilation is handled in Script.Run() method
+				usm.jsScripts[eventType] = script
+				usm.scriptTypes[eventType] = ScriptTypeJS
 			}
 			// If no .js file exists, that's fine - just don't load any script for this event
 		}
