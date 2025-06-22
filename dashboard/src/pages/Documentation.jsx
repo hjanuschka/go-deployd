@@ -34,6 +34,9 @@ import {
   useToast,
   IconButton,
   Tooltip,
+  UnorderedList,
+  ListItem,
+  Link,
 } from '@chakra-ui/react'
 import {
   FiCopy,
@@ -152,6 +155,36 @@ function Documentation() {
     return <Badge colorScheme={colors[method] || 'gray'}>{method}</Badge>
   }
 
+  const TableOfContents = ({ sections }) => (
+    <Card mb={6}>
+      <CardHeader>
+        <Heading size="sm">Table of Contents</Heading>
+      </CardHeader>
+      <CardBody pt={0}>
+        <UnorderedList spacing={1}>
+          {sections.map((section, index) => (
+            <ListItem key={index}>
+              <Link href={`#${section.id}`} color="blue.500" fontSize="sm">
+                {section.title}
+              </Link>
+              {section.subsections && (
+                <UnorderedList ml={4} mt={1}>
+                  {section.subsections.map((sub, subIndex) => (
+                    <ListItem key={subIndex}>
+                      <Link href={`#${sub.id}`} color="blue.400" fontSize="xs">
+                        {sub.title}
+                      </Link>
+                    </ListItem>
+                  ))}
+                </UnorderedList>
+              )}
+            </ListItem>
+          ))}
+        </UnorderedList>
+      </CardBody>
+    </Card>
+  )
+
   return (
     <VStack align="stretch" spacing={6}>
       <HStack justify="space-between">
@@ -189,6 +222,29 @@ function Documentation() {
           {/* Collections API Tab */}
           <TabPanel>
             <VStack align="stretch" spacing={6}>
+              <TableOfContents sections={[
+                {
+                  id: 'crud-operations',
+                  title: 'Basic CRUD Operations',
+                  subsections: [
+                    { id: 'get-all', title: 'GET All Documents' },
+                    { id: 'get-single', title: 'GET Single Document' },
+                    { id: 'post-create', title: 'POST Create Document' },
+                    { id: 'put-update', title: 'PUT Update Document' },
+                    { id: 'delete-doc', title: 'DELETE Document' }
+                  ]
+                },
+                {
+                  id: 'advanced-queries',
+                  title: 'Advanced Queries',
+                  subsections: [
+                    { id: 'filtering', title: 'Filtering' },
+                    { id: 'mongodb-operators', title: 'MongoDB-Style Operators' },
+                    { id: 'sorting-pagination', title: 'Sorting & Pagination' }
+                  ]
+                }
+              ]} />
+
               <Alert status="info">
                 <AlertIcon />
                 <Box>
@@ -354,6 +410,27 @@ curl "${serverUrl}/${selectedCollection}?\\$fields={\\"title\\":1,\\"status\\":1
           {/* Master Key Auth Tab */}
           <TabPanel>
             <VStack align="stretch" spacing={6}>
+              <TableOfContents sections={[
+                {
+                  id: 'master-key-overview',
+                  title: 'Master Key Overview',
+                  subsections: [
+                    { id: 'key-features', title: 'Key Features' },
+                    { id: 'configuration', title: 'Configuration Location' }
+                  ]
+                },
+                {
+                  id: 'api-usage',
+                  title: 'Using Master Key in API Calls',
+                  subsections: [
+                    { id: 'via-header', title: 'Via Header (Recommended)' },
+                    { id: 'via-auth-header', title: 'Via Authorization Header' },
+                    { id: 'dashboard-login', title: 'Dashboard Login' },
+                    { id: 'system-login', title: 'System Login (Programmatic)' }
+                  ]
+                }
+              ]} />
+
               <Alert status="warning">
                 <AlertIcon />
                 <Box>
@@ -455,6 +532,26 @@ curl "${serverUrl}/${selectedCollection}?\\$fields={\\"title\\":1,\\"status\\":1
           {/* User Management Tab */}
           <TabPanel>
             <VStack align="stretch" spacing={6}>
+              <TableOfContents sections={[
+                {
+                  id: 'create-user',
+                  title: 'Create User (Master Key Required)'
+                },
+                {
+                  id: 'user-auth',
+                  title: 'User Authentication',
+                  subsections: [
+                    { id: 'standard-login', title: 'Standard Login' },
+                    { id: 'get-current-user', title: 'Get Current User (/me)' },
+                    { id: 'logout', title: 'Logout' }
+                  ]
+                },
+                {
+                  id: 'user-roles',
+                  title: 'User Roles & Permissions'
+                }
+              ]} />
+
               <Alert status="info">
                 <AlertIcon />
                 <Box>
@@ -582,6 +679,21 @@ curl -b cookies.txt "${serverUrl}/users/me"`}
           {/* Authentication Tab */}
           <TabPanel>
             <VStack align="stretch" spacing={6}>
+              <TableOfContents sections={[
+                {
+                  id: 'security-features',
+                  title: 'Security Features'
+                },
+                {
+                  id: 'session-management',
+                  title: 'Session Management',
+                  subsections: [
+                    { id: 'session-properties', title: 'Session Properties' },
+                    { id: 'session-validation', title: 'Session Validation' }
+                  ]
+                }
+              ]} />
+
               <Alert status="success">
                 <AlertIcon />
                 <Box>
@@ -649,6 +761,31 @@ curl -H "Authorization: Bearer session_token_here" \\
           {/* Admin API Tab */}
           <TabPanel>
             <VStack align="stretch" spacing={6}>
+              <TableOfContents sections={[
+                {
+                  id: 'server-info',
+                  title: 'Server Information'
+                },
+                {
+                  id: 'collection-mgmt',
+                  title: 'Collection Management',
+                  subsections: [
+                    { id: 'list-collections', title: 'List Collections' },
+                    { id: 'get-collection-details', title: 'Get Collection Details' },
+                    { id: 'create-collection', title: 'Create Collection' }
+                  ]
+                },
+                {
+                  id: 'security-settings',
+                  title: 'Security Settings Management',
+                  subsections: [
+                    { id: 'get-security-settings', title: 'Get Security Settings' },
+                    { id: 'update-security-settings', title: 'Update Security Settings' },
+                    { id: 'validate-master-key', title: 'Validate Master Key' }
+                  ]
+                }
+              ]} />
+
               <Alert status="warning">
                 <AlertIcon />
                 <Box>
@@ -770,6 +907,44 @@ curl -H "Authorization: Bearer session_token_here" \\
           </TabPanel>
           <TabPanel>
             <VStack spacing={6} align="stretch">
+              <TableOfContents sections={[
+                {
+                  id: 'events-overview',
+                  title: 'Events System Overview',
+                  subsections: [
+                    { id: 'event-types', title: 'Event Types' },
+                    { id: 'event-context', title: 'Event Context' }
+                  ]
+                },
+                {
+                  id: 'bypass-events',
+                  title: 'Bypassing Events (Admin Only)',
+                  subsections: [
+                    { id: 'skip-in-body', title: 'Using $skipEvents in Request Body' },
+                    { id: 'skip-in-query', title: 'Using $skipEvents as Query Parameter' },
+                    { id: 'security-notes', title: 'Security Notes' }
+                  ]
+                },
+                {
+                  id: 'javascript-events',
+                  title: 'JavaScript Events',
+                  subsections: [
+                    { id: 'js-validation', title: 'Basic Validation Example' },
+                    { id: 'npm-modules', title: 'Using npm Modules' },
+                    { id: 'js-globals', title: 'Available Global Functions' }
+                  ]
+                },
+                {
+                  id: 'go-events',
+                  title: 'Go Events',
+                  subsections: [
+                    { id: 'go-validation', title: 'Basic Validation Example' },
+                    { id: 'go-packages', title: 'Using Third-Party Packages' },
+                    { id: 'go-methods', title: 'Available EventContext Methods' }
+                  ]
+                }
+              ]} />
+
               <Card>
                 <CardHeader>
                   <Heading size="md">Events System Overview</Heading>
@@ -1045,6 +1220,27 @@ var EventHandler = &EventHandler{}`}
 
           <TabPanel>
             <VStack spacing={6} align="stretch">
+              <TableOfContents sections={[
+                {
+                  id: 'database-config',
+                  title: 'Database Configuration',
+                  subsections: [
+                    { id: 'mongodb-config', title: 'MongoDB Configuration' },
+                    { id: 'sqlite-config', title: 'SQLite Configuration' },
+                    { id: 'switching-db', title: 'Switching Databases' },
+                    { id: 'feature-comparison', title: 'Feature Comparison' }
+                  ]
+                },
+                {
+                  id: 'performance',
+                  title: 'Performance Considerations',
+                  subsections: [
+                    { id: 'event-performance', title: 'Event Performance' },
+                    { id: 'database-performance', title: 'Database Performance' }
+                  ]
+                }
+              ]} />
+
               <Card>
                 <CardHeader>
                   <Heading size="md">Database Configuration</Heading>
