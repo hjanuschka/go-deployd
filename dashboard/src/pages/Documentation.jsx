@@ -808,6 +808,67 @@ curl -H "Authorization: Bearer session_token_here" \\
 
               <Card>
                 <CardHeader>
+                  <Heading size="md">Bypassing Events (Admin Only)</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      When using the master key for administrative operations, you can bypass all events 
+                      using the special <Code>$skipEvents</Code> parameter. This is useful for data 
+                      migrations, bulk operations, or emergency fixes.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Using $skipEvents in Request Body</Text>
+                      <CodeBlock language="javascript">
+{`// POST/PUT request with $skipEvents in payload
+var payload = {
+  userId: user_id,
+  title: "Admin Created Item",
+  $skipEvents: true
+};
+
+fetch("/api/collection", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + masterKey
+  },
+  body: JSON.stringify(payload)
+});`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Using $skipEvents as Query Parameter</Text>
+                      <CodeBlock language="bash">
+{`# GET request bypassing events
+curl -X GET "http://localhost:2403/users?$skipEvents=true" \\
+  -H "Authorization: Bearer \${MASTER_KEY}"
+
+# POST request bypassing events  
+curl -X POST "http://localhost:2403/users?$skipEvents=true" \\
+  -H "Authorization: Bearer \${MASTER_KEY}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"username": "admin", "role": "administrator"}'`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Security Notes</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>⚠️ Only works with valid master key authentication</Text>
+                        <Text>⚠️ Bypasses ALL events (validate, post, put, get)</Text>
+                        <Text>⚠️ Use carefully - no validation or business logic will run</Text>
+                        <Text>✅ Ideal for administrative data operations and migrations</Text>
+                      </VStack>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
                   <Heading size="md">JavaScript Events</Heading>
                 </CardHeader>
                 <CardBody>
