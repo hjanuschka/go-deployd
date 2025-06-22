@@ -181,6 +181,8 @@ function Documentation() {
           <Tab><HStack><FiUsers /><Text>User Management</Text></HStack></Tab>
           <Tab><HStack><FiShield /><Text>Authentication</Text></HStack></Tab>
           <Tab><HStack><FiServer /><Text>Admin API</Text></HStack></Tab>
+          <Tab><HStack><FiCode /><Text>Events System</Text></HStack></Tab>
+          <Tab><HStack><FiDatabase /><Text>Database Config</Text></HStack></Tab>
         </TabList>
 
         <TabPanels>
@@ -766,6 +768,329 @@ curl -H "Authorization: Bearer session_token_here" \\
               </Card>
             </VStack>
           </TabPanel>
+          <TabPanel>
+            <VStack spacing={6} align="stretch">
+              <Card>
+                <CardHeader>
+                  <Heading size="md">Events System Overview</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      Go-Deployd supports both JavaScript and Go events that run during collection operations. 
+                      Events allow you to validate data, modify requests, and implement business logic.
+                    </Text>
+                    
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Event Types</Text>
+                      <VStack spacing={2} align="stretch">
+                        <Text>• <Code>validate.js/go</Code> - Runs before data is saved (POST/PUT)</Text>
+                        <Text>• <Code>post.js/go</Code> - Runs after successful POST operations</Text>
+                        <Text>• <Code>put.js/go</Code> - Runs after successful PUT operations</Text>
+                        <Text>• <Code>get.js/go</Code> - Runs during GET operations to modify response</Text>
+                      </VStack>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Event Context</Text>
+                      <Text>All events receive a context object with:</Text>
+                      <VStack spacing={1} align="stretch" mt={2}>
+                        <Text>• <Code>data</Code> - The request/response data</Text>
+                        <Text>• <Code>query</Code> - URL query parameters</Text>
+                        <Text>• <Code>me</Code> - Current authenticated user (if any)</Text>
+                        <Text>• <Code>isRoot</Code> - True if user has root privileges</Text>
+                        <Text>• <Code>previous</Code> - Previous data (PUT events only)</Text>
+                      </VStack>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">JavaScript Events</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      JavaScript events run in a V8 engine with support for npm modules and ES6+ features.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Basic Validation Example</Text>
+                      <CodeBlock language="javascript">
+{`// validate.js
+if (!this.title || this.title.length < 3) {
+  error('title', 'Title must be at least 3 characters');
+}
+
+if (this.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(this.email)) {
+  error('email', 'Please enter a valid email address');
+}
+
+// Hide sensitive fields
+hide('password');`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Using npm Modules</Text>
+                      <CodeBlock language="javascript">
+{`// post.js - Using external libraries
+const bcrypt = require('bcrypt');
+const uuid = require('uuid');
+
+if (this.password) {
+  // Hash password before saving
+  this.password = bcrypt.hashSync(this.password, 10);
+}
+
+// Add unique ID
+this.externalId = uuid.v4();
+
+// Send welcome email (example)
+const nodemailer = require('nodemailer');
+// ... email setup and sending logic`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Available Global Functions</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>• <Code>error(field, message)</Code> - Add validation error</Text>
+                        <Text>• <Code>hide(field)</Code> - Remove field from response</Text>
+                        <Text>• <Code>protect(field)</Code> - Remove field from data</Text>
+                        <Text>• <Code>cancel(message, statusCode)</Code> - Cancel operation</Text>
+                        <Text>• <Code>isMe(userId)</Code> - Check if user owns resource</Text>
+                      </VStack>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">Go Events</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      Go events are compiled as plugins and offer better performance for complex logic.
+                      They support any Go module available on the Go module proxy.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Basic Validation Example</Text>
+                      <CodeBlock language="go">
+{`// validate.go
+package main
+
+import (
+    "strings"
+    "regexp"
+)
+
+type EventHandler struct{}
+
+func (h *EventHandler) Run(ctx interface{}) error {
+    eventCtx := ctx.(*EventContext)
+    
+    // Validate title
+    if title, ok := eventCtx.Data["title"].(string); !ok || len(title) < 3 {
+        eventCtx.Error("title", "Title must be at least 3 characters")
+    }
+    
+    // Validate email format
+    if email, ok := eventCtx.Data["email"].(string); ok && email != "" {
+        emailRegex := regexp.MustCompile(\`^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$\`)
+        if !emailRegex.MatchString(email) {
+            eventCtx.Error("email", "Please enter a valid email address")
+        }
+    }
+    
+    // Hide sensitive field
+    eventCtx.Hide("password")
+    
+    return nil
+}
+
+var EventHandler = &EventHandler{}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Using Third-Party Packages</Text>
+                      <CodeBlock language="go">
+{`// post.go - Using external libraries
+package main
+
+import (
+    "github.com/google/uuid"
+    "github.com/shopspring/decimal"
+    "golang.org/x/crypto/bcrypt"
+)
+
+type EventHandler struct{}
+
+func (h *EventHandler) Run(ctx interface{}) error {
+    eventCtx := ctx.(*EventContext)
+    
+    // Hash password if provided
+    if password, ok := eventCtx.Data["password"].(string); ok && password != "" {
+        hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+        if err != nil {
+            eventCtx.Error("password", "Failed to process password")
+            return nil
+        }
+        eventCtx.Data["password"] = string(hashed)
+    }
+    
+    // Add unique external ID
+    eventCtx.Data["externalId"] = uuid.New().String()
+    
+    // Handle decimal calculations
+    if priceStr, ok := eventCtx.Data["price"].(string); ok {
+        price, err := decimal.NewFromString(priceStr)
+        if err == nil {
+            tax := price.Mul(decimal.NewFromFloat(0.1)) // 10% tax
+            eventCtx.Data["taxAmount"] = tax.String()
+            eventCtx.Data["totalPrice"] = price.Add(tax).String()
+        }
+    }
+    
+    return nil
+}
+
+var EventHandler = &EventHandler{}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Available EventContext Methods</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>• <Code>Error(field, message)</Code> - Add validation error</Text>
+                        <Text>• <Code>Hide(field)</Code> - Remove field from response</Text>
+                        <Text>• <Code>Protect(field)</Code> - Remove field from data</Text>
+                        <Text>• <Code>Cancel(message, statusCode)</Code> - Cancel operation</Text>
+                        <Text>• <Code>IsMe(userId)</Code> - Check if user owns resource</Text>
+                        <Text>• <Code>HasErrors()</Code> - Check if validation errors exist</Text>
+                      </VStack>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+            </VStack>
+          </TabPanel>
+
+          <TabPanel>
+            <VStack spacing={6} align="stretch">
+              <Card>
+                <CardHeader>
+                  <Heading size="md">Database Configuration</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      Go-Deployd supports both MongoDB and SQLite databases. Choose based on your deployment needs and scale requirements.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>MongoDB Configuration</Text>
+                      <Text mb={2}>Best for: Production environments, horizontal scaling, complex queries</Text>
+                      <CodeBlock language="bash">
+{`# Set MongoDB connection string
+export DATABASE_URL="mongodb://localhost:27017/deployd"
+
+# Or with authentication
+export DATABASE_URL="mongodb://username:password@localhost:27017/deployd"
+
+# MongoDB Atlas (cloud)
+export DATABASE_URL="mongodb+srv://username:password@cluster.mongodb.net/deployd"`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>SQLite Configuration</Text>
+                      <Text mb={2}>Best for: Development, testing, small applications, single-server deployments</Text>
+                      <CodeBlock language="bash">
+{`# Set SQLite database file path
+export DATABASE_URL="sqlite:./data/deployd.db"
+
+# Or use in-memory database (for testing)
+export DATABASE_URL="sqlite::memory:"`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Switching Databases</Text>
+                      <Text>
+                        Simply change the DATABASE_URL environment variable and restart the server. 
+                        Both databases support the same API and event system features.
+                      </Text>
+                      <CodeBlock language="bash">
+{`# Development with SQLite
+export DATABASE_URL="sqlite:./data/dev.db"
+./deployd
+
+# Production with MongoDB
+export DATABASE_URL="mongodb://localhost:27017/deployd_prod"
+./deployd`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Feature Comparison</Text>
+                      <VStack spacing={2} align="stretch">
+                        <Text><strong>MongoDB:</strong></Text>
+                        <Text>✅ Horizontal scaling</Text>
+                        <Text>✅ Advanced indexing</Text>
+                        <Text>✅ Replica sets</Text>
+                        <Text>✅ Aggregation pipeline</Text>
+                        <Text>❌ Requires separate server</Text>
+                        
+                        <Text mt={3}><strong>SQLite:</strong></Text>
+                        <Text>✅ Zero configuration</Text>
+                        <Text>✅ Single file database</Text>
+                        <Text>✅ ACID transactions</Text>
+                        <Text>✅ Embedded in application</Text>
+                        <Text>❌ Single writer limitation</Text>
+                      </VStack>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">Performance Considerations</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Event Performance</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>• <strong>Go events:</strong> ~50-100x faster than JavaScript for CPU-intensive tasks</Text>
+                        <Text>• <strong>JavaScript events:</strong> Better for simple validations and npm ecosystem</Text>
+                        <Text>• Event compilation happens once at startup or file change</Text>
+                        <Text>• Use Go events for complex business logic and calculations</Text>
+                      </VStack>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Database Performance</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>• <strong>SQLite:</strong> Excellent for read-heavy workloads, single-server deployments</Text>
+                        <Text>• <strong>MongoDB:</strong> Better for write-heavy workloads, multiple servers</Text>
+                        <Text>• Both support efficient indexing on collection properties</Text>
+                        <Text>• Consider database-specific optimizations in your events</Text>
+                      </VStack>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+            </VStack>
+          </TabPanel>
+
         </TabPanels>
       </Tabs>
     </VStack>
