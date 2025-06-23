@@ -26,10 +26,11 @@ type V8Pool struct {
 
 // V8EventContext wraps a V8 context with its isolate for reuse
 type V8EventContext struct {
-	isolate *v8.Isolate
-	context *v8.Context
-	inUse   bool
-	lastUsed time.Time
+	isolate    *v8.Isolate
+	context    *v8.Context
+	inUse      bool
+	lastUsed   time.Time
+	execCount  int  // Track number of executions to detect when to refresh
 }
 
 var (
@@ -178,8 +179,15 @@ func (pool *V8Pool) ReleaseContext(eventCtx *V8EventContext) {
 		return
 	}
 	
-	// Reset the context for reuse
-	pool.resetContext(eventCtx)
+	eventCtx.execCount++
+	
+	// If context has been used too many times, recreate it to avoid pollution
+	if eventCtx.execCount > 1000 {
+		pool.recreateContext(eventCtx)
+	} else {
+		// Reset the context for reuse (less needed now with function wrapping)
+		pool.resetContext(eventCtx)
+	}
 	
 	eventCtx.inUse = false
 	eventCtx.lastUsed = time.Now()
@@ -196,16 +204,51 @@ func (pool *V8Pool) ReleaseContext(eventCtx *V8EventContext) {
 	}
 }
 
-// resetContext clears the context state for reuse
-func (pool *V8Pool) resetContext(eventCtx *V8EventContext) {
-	// Clear global variables that might have been set
-	globals := []string{"data", "query", "me", "previous", "isRoot", "internal", "errors"}
-	for _, global := range globals {
-		eventCtx.context.Global().Delete(global)
+// recreateContext creates a fresh context to avoid global pollution
+func (pool *V8Pool) recreateContext(eventCtx *V8EventContext) {
+	// Close old context
+	if eventCtx.context != nil {
+		eventCtx.context.Close()
 	}
 	
-	// Reset any other state as needed
-	eventCtx.context.Global().Set("cancelled", false)
+	// Create new context with same isolate
+	eventCtx.context = v8.NewContext(eventCtx.isolate)
+	eventCtx.execCount = 0
+	
+	logging.Debug("Recreated V8 context to avoid pollution", "v8-pool", map[string]interface{}{
+		"reason": "execCount > 100",
+	})
+}
+
+// resetContext clears the context state for reuse
+func (pool *V8Pool) resetContext(eventCtx *V8EventContext) {
+	// Get all global property names to clear user-defined variables
+	globalObj := eventCtx.context.Global()
+	
+	// Clear known deployd globals
+	deployGlobals := []string{
+		"data", "query", "me", "previous", "isRoot", "internal", "errors", 
+		"cancelled", "error", "hide", "protect", "cancel", "isMe",
+	}
+	for _, global := range deployGlobals {
+		globalObj.Delete(global)
+	}
+	
+	// Clear common npm module globals that might be declared
+	npmGlobals := []string{
+		"crypto", "bcrypt", "uuid", "lodash", "_", "moment", "axios", 
+		"fetch", "Buffer", "process", "require", "module", "exports",
+		"nodemailer", "validator", "jsonwebtoken", "jwt", "fs", "path",
+	}
+	for _, global := range npmGlobals {
+		globalObj.Delete(global)
+	}
+	
+	// Try to get property names and clear any non-standard globals
+	// Note: V8Go doesn't expose PropertyNames, so we clear known problematic ones
+	
+	// Reset core state
+	globalObj.Set("cancelled", false)
 }
 
 // ExecuteScript executes a script in the given context (compiles per-isolate if needed)
@@ -217,26 +260,30 @@ func (pool *V8Pool) ExecuteScript(eventCtx *V8EventContext, filePath string, scr
 		return fmt.Errorf("script not found in pool: %s", filePath)
 	}
 	
-	// Check if script is already compiled for this isolate
+	// Wrap script in function to avoid global variable pollution
+	wrappedSource := pool.wrapScriptInFunction(source)
+	
+	// Check if wrapped script is already compiled for this isolate
+	wrappedKey := filePath + "_wrapped"
 	var compiled *v8.UnboundScript
-	if pool.compiled[filePath] != nil {
-		compiled = pool.compiled[filePath][eventCtx.isolate]
+	if pool.compiled[wrappedKey] != nil {
+		compiled = pool.compiled[wrappedKey][eventCtx.isolate]
 	}
 	
 	// Compile for this isolate if not already done
 	if compiled == nil {
 		var err error
-		compiled, err = eventCtx.isolate.CompileUnboundScript(source, filePath, v8.CompileOptions{})
+		compiled, err = eventCtx.isolate.CompileUnboundScript(wrappedSource, filePath, v8.CompileOptions{})
 		if err != nil {
 			pool.mu.Unlock()
-			return fmt.Errorf("failed to compile script for isolate: %w", err)
+			return fmt.Errorf("failed to compile wrapped script for isolate: %w", err)
 		}
 		
 		// Store compiled script for this isolate
-		if pool.compiled[filePath] == nil {
-			pool.compiled[filePath] = make(map[*v8.Isolate]*v8.UnboundScript)
+		if pool.compiled[wrappedKey] == nil {
+			pool.compiled[wrappedKey] = make(map[*v8.Isolate]*v8.UnboundScript)
 		}
-		pool.compiled[filePath][eventCtx.isolate] = compiled
+		pool.compiled[wrappedKey][eventCtx.isolate] = compiled
 	}
 	pool.mu.Unlock()
 	
@@ -253,6 +300,15 @@ func (pool *V8Pool) ExecuteScript(eventCtx *V8EventContext, filePath string, scr
 	
 	// Extract modified data back from JavaScript
 	return extractModifiedData(eventCtx.context, scriptCtx)
+}
+
+// wrapScriptInFunction wraps the script code in an IIFE to avoid global variable pollution
+func (pool *V8Pool) wrapScriptInFunction(source string) string {
+	return fmt.Sprintf(`
+(function() {
+	%s
+})();
+`, source)
 }
 
 // GetStats returns statistics about the V8 pool
