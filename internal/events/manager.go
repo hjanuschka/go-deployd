@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hjanuschka/go-deployd/internal/context"
+	"github.com/hjanuschka/go-deployd/internal/logging"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -169,8 +171,30 @@ func (usm *UniversalScriptManager) loadGoScript(eventType EventType, sourcePath 
 	return nil
 }
 
-// RunEvent executes an event script
+// RunEvent executes an event script with timing and payload logging
 func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Context, data bson.M) error {
+	// Start timing
+	startTime := time.Now()
+	
+	// Log event trigger with payload
+	var collectionName string
+	if ctx.Resource != nil {
+		collectionName = ctx.Resource.GetName()
+	}
+	
+	var userID interface{}
+	if ctx.Session != nil {
+		userID = ctx.Session.Get("user")
+	}
+	
+	logging.Info("Event triggered", "event", map[string]interface{}{
+		"type":       string(eventType),
+		"collection": collectionName,
+		"method":     ctx.Method,
+		"user":       userID,
+		"payload":    data,
+	})
+	
 	usm.mu.RLock()
 	scriptType, exists := usm.scriptTypes[eventType]
 	if !exists {
@@ -178,25 +202,55 @@ func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Co
 		return nil // No script for this event
 	}
 	
+	var err error
+	var runtime string
+	
 	switch scriptType {
 	case ScriptTypeGo:
+		runtime = "go"
 		goScript := usm.goPlugins[eventType]
 		usm.mu.RUnlock()
 		// Use compiled plugin for Go scripts
 		if goScript != nil {
-			return RunGoPlugin(goScript.PluginPath, ctx, data)
+			err = RunGoPlugin(goScript.PluginPath, ctx, data)
 		}
-		return nil
 		
 	case ScriptTypeJS:
+		runtime = "js"
 		jsScript := usm.jsScripts[eventType]
 		usm.mu.RUnlock()
-		return usm.runJSScript(jsScript, ctx, data)
+		err = usm.runJSScript(jsScript, ctx, data)
 		
 	default:
 		usm.mu.RUnlock()
 		return nil
 	}
+	
+	// Calculate execution time
+	duration := time.Since(startTime)
+	
+	// Log event completion with timing
+	if err != nil {
+		logging.Error("Event failed", "event", map[string]interface{}{
+			"type":       string(eventType),
+			"collection": collectionName,
+			"runtime":    runtime,
+			"duration":   duration.String(),
+			"durationMs": duration.Milliseconds(),
+			"error":      err.Error(),
+		})
+	} else {
+		logging.Info("Event completed", "event", map[string]interface{}{
+			"type":       string(eventType),
+			"collection": collectionName,
+			"runtime":    runtime,
+			"duration":   duration.String(),
+			"durationMs": duration.Milliseconds(),
+			"dataModified": data,
+		})
+	}
+	
+	return err
 }
 
 // runGoPlugin executes a Go plugin

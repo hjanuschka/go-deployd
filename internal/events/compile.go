@@ -8,9 +8,11 @@ import (
 	"plugin"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/dop251/goja"
 	"github.com/hjanuschka/go-deployd/internal/context"
+	"github.com/hjanuschka/go-deployd/internal/logging"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -163,11 +165,15 @@ golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632
 
 // RunGoPlugin loads and executes a Go plugin
 func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
+	startTime := time.Now()
+	
 	// Load the plugin
 	p, err := plugin.Open(pluginPath)
 	if err != nil {
 		return fmt.Errorf("failed to load plugin: %w", err)
 	}
+	
+	loadTime := time.Since(startTime)
 
 	// Look up the EventHandler symbol
 	symHandler, err := p.Lookup("EventHandler")
@@ -206,6 +212,8 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 	// Use reflection to call the Run method
 	handler := symHandler.(interface{})
 	if runnable, ok := handler.(interface{ Run(interface{}) error }); ok {
+		executeStart := time.Now()
+		
 		// Run with panic recovery
 		func() {
 			defer func() {
@@ -217,6 +225,18 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 			}()
 			err = runnable.Run(eventCtx)
 		}()
+		
+		executeTime := time.Since(executeStart)
+		
+		// Log detailed timing
+		logging.Debug("Go plugin execution details", "go-plugin", map[string]interface{}{
+			"plugin":      filepath.Base(pluginPath),
+			"loadTimeMs":  loadTime.Milliseconds(),
+			"execTimeMs":  executeTime.Milliseconds(),
+			"totalTimeMs": time.Since(startTime).Milliseconds(),
+			"hasErrors":   eventCtx.HasErrors(),
+			"cancelled":   cancelErr != nil,
+		})
 
 		if cancelErr != nil {
 			return cancelErr

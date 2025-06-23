@@ -127,7 +127,9 @@ func (s *Script) runWithPool(scriptCtx *ScriptContext) (*ScriptContext, error) {
 	}
 
 	// Acquire a context from the pool with timeout
+	acquireStart := time.Now()
 	eventCtx, err := pool.AcquireContext(5 * time.Second)
+	acquireTime := time.Since(acquireStart)
 	if err != nil {
 		logging.Debug("Failed to acquire V8 context from pool, falling back", "js-execution", map[string]interface{}{
 			"error": err.Error(),
@@ -141,17 +143,32 @@ func (s *Script) runWithPool(scriptCtx *ScriptContext) (*ScriptContext, error) {
 		"scriptPath": s.path,
 	})
 
-	if err := pool.ExecuteScript(eventCtx, s.path, scriptCtx); err != nil {
+	executeStart := time.Now()
+	poolErr := pool.ExecuteScript(eventCtx, s.path, scriptCtx)
+	executeTime := time.Since(executeStart)
+	
+	// Log detailed timing
+	logging.Info("JavaScript execution timing", "js-timing", map[string]interface{}{
+		"script":        filepath.Base(s.path),
+		"pooled":        true,
+		"execTimeMs":    executeTime.Milliseconds(),
+		"acquireTimeMs": acquireTime.Milliseconds(),
+		"totalTimeMs":   time.Since(acquireStart).Milliseconds(),
+		"hasErrors":     len(scriptCtx.errors) > 0,
+		"errorCount":    len(scriptCtx.errors),
+	})
+	
+	if poolErr != nil {
 		// Check if it's a cancellation (our custom exception)
-		if strings.Contains(err.Error(), "CANCEL") {
+		if strings.Contains(poolErr.Error(), "CANCEL") {
 			logging.Debug("JavaScript execution cancelled (V8 pool)", "js-execution", map[string]interface{}{
 				"cancelMsg": scriptCtx.cancelMsg,
 			})
 		} else {
 			logging.Debug("JavaScript execution failed (V8 pool)", "js-execution", map[string]interface{}{
-				"error": err.Error(),
+				"error": poolErr.Error(),
 			})
-			return scriptCtx, fmt.Errorf("script error: %w", err)
+			return scriptCtx, fmt.Errorf("script error: %w", poolErr)
 		}
 	}
 
@@ -166,12 +183,16 @@ func (s *Script) runWithPool(scriptCtx *ScriptContext) (*ScriptContext, error) {
 
 // runTraditional executes the script using traditional V8 method (fallback)
 func (s *Script) runTraditional(scriptCtx *ScriptContext) (*ScriptContext, error) {
+	startTime := time.Now()
+	
 	// Create a new isolate for each script execution to avoid conflicts
 	isolate := v8.NewIsolate()
 	defer isolate.Dispose()
 	
 	v8ctx := v8.NewContext(isolate)
 	defer v8ctx.Close()
+	
+	setupTime := time.Since(startTime)
 
 	// Set up the script environment
 	if err := setupV8Environment(v8ctx, scriptCtx); err != nil {
@@ -184,12 +205,14 @@ func (s *Script) runTraditional(scriptCtx *ScriptContext) (*ScriptContext, error
 		"scriptPath":        s.path,
 	})
 
+	executeStart := time.Now()
 	var err error
 	if s.compiled != nil {
 		_, err = s.compiled.Run(v8ctx)
 	} else {
 		_, err = v8ctx.RunScript(s.source, s.path)
 	}
+	executeTime := time.Since(executeStart)
 
 	if err != nil {
 		// Check if it's a cancellation (our custom exception)
@@ -212,6 +235,17 @@ func (s *Script) runTraditional(scriptCtx *ScriptContext) (*ScriptContext, error
 			"error": err.Error(),
 		})
 	}
+
+	// Log detailed timing for traditional execution
+	logging.Info("JavaScript execution timing", "js-timing", map[string]interface{}{
+		"script":        filepath.Base(s.path),
+		"pooled":        false,
+		"setupTimeMs":   setupTime.Milliseconds(),
+		"execTimeMs":    executeTime.Milliseconds(),
+		"totalTimeMs":   time.Since(startTime).Milliseconds(),
+		"hasErrors":     len(scriptCtx.errors) > 0,
+		"errorCount":    len(scriptCtx.errors),
+	})
 
 	logging.Debug("JavaScript execution completed (V8 traditional)", "js-execution", map[string]interface{}{
 		"hasCancelled": scriptCtx.cancelled,
