@@ -25,7 +25,13 @@ function Sidebar({ menuItems, onClose }) {
       {/* Logo */}
       <Box p={6}>
         <HStack spacing={3}>
-          <Icon as={FiCode} boxSize={8} color="brand.400" />
+          <Box boxSize={8}>
+            <img 
+              src="/deployd-logo.png" 
+              alt="go-deployd logo" 
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+          </Box>
           <Text fontSize="xl" fontWeight="bold" color="white">
             go-deployd
           </Text>

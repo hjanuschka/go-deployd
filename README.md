@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="dashboard/public/deployd-logo.png" alt="Go-Deployd Logo" width="120" height="120">
+</div>
+
 # 🚀 Go-Deployd
 
 > **A high-performance, modern reimagining of Deployd in Go**  
@@ -31,12 +35,25 @@ go-deployd dev
 
 ## Quick Start
 
+### With MongoDB (Default)
 ```bash
 # Start the server (uses MongoDB defaults: localhost:27017/deployd)
 go run cmd/deployd/main.go
 
 # Or with custom settings
 go run cmd/deployd/main.go -port 3000 -db-name myapp -dev
+
+# Run development server with MongoDB (recommended)
+make run
+```
+
+### With SQLite
+```bash
+# Run with SQLite database (no MongoDB required)
+make run_sqlite
+
+# Or directly
+go run cmd/deployd/main.go -dev -database sqlite
 ```
 
 The server will start at `http://localhost:2403` with a default "todos" collection and admin dashboard at `http://localhost:2403/_dashboard/`.
@@ -277,6 +294,9 @@ make build
 
 # Run in development mode (auto-starts MongoDB + builds dashboard)
 make run
+
+# Run with SQLite (no MongoDB required)
+make run_sqlite
 
 # Run just the dashboard dev server (for dashboard development)
 make dashboard-dev

@@ -1,4 +1,4 @@
-.PHONY: build run test clean deps mongo-start mongo-stop mongo-status dashboard dashboard-dev dashboard-build e2e-test
+.PHONY: build run run_sqlite test clean deps mongo-start mongo-stop mongo-status dashboard dashboard-dev dashboard-build e2e-test
 
 # Build the application
 build:
@@ -54,6 +54,11 @@ run: mongo-start dashboard-build
 	@echo "🚀 Starting go-deployd with dashboard..."
 	@sleep 1
 	go run cmd/deployd/main.go -dev
+
+# Run the application in development mode with SQLite (no MongoDB required)
+run_sqlite: dashboard-build
+	@echo "🚀 Starting go-deployd with SQLite and dashboard..."
+	go run cmd/deployd/main.go -dev -database sqlite
 
 # Run with custom port
 run-port:
