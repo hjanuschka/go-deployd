@@ -18,7 +18,8 @@ type V8Pool struct {
 	isolates  []*v8.Isolate
 	contexts  []*V8EventContext
 	available chan *V8EventContext
-	scripts   map[string]*v8.UnboundScript // Pre-compiled scripts by file path
+	scripts   map[string]string // Source code by file path for per-isolate compilation
+	compiled  map[string]map[*v8.Isolate]*v8.UnboundScript // Per-isolate compiled scripts
 	poolSize  int
 	isShutdown bool
 }
@@ -54,7 +55,8 @@ func NewV8Pool(poolSize int) *V8Pool {
 		isolates:  make([]*v8.Isolate, 0, poolSize),
 		contexts:  make([]*V8EventContext, 0, poolSize),
 		available: make(chan *V8EventContext, poolSize),
-		scripts:   make(map[string]*v8.UnboundScript),
+		scripts:   make(map[string]string),
+		compiled:  make(map[string]map[*v8.Isolate]*v8.UnboundScript),
 		poolSize:  poolSize,
 	}
 	
@@ -93,7 +95,7 @@ func (pool *V8Pool) initialize() error {
 	return nil
 }
 
-// PrecompileScript compiles a JavaScript source file and stores it for reuse
+// PrecompileScript stores JavaScript source for per-isolate compilation
 func (pool *V8Pool) PrecompileScript(filePath, source string) error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
@@ -102,28 +104,15 @@ func (pool *V8Pool) PrecompileScript(filePath, source string) error {
 		return fmt.Errorf("V8 pool is shut down")
 	}
 	
-	// Use any available isolate for compilation
-	var isolate *v8.Isolate
-	if len(pool.isolates) > 0 {
-		isolate = pool.isolates[0]
-	} else {
-		// Fallback: create temporary isolate for compilation
-		isolate = v8.NewIsolate()
-		defer isolate.Dispose()
+	// Store source code for per-isolate compilation
+	pool.scripts[filePath] = source
+	
+	// Initialize compiled map for this script
+	if pool.compiled[filePath] == nil {
+		pool.compiled[filePath] = make(map[*v8.Isolate]*v8.UnboundScript)
 	}
 	
-	unbound, err := isolate.CompileUnboundScript(source, filePath, v8.CompileOptions{})
-	if err != nil {
-		logging.Error("Failed to precompile JavaScript", "v8-pool", map[string]interface{}{
-			"error":    err.Error(),
-			"filePath": filePath,
-		})
-		return fmt.Errorf("failed to compile script %s: %w", filePath, err)
-	}
-	
-	pool.scripts[filePath] = unbound
-	
-	logging.Debug("JavaScript precompiled successfully", "v8-pool", map[string]interface{}{
+	logging.Debug("JavaScript source stored for compilation", "v8-pool", map[string]interface{}{
 		"filePath": filePath,
 	})
 	
@@ -219,23 +208,45 @@ func (pool *V8Pool) resetContext(eventCtx *V8EventContext) {
 	eventCtx.context.Global().Set("cancelled", false)
 }
 
-// ExecuteScript executes a precompiled script in the given context
+// ExecuteScript executes a script in the given context (compiles per-isolate if needed)
 func (pool *V8Pool) ExecuteScript(eventCtx *V8EventContext, filePath string, scriptCtx *ScriptContext) error {
-	pool.mu.RLock()
-	script, exists := pool.scripts[filePath]
-	pool.mu.RUnlock()
-	
+	pool.mu.Lock()
+	source, exists := pool.scripts[filePath]
 	if !exists {
+		pool.mu.Unlock()
 		return fmt.Errorf("script not found in pool: %s", filePath)
 	}
+	
+	// Check if script is already compiled for this isolate
+	var compiled *v8.UnboundScript
+	if pool.compiled[filePath] != nil {
+		compiled = pool.compiled[filePath][eventCtx.isolate]
+	}
+	
+	// Compile for this isolate if not already done
+	if compiled == nil {
+		var err error
+		compiled, err = eventCtx.isolate.CompileUnboundScript(source, filePath, v8.CompileOptions{})
+		if err != nil {
+			pool.mu.Unlock()
+			return fmt.Errorf("failed to compile script for isolate: %w", err)
+		}
+		
+		// Store compiled script for this isolate
+		if pool.compiled[filePath] == nil {
+			pool.compiled[filePath] = make(map[*v8.Isolate]*v8.UnboundScript)
+		}
+		pool.compiled[filePath][eventCtx.isolate] = compiled
+	}
+	pool.mu.Unlock()
 	
 	// Set up the script environment in the context
 	if err := setupV8Environment(eventCtx.context, scriptCtx); err != nil {
 		return err
 	}
 	
-	// Execute the precompiled script
-	_, err := script.Run(eventCtx.context)
+	// Execute the compiled script
+	_, err := compiled.Run(eventCtx.context)
 	if err != nil {
 		return err
 	}

@@ -23,6 +23,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
 function DocumentEditor({ open, onClose, document, collection, onSave }) {
   const [formData, setFormData] = useState({})
   const [errors, setErrors] = useState({})
+  const [skipEvents, setSkipEvents] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -44,6 +45,7 @@ function DocumentEditor({ open, onClose, document, collection, onSave }) {
         setFormData(initialData)
       }
       setErrors({})
+      setSkipEvents(false) // Reset skip events checkbox
     }
   }, [open, document, collection])
 
@@ -81,6 +83,11 @@ function DocumentEditor({ open, onClose, document, collection, onSave }) {
         processedData[name] = processedData[name].toISOString()
       }
     })
+
+    // Add $skipEvents flag if checkbox is checked
+    if (skipEvents) {
+      processedData.$skipEvents = true
+    }
 
     onSave(processedData)
   }
@@ -212,6 +219,29 @@ function DocumentEditor({ open, onClose, document, collection, onSave }) {
               No properties defined for this collection. Add properties in the Properties tab first.
             </Alert>
           )}
+          
+          <Box mt={2} sx={{ borderTop: '1px solid #e0e0e0', pt: 2 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={skipEvents}
+                  onChange={(e) => setSkipEvents(e.target.checked)}
+                  color="warning"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body2" fontWeight="bold">
+                    Skip Events (Admin Only)
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Bypass all validation and event scripts during save operation. 
+                    Requires master key authentication.
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
         </Box>
       </DialogContent>
       <DialogActions>
