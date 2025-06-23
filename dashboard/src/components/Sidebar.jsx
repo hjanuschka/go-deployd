@@ -27,7 +27,7 @@ function Sidebar({ menuItems, onClose }) {
         <HStack spacing={3}>
           <Box boxSize={8}>
             <img 
-              src="/deployd-logo.png" 
+              src="/_dashboard/deployd-logo.png" 
               alt="go-deployd logo" 
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
