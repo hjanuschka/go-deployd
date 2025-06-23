@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/database"
 	"github.com/hjanuschka/go-deployd/internal/resources"
@@ -118,6 +119,18 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	
 	// Set session cookie
 	r.sessions.SetSessionCookie(w, session)
+	
+	// Check for master key authentication
+	masterKey := req.Header.Get("X-Master-Key")
+	if masterKey != "" {
+		// Load security config to validate master key
+		securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
+		if err == nil && securityConfig.ValidateMasterKey(masterKey) {
+			// Set isRoot flag in session for master key authentication
+			session.Set("isRoot", true)
+			session.Save(r.sessions)
+		}
+	}
 	
 	// Find matching resource
 	resource := r.findMatchingResource(req.URL.Path)

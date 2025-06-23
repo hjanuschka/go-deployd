@@ -173,11 +173,27 @@ func (gpm *GoPluginManager) RunPlugin(eventType EventType, ctx *context.Context,
 	}
 
 	if ctx.Session != nil {
-		// TODO: Add User field to Session interface if needed
-		// For now, try to get user from session data
+		// Get user from session data
 		if user := ctx.Session.Get("user"); user != nil {
-			if userMap, ok := user.(bson.M); ok {
-				eventCtx.Me = userMap
+			// Handle both UserSessionData struct and map[string]interface{} formats
+			switch userData := user.(type) {
+			case bson.M:
+				eventCtx.Me = userData
+				// Add id field for compatibility if userId exists
+				if userId, exists := userData["userId"]; exists {
+					userData["id"] = userId
+				}
+			case map[string]interface{}:
+				eventCtx.Me = userData
+				// Add id field for compatibility if userId exists
+				if userId, exists := userData["userId"]; exists {
+					userData["id"] = userId
+				}
+			default:
+				// Try to convert struct to map for compatibility
+				if userMap := convertUserToMap(userData); userMap != nil {
+					eventCtx.Me = userMap
+				}
 			}
 		}
 	}
@@ -218,3 +234,4 @@ func (gpm *GoPluginManager) RunPlugin(eventType EventType, ctx *context.Context,
 
 	return nil
 }
+

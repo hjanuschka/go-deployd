@@ -106,14 +106,17 @@ func (s *Session) GetID() string {
 }
 
 func (s *Session) IsRoot() bool {
-	if s.development {
-		return true // In development mode, all sessions are root
-	}
-	
+	// Check explicit isRoot flag first (for system login, master key auth)
 	if root, exists := s.Data["isRoot"]; exists {
 		if rootBool, ok := root.(bool); ok {
 			return rootBool
 		}
+	}
+	
+	// In development mode, only return true if no explicit isRoot flag is set
+	// This allows proper authentication testing while maintaining dev convenience
+	if s.development {
+		return false // Changed: don't automatically grant root in dev mode
 	}
 	
 	return false
@@ -133,10 +136,12 @@ func (s *Session) Save(store *SessionStore) error {
 	
 	query := database.NewQueryBuilder().Where("id", "$eq", s.ID)
 	update := database.NewUpdateBuilder().
+		Set("id", s.ID).
 		Set("data", s.Data).
+		Set("createdAt", s.CreatedAt).
 		Set("updatedAt", s.UpdatedAt)
 	
-	_, err := store.store.Update(ctx, query, update)
+	_, err := store.store.Upsert(ctx, query, update)
 	return err
 }
 

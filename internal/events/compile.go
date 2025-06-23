@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"plugin"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -209,8 +210,25 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 
 	if ctx.Session != nil {
 		if user := ctx.Session.Get("user"); user != nil {
-			if userMap, ok := user.(bson.M); ok {
-				eventCtx.Me = userMap
+			// Handle both UserSessionData struct and map[string]interface{} formats
+			switch userData := user.(type) {
+			case bson.M:
+				eventCtx.Me = userData
+				// Add id field for compatibility if userId exists
+				if userId, exists := userData["userId"]; exists {
+					userData["id"] = userId
+				}
+			case map[string]interface{}:
+				eventCtx.Me = userData
+				// Add id field for compatibility if userId exists
+				if userId, exists := userData["userId"]; exists {
+					userData["id"] = userId
+				}
+			default:
+				// Try to convert struct to map for compatibility
+				if userMap := convertUserToMap(userData); userMap != nil {
+					eventCtx.Me = userMap
+				}
 			}
 		}
 	}
@@ -299,4 +317,50 @@ func getProjectRoot() string {
 		dir = parent
 	}
 	return "."
+}
+
+// convertUserToMap attempts to convert various user data formats to map[string]interface{}
+func convertUserToMap(userData interface{}) map[string]interface{} {
+	if userData == nil {
+		return nil
+	}
+	
+	// Use reflection to convert struct to map
+	val := reflect.ValueOf(userData)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	
+	if val.Kind() != reflect.Struct {
+		return nil
+	}
+	
+	result := make(map[string]interface{})
+	typ := val.Type()
+	
+	for i := 0; i < val.NumField(); i++ {
+		field := typ.Field(i)
+		fieldValue := val.Field(i)
+		
+		if !fieldValue.CanInterface() {
+			continue
+		}
+		
+		// Convert field name to camelCase for consistency
+		var fieldName string
+		if jsonTag := field.Tag.Get("json"); jsonTag != "" && jsonTag != "-" {
+			fieldName = strings.Split(jsonTag, ",")[0]
+		} else {
+			fieldName = strings.ToLower(field.Name[:1]) + field.Name[1:]
+		}
+		
+		result[fieldName] = fieldValue.Interface()
+		
+		// Special handling for userId -> id mapping for compatibility
+		if fieldName == "userId" {
+			result["id"] = fieldValue.Interface()
+		}
+	}
+	
+	return result
 }

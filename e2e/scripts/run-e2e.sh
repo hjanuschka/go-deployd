@@ -599,6 +599,44 @@ run_database_tests() {
     echo '{"properties":{"userId":{"type":"string","required":true},"status":{"type":"string","required":true},"total":{"type":"number","required":true},"items":{"type":"array"}}}' > "$PROJECT_ROOT/resources/orders/config.json"
     echo '{"properties":{"title":{"type":"string","required":true},"content":{"type":"string","required":true},"userId":{"type":"string","required":true},"private":{"type":"boolean","default":true}}}' > "$PROJECT_ROOT/resources/private_docs/config.json"
     
+    # Create GET event for private_docs to implement user-based filtering
+    cat > "$PROJECT_ROOT/resources/private_docs/get.go" << 'EOF'
+package main
+
+// Run filters documents based on user authentication and ownership
+func Run(ctx *EventContext) error {
+    // Admin users can see all documents
+    if ctx.IsRoot {
+        return nil
+    }
+    
+    // Check if user is authenticated
+    if ctx.Me == nil {
+        ctx.Cancel("Authentication required", 401)
+        return nil
+    }
+    
+    // For single document requests, check ownership
+    if docUserID, exists := ctx.Data["userId"].(string); exists {
+        // Try both userId and id fields for compatibility
+        if ctx.Me["userId"] != docUserID && ctx.Me["id"] != docUserID {
+            ctx.Cancel("Document not found", 404)
+            return nil
+        }
+    } else {
+        // Multiple documents - filter by userId
+        // Try both userId and id fields for compatibility
+        if userID, ok := ctx.Me["userId"].(string); ok {
+            ctx.Query["userId"] = userID
+        } else if userID, ok := ctx.Me["id"].(string); ok {
+            ctx.Query["userId"] = userID
+        }
+    }
+    
+    return nil
+}
+EOF
+    
     # Load test data
     load_test_data "$port" "users" || return 1
     load_test_data "$port" "products" || return 1
