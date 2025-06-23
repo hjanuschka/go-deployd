@@ -53,7 +53,7 @@ make run
 make run_sqlite
 
 # Or directly
-go run cmd/deployd/main.go -dev -database sqlite
+go run cmd/deployd/main.go -dev -db-type sqlite
 ```
 
 The server will start at `http://localhost:2403` with a default "todos" collection and admin dashboard at `http://localhost:2403/_dashboard/`.

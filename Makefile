@@ -58,7 +58,7 @@ run: mongo-start dashboard-build
 # Run the application in development mode with SQLite (no MongoDB required)
 run_sqlite: dashboard-build
 	@echo "🚀 Starting go-deployd with SQLite and dashboard..."
-	go run cmd/deployd/main.go -dev -database sqlite
+	go run cmd/deployd/main.go -dev -db-type sqlite
 
 # Run with custom port
 run-port:
