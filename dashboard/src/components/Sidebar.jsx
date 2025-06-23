@@ -29,7 +29,12 @@ function Sidebar({ menuItems, onClose }) {
             <img 
               src="/_dashboard/deployd-logo.png" 
               alt="go-deployd logo" 
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                objectFit: 'contain',
+                filter: 'brightness(1.2) contrast(1.1)'
+              }}
             />
           </Box>
           <Text fontSize="xl" fontWeight="bold" color="white">
