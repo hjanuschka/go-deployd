@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -97,10 +98,10 @@ func (s *MongoStore) Find(ctx context.Context, query QueryBuilder, opts QueryOpt
 		return nil, err
 	}
 
-	// Convert []bson.M to []map[string]interface{}
+	// Convert []bson.M to []map[string]interface{} with BSON conversion
 	mapResults := make([]map[string]interface{}, len(results))
 	for i, result := range results {
-		mapResults[i] = map[string]interface{}(result)
+		mapResults[i] = s.convertBSONToMap(map[string]interface{}(result))
 	}
 
 	return mapResults, nil
@@ -119,7 +120,8 @@ func (s *MongoStore) FindOne(ctx context.Context, query QueryBuilder) (map[strin
 		return nil, nil
 	}
 	
-	return map[string]interface{}(result), nil
+	// Convert bson.M to map[string]interface{} recursively
+	return s.convertBSONToMap(map[string]interface{}(result)), nil
 }
 
 func (s *MongoStore) Update(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
@@ -294,6 +296,50 @@ func (s *MongoStore) mapToBSON(m map[string]interface{}) bson.M {
 		result[k] = v
 	}
 	return result
+}
+
+// convertBSONToMap recursively converts BSON types to standard Go types
+func (s *MongoStore) convertBSONToMap(data map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	
+	for key, value := range data {
+		result[key] = s.convertBSONValue(value)
+	}
+	
+	return result
+}
+
+// convertBSONValue converts individual BSON values to standard Go types
+func (s *MongoStore) convertBSONValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		// Recursively convert nested maps
+		return s.convertBSONToMap(v)
+	case primitive.M:
+		// Convert primitive.M (which is the same as bson.M) to map[string]interface{}
+		result := make(map[string]interface{})
+		for key, val := range v {
+			result[key] = s.convertBSONValue(val)
+		}
+		return result
+	case primitive.A:
+		// Convert primitive.A (array) to []interface{}
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = s.convertBSONValue(item)
+		}
+		return result
+	case []interface{}:
+		// Convert arrays recursively
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = s.convertBSONValue(item)
+		}
+		return result
+	default:
+		// For primitive types, return as-is
+		return value
+	}
 }
 
 // Register MongoDB database factory

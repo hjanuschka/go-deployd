@@ -48,6 +48,9 @@ func (ss *SessionStore) CreateSession(sessionID string) (*Session, error) {
 			if data, exists := existing["data"]; exists {
 				if dataMap, ok := data.(map[string]interface{}); ok {
 					session.Data = dataMap
+				} else {
+					// Fallback for any unconverted data types
+					session.Data = make(map[string]interface{})
 				}
 			}
 			
@@ -174,3 +177,4 @@ func (ss *SessionStore) SetSessionCookie(w http.ResponseWriter, session *Session
 	
 	http.SetCookie(w, cookie)
 }
+

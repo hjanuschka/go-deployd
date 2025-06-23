@@ -185,10 +185,27 @@ func (uc *UserCollection) handleMe(ctx *appcontext.Context) error {
 	case UserSessionData:
 		userID = data.UserID
 	case map[string]interface{}:
+		// Try multiple possible field names for compatibility
 		if id, ok := data["userId"].(string); ok {
 			userID = id
+		} else if id, ok := data["UserID"].(string); ok {
+			userID = id
+		} else if id, ok := data["userid"].(string); ok {
+			// MongoDB may convert field names to lowercase
+			userID = id
 		} else {
-			return ctx.WriteError(500, "Invalid session data: missing userId")
+			// Check if there's a nested user object (from admin login)
+			if userObj, ok := data["user"].(map[string]interface{}); ok {
+				if id, ok := userObj["userId"].(string); ok {
+					userID = id
+				} else if id, ok := userObj["userid"].(string); ok {
+					userID = id
+				}
+			}
+			
+			if userID == "" {
+				return ctx.WriteError(500, "Invalid session data: missing userId")
+			}
 		}
 	default:
 		return ctx.WriteError(500, "Invalid session data type")
