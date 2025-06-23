@@ -125,7 +125,7 @@ func (d *SQLiteDatabase) Drop() error {
 
 	// Drop all tables
 	for _, table := range tables {
-		if _, err := d.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", table)); err != nil {
+		if _, err := d.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, table)); err != nil {
 			return fmt.Errorf("failed to drop table %s: %w", table, err)
 		}
 	}
@@ -139,6 +139,7 @@ func (d *SQLiteDatabase) GetType() DatabaseType {
 
 // ensureTable creates the table if it doesn't exist
 func (s *SQLiteStore) ensureTable() error {
+	quotedTable := s.quotedTableName()
 	createSQL := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			id TEXT PRIMARY KEY,
@@ -146,7 +147,7 @@ func (s *SQLiteStore) ensureTable() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)
-	`, s.tableName)
+	`, quotedTable)
 
 	if _, err := s.db.Exec(createSQL); err != nil {
 		return fmt.Errorf("failed to create table %s: %w", s.tableName, err)
@@ -154,10 +155,10 @@ func (s *SQLiteStore) ensureTable() error {
 
 	// Create indexes for common queries
 	indexSQL := fmt.Sprintf(`
-		CREATE INDEX IF NOT EXISTS idx_%s_id ON %s(id);
-		CREATE INDEX IF NOT EXISTS idx_%s_created_at ON %s(created_at);
-		CREATE INDEX IF NOT EXISTS idx_%s_updated_at ON %s(updated_at);
-	`, s.tableName, s.tableName, s.tableName, s.tableName, s.tableName, s.tableName)
+		CREATE INDEX IF NOT EXISTS "idx_%s_id" ON %s(id);
+		CREATE INDEX IF NOT EXISTS "idx_%s_created_at" ON %s(created_at);
+		CREATE INDEX IF NOT EXISTS "idx_%s_updated_at" ON %s(updated_at);
+	`, s.tableName, quotedTable, s.tableName, quotedTable, s.tableName, quotedTable)
 
 	if _, err := s.db.Exec(indexSQL); err != nil {
 		return fmt.Errorf("failed to create indexes for table %s: %w", s.tableName, err)
@@ -196,7 +197,7 @@ func (s *SQLiteStore) Insert(ctx context.Context, document interface{}) (interfa
 		return nil, fmt.Errorf("failed to marshal document: %w", err)
 	}
 
-	insertSQL := fmt.Sprintf("INSERT INTO %s (id, data, created_at, updated_at) VALUES (?, ?, ?, ?)", s.tableName)
+	insertSQL := fmt.Sprintf("INSERT INTO %s (id, data, created_at, updated_at) VALUES (?, ?, ?, ?)", s.quotedTableName())
 	_, err = s.db.ExecContext(ctx, insertSQL, doc["id"], string(jsonData), now, now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert document: %w", err)
@@ -206,7 +207,7 @@ func (s *SQLiteStore) Insert(ctx context.Context, document interface{}) (interfa
 }
 
 func (s *SQLiteStore) Find(ctx context.Context, query QueryBuilder, opts QueryOptions) ([]map[string]interface{}, error) {
-	baseSQL := fmt.Sprintf("SELECT data FROM %s", s.tableName)
+	baseSQL := fmt.Sprintf("SELECT data FROM %s", s.quotedTableName())
 	var args []interface{}
 
 	// Build WHERE clause
@@ -327,7 +328,7 @@ func (s *SQLiteStore) performUpdate(ctx context.Context, query QueryBuilder, upd
 				return nil, fmt.Errorf("failed to marshal updated document: %w", err)
 			}
 
-			updateSQL := fmt.Sprintf("UPDATE %s SET data = ?, updated_at = ? WHERE id = ?", s.tableName)
+			updateSQL := fmt.Sprintf("UPDATE %s SET data = ?, updated_at = ? WHERE id = ?", s.quotedTableName())
 			_, err = s.db.ExecContext(ctx, updateSQL, string(jsonData), doc["updatedAt"], doc["id"])
 			if err != nil {
 				return nil, fmt.Errorf("failed to update document: %w", err)
@@ -352,7 +353,7 @@ func (s *SQLiteStore) Remove(ctx context.Context, query QueryBuilder) (DeleteRes
 	}
 
 	// Build DELETE query
-	deleteSQL := fmt.Sprintf("DELETE FROM %s", s.tableName)
+	deleteSQL := fmt.Sprintf("DELETE FROM %s", s.quotedTableName())
 	var args []interface{}
 
 	whereClause, whereArgs := s.buildWhereClause(query)
@@ -370,7 +371,7 @@ func (s *SQLiteStore) Remove(ctx context.Context, query QueryBuilder) (DeleteRes
 }
 
 func (s *SQLiteStore) Count(ctx context.Context, query QueryBuilder) (int64, error) {
-	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s", s.tableName)
+	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s", s.quotedTableName())
 	var args []interface{}
 
 	whereClause, whereArgs := s.buildWhereClause(query)
@@ -480,6 +481,11 @@ func (s *SQLiteStore) Aggregate(ctx context.Context, pipeline []map[string]inter
 }
 
 // Helper methods
+
+func (s *SQLiteStore) quotedTableName() string {
+	// Quote table names to handle special characters like hyphens
+	return fmt.Sprintf(`"%s"`, s.tableName)
+}
 
 func (s *SQLiteStore) buildWhereClause(query QueryBuilder) (string, []interface{}) {
 	if sqlQuery, ok := query.(*SQLQueryBuilder); ok {

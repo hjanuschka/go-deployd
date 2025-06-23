@@ -19,10 +19,8 @@ import {
   Select,
   FormControl,
   FormLabel,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
+  Input,
+  Textarea,
   Divider,
   Table,
   Thead,
@@ -37,6 +35,14 @@ import {
   UnorderedList,
   ListItem,
   Link,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
 } from '@chakra-ui/react'
 import {
   FiCopy,
@@ -48,8 +54,10 @@ import {
   FiShield,
   FiCode,
   FiServer,
+  FiEdit,
 } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
+import { apiService } from '../services/api'
 
 function Documentation() {
   const [collections, setCollections] = useState([])
@@ -57,6 +65,18 @@ function Documentation() {
   const [loading, setLoading] = useState(false)
   const [serverUrl, setServerUrl] = useState('')
   const [masterKey, setMasterKey] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [authMode, setAuthMode] = useState('masterkey') // 'masterkey' or 'userpass'
+  const [lastResponse, setLastResponse] = useState(null)
+  const [responseLoading, setResponseLoading] = useState(false)
+  
+  // Request editor state
+  const { isOpen: isEditorOpen, onOpen: onEditorOpen, onClose: onEditorClose } = useDisclosure()
+  const [editMethod, setEditMethod] = useState('GET')
+  const [editUrl, setEditUrl] = useState('')
+  const [editHeaders, setEditHeaders] = useState('{}')
+  const [editBody, setEditBody] = useState('')
   
   const { authFetch } = useAuth()
   const toast = useToast()
@@ -111,38 +131,610 @@ function Documentation() {
     })
   }
 
-  const CodeBlock = ({ children, language = 'bash', title }) => (
-    <Box position="relative" mb={4}>
-      {title && (
-        <Text fontSize="sm" fontWeight="medium" mb={2} color="gray.600">
-          {title}
-        </Text>
-      )}
-      <Box
-        bg={codeBg}
-        borderRadius="md"
-        border="1px"
-        borderColor={useColorModeValue('gray.200', 'gray.600')}
-        position="relative"
-      >
-        <HStack justify="space-between" p={3} borderBottom="1px" borderColor={useColorModeValue('gray.200', 'gray.600')}>
-          <Badge colorScheme="blue" variant="subtle">{language}</Badge>
-          <Tooltip label="Copy to clipboard">
-            <IconButton
-              size="sm"
-              variant="ghost"
-              icon={<FiCopy />}
-              onClick={() => copyToClipboard(children)}
-              aria-label="Copy code"
-            />
-          </Tooltip>
-        </HStack>
-        <Box p={4} fontSize="sm" overflow="auto" maxH="400px" fontFamily="mono" whiteSpace="pre">
-          <Code>{children}</Code>
+  const executeDocRequest = async (codeContent) => {
+    try {
+      setResponseLoading(true)
+      setLastResponse(null)
+      
+      // Parse curl command to extract method, url, headers, and body
+      const lines = codeContent.split('\n').map(line => line.trim()).filter(line => line)
+      const curlLine = lines.find(line => line.startsWith('curl'))
+      
+      if (!curlLine) {
+        toast({
+          title: 'Invalid Request',
+          description: 'Could not parse curl command from code block',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        })
+        setResponseLoading(false)
+        return
+      }
+
+      // Extract method
+      const methodMatch = curlLine.match(/-X\s+(\w+)/)
+      const method = methodMatch ? methodMatch[1] : 'GET'
+
+      // Extract URL
+      const urlMatch = curlLine.match(/"([^"]*)"(?:\s|$)/) || curlLine.match(/\s([^\s-][^\s]*?)(?:\s|$)/)
+      let url = urlMatch ? urlMatch[1] : '/'
+      
+      // Replace variables in URL
+      url = url.replace(/\$\{serverUrl\}/g, window.location.origin)
+      url = url.replace(/\$\{masterKey\}/g, masterKey || 'your_master_key_here')
+
+      // Extract headers
+      const headers = {}
+      const headerLines = lines.filter(line => line.includes('-H'))
+      headerLines.forEach(line => {
+        const headerMatch = line.match(/-H\s+"([^:]+):\s*([^"]+)"/)
+        if (headerMatch) {
+          headers[headerMatch[1]] = headerMatch[2].replace(/\$\{masterKey\}/g, masterKey || 'your_master_key_here')
+        }
+      })
+
+      // Add authentication headers based on current auth mode
+      if (authMode === 'masterkey' && masterKey) {
+        headers['X-Master-Key'] = masterKey
+      } else if (authMode === 'userpass' && username && password) {
+        // For user/pass, we could add basic auth or custom headers
+        headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`
+      }
+
+      // Extract body
+      let body = null
+      const bodyLines = lines.filter(line => line.includes('-d'))
+      if (bodyLines.length > 0) {
+        const bodyContent = bodyLines.join(' ').match(/-d\s+'([^']+)'||-d\s+"([^"]+)"/)
+        if (bodyContent) {
+          body = bodyContent[1] || bodyContent[2]
+          try {
+            body = JSON.parse(body)
+          } catch (e) {
+            // Keep as string if not valid JSON
+          }
+        }
+      }
+
+      const startTime = Date.now()
+      
+      // Execute the request
+      const response = await apiService.testEndpoint(method, url, body, headers)
+      const endTime = Date.now()
+      
+      const responseData = {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers && typeof response.headers.entries === 'function' 
+          ? Object.fromEntries(response.headers.entries()) 
+          : response.headers || {},
+        data: response.data,
+        duration: endTime - startTime,
+        timestamp: new Date().toISOString(),
+        method,
+        url
+      }
+
+      setLastResponse(responseData)
+      console.log('Setting response data:', responseData)
+      
+      toast({
+        title: 'Request Executed',
+        description: `${method} ${url} - ${response.status} ${response.statusText}`,
+        status: response.status >= 200 && response.status < 300 ? 'success' : 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      
+    } catch (error) {
+      const errorResponse = {
+        error: true,
+        message: error.message,
+        duration: Date.now() - (typeof startTime !== 'undefined' ? startTime : Date.now()),
+        timestamp: new Date().toISOString(),
+        method: typeof method !== 'undefined' ? method : 'Unknown',
+        url: typeof url !== 'undefined' ? url : 'Unknown'
+      }
+      
+      if (error.response) {
+        errorResponse.status = error.response.status
+        errorResponse.statusText = error.response.statusText
+        errorResponse.data = error.response.data
+      }
+      
+      setLastResponse(errorResponse)
+      
+      toast({
+        title: 'Request Failed',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    } finally {
+      setResponseLoading(false)
+    }
+  }
+
+  const openRequestEditor = (codeContent) => {
+    try {
+      // Parse curl command to pre-populate the editor
+      const lines = codeContent.split('\n').map(line => line.trim()).filter(line => line)
+      const curlLine = lines.find(line => line.startsWith('curl'))
+      
+      if (!curlLine) return
+
+      // Extract method
+      const methodMatch = curlLine.match(/-X\s+(\w+)/)
+      const method = methodMatch ? methodMatch[1] : 'GET'
+      setEditMethod(method)
+
+      // Extract URL
+      const urlMatch = curlLine.match(/"([^"]*)"(?:\s|$)/) || curlLine.match(/\s([^\s-][^\s]*?)(?:\s|$)/)
+      let url = urlMatch ? urlMatch[1] : '/'
+      
+      // Replace variables in URL
+      url = url.replace(/\$\{serverUrl\}/g, window.location.origin)
+      url = url.replace(/\$\{masterKey\}/g, masterKey || 'your_master_key_here')
+      setEditUrl(url)
+
+      // Extract headers
+      const headers = {}
+      const headerLines = lines.filter(line => line.includes('-H'))
+      headerLines.forEach(line => {
+        const headerMatch = line.match(/-H\s+"([^:]+):\s*([^"]+)"/)
+        if (headerMatch) {
+          headers[headerMatch[1]] = headerMatch[2].replace(/\$\{masterKey\}/g, masterKey || 'your_master_key_here')
+        }
+      })
+
+      // Add authentication headers based on current auth mode
+      if (authMode === 'masterkey' && masterKey) {
+        headers['X-Master-Key'] = masterKey
+      } else if (authMode === 'userpass' && username && password) {
+        headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`
+      }
+
+      setEditHeaders(JSON.stringify(headers, null, 2))
+
+      // Extract body
+      let body = ''
+      const bodyLines = lines.filter(line => line.includes('-d'))
+      if (bodyLines.length > 0) {
+        const bodyContent = bodyLines.join(' ').match(/-d\s+'([^']+)'||-d\s+"([^"]+)"/)
+        if (bodyContent) {
+          body = bodyContent[1] || bodyContent[2]
+          try {
+            body = JSON.stringify(JSON.parse(body), null, 2)
+          } catch (e) {
+            // Keep as string if not valid JSON
+          }
+        }
+      }
+      setEditBody(body)
+
+      onEditorOpen()
+    } catch (error) {
+      console.error('Failed to parse curl command:', error)
+      toast({
+        title: 'Parse Error',
+        description: 'Could not parse the curl command for editing',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }
+
+  const executeEditedRequest = async () => {
+    try {
+      setResponseLoading(true)
+      setLastResponse(null)
+
+      // Parse headers
+      let parsedHeaders = {}
+      if (editHeaders.trim()) {
+        try {
+          parsedHeaders = JSON.parse(editHeaders)
+        } catch (err) {
+          throw new Error('Invalid JSON in headers')
+        }
+      }
+
+      // Parse body for non-GET requests
+      let parsedBody = null
+      if (editMethod !== 'GET' && editBody.trim()) {
+        if (parsedHeaders['Content-Type']?.includes('application/json')) {
+          try {
+            parsedBody = JSON.parse(editBody)
+          } catch (err) {
+            throw new Error('Invalid JSON in request body')
+          }
+        } else {
+          parsedBody = editBody
+        }
+      }
+
+      const startTime = Date.now()
+      
+      // Execute the request
+      const response = await apiService.testEndpoint(editMethod, editUrl, parsedBody, parsedHeaders)
+      const endTime = Date.now()
+      
+      const responseData = {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers && typeof response.headers.entries === 'function' 
+          ? Object.fromEntries(response.headers.entries()) 
+          : response.headers || {},
+        data: response.data,
+        duration: endTime - startTime,
+        timestamp: new Date().toISOString(),
+        method: editMethod,
+        url: editUrl
+      }
+
+      setLastResponse(responseData)
+      onEditorClose()
+      
+      toast({
+        title: 'Request Executed',
+        description: `${editMethod} ${editUrl} - ${response.status} ${response.statusText}`,
+        status: response.status >= 200 && response.status < 300 ? 'success' : 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      
+    } catch (error) {
+      const errorResponse = {
+        error: true,
+        message: error.message,
+        timestamp: new Date().toISOString(),
+        method: editMethod,
+        url: editUrl
+      }
+      
+      if (error.response) {
+        errorResponse.status = error.response.status
+        errorResponse.statusText = error.response.statusText
+        errorResponse.data = error.response.data
+      }
+      
+      setLastResponse(errorResponse)
+      
+      toast({
+        title: 'Request Failed',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    } finally {
+      setResponseLoading(false)
+    }
+  }
+
+  const CodeBlock = ({ children, language = 'bash', title, executable = false, expectedResponse = null }) => {
+    const [blockResponse, setBlockResponse] = React.useState(null)
+    const [blockLoading, setBlockLoading] = React.useState(false)
+    
+    const executeBlockRequest = async (codeContent) => {
+      try {
+        setBlockLoading(true)
+        setBlockResponse(null)
+        
+        // Parse curl command to extract method, url, headers, and body
+        const lines = codeContent.split('\n').map(line => line.trim()).filter(line => line)
+        const curlLine = lines.find(line => line.startsWith('curl'))
+        
+        if (!curlLine) {
+          toast({
+            title: 'Invalid Request',
+            description: 'Could not parse curl command from code block',
+            status: 'error',
+            duration: 3000,
+            isClosable: true,
+          })
+          setBlockLoading(false)
+          return
+        }
+
+        // Extract method
+        const methodMatch = curlLine.match(/-X\s+(\w+)/)
+        const method = methodMatch ? methodMatch[1] : 'GET'
+
+        // Extract URL - improved parsing
+        let url = '/'
+        const quotedUrlMatch = curlLine.match(/"([^"]*)"/)
+        if (quotedUrlMatch) {
+          url = quotedUrlMatch[1]
+        } else {
+          // Fallback: look for URL after curl command, avoiding flags
+          const parts = curlLine.split(/\s+/)
+          for (let i = 1; i < parts.length; i++) {
+            const part = parts[i]
+            if (!part.startsWith('-') && (part.startsWith('/') || part.startsWith('http'))) {
+              url = part
+              break
+            }
+          }
+        }
+        
+        // Replace variables in URL
+        url = url.replace(/\$\{serverUrl\}/g, window.location.origin)
+        url = url.replace(/\$\{masterKey\}/g, masterKey || 'your_master_key_here')
+
+        // Extract headers
+        const headers = {}
+        const headerLines = lines.filter(line => line.includes('-H'))
+        headerLines.forEach(line => {
+          const headerMatch = line.match(/-H\s+"([^:]+):\s*([^"]+)"/)
+          if (headerMatch) {
+            headers[headerMatch[1]] = headerMatch[2].replace(/\$\{masterKey\}/g, masterKey || 'your_master_key_here')
+          }
+        })
+
+        // Add authentication headers based on current auth mode
+        if (authMode === 'masterkey' && masterKey) {
+          headers['X-Master-Key'] = masterKey
+        } else if (authMode === 'userpass' && username && password) {
+          headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`
+        }
+
+        // Extract body
+        let body = null
+        const bodyLines = lines.filter(line => line.includes('-d'))
+        if (bodyLines.length > 0) {
+          const bodyContent = bodyLines.join(' ').match(/-d\s+'([^']+)'||-d\s+"([^"]+)"/)
+          if (bodyContent) {
+            body = bodyContent[1] || bodyContent[2]
+            try {
+              body = JSON.parse(body)
+            } catch (e) {
+              // Keep as string if not valid JSON
+            }
+          }
+        }
+
+        const startTime = Date.now()
+        
+        console.log('Executing request:', { method, url, headers, body })
+        
+        // Execute the request
+        const response = await apiService.testEndpoint(method, url, body, headers)
+        const endTime = Date.now()
+        
+        const responseData = {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers && typeof response.headers.entries === 'function' 
+            ? Object.fromEntries(response.headers.entries()) 
+            : response.headers || {},
+          data: response.data,
+          duration: endTime - startTime,
+          timestamp: new Date().toISOString(),
+          method,
+          url
+        }
+
+        setBlockResponse(responseData)
+        
+        toast({
+          title: 'Request Executed',
+          description: `${method} ${url} - ${response.status} ${response.statusText}`,
+          status: response.status >= 200 && response.status < 300 ? 'success' : 'error',
+          duration: 3000,
+          isClosable: true,
+        })
+        
+      } catch (error) {
+        const errorResponse = {
+          error: true,
+          message: error.message,
+          timestamp: new Date().toISOString(),
+          method: 'Unknown',
+          url: 'Unknown'
+        }
+        
+        if (error.response) {
+          errorResponse.status = error.response.status
+          errorResponse.statusText = error.response.statusText
+          errorResponse.data = error.response.data
+        }
+        
+        setBlockResponse(errorResponse)
+        
+        toast({
+          title: 'Request Failed',
+          description: error.message,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        })
+      } finally {
+        setBlockLoading(false)
+      }
+    }
+
+    const openBlockEditor = (codeContent) => {
+      // Use the global editor but set a callback to update this block's response
+      openRequestEditor(codeContent)
+      // We'll need to modify the global editor to support per-block responses
+    }
+
+    return (
+      <VStack align="stretch" spacing={3} mb={4}>
+        <Box position="relative">
+          {title && (
+            <Text fontSize="sm" fontWeight="medium" mb={2} color="gray.600">
+              {title}
+            </Text>
+          )}
+          <Box
+            bg={codeBg}
+            borderRadius="md"
+            border="1px"
+            borderColor={useColorModeValue('gray.200', 'gray.600')}
+            position="relative"
+          >
+            <HStack justify="space-between" p={3} borderBottom="1px" borderColor={useColorModeValue('gray.200', 'gray.600')}>
+              <Badge colorScheme="blue" variant="subtle">{language}</Badge>
+              <HStack>
+                {executable && language === 'bash' && children.includes('curl') && (
+                  <>
+                    <Tooltip label="Edit and execute request">
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        icon={<FiEdit />}
+                        onClick={() => openBlockEditor(children)}
+                        aria-label="Edit request"
+                        colorScheme="blue"
+                      />
+                    </Tooltip>
+                    <Tooltip label="Execute request">
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        icon={<FiPlay />}
+                        onClick={() => executeBlockRequest(children)}
+                        aria-label="Execute request"
+                        colorScheme="green"
+                        isLoading={blockLoading}
+                      />
+                    </Tooltip>
+                  </>
+                )}
+                <Tooltip label="Copy to clipboard">
+                  <IconButton
+                    size="sm"
+                    variant="ghost"
+                    icon={<FiCopy />}
+                    onClick={() => copyToClipboard(children)}
+                    aria-label="Copy code"
+                  />
+                </Tooltip>
+              </HStack>
+            </HStack>
+            <Box p={4} fontSize="sm" overflow="auto" maxH="400px" fontFamily="mono" whiteSpace="pre">
+              <Code>{children}</Code>
+            </Box>
+          </Box>
         </Box>
-      </Box>
-    </Box>
-  )
+
+        {/* Response Display for this specific code block */}
+        {(blockResponse || expectedResponse) && (
+          <Card bg={cardBg} size="sm">
+            <CardHeader py={2}>
+              <HStack justify="space-between">
+                <HStack spacing={2}>
+                  <Text fontSize="sm" fontWeight="medium">
+                    {blockResponse ? 'API Response' : 'Expected Response'}
+                  </Text>
+                  {blockResponse?.status && (
+                    <Badge size="sm" colorScheme={
+                      blockResponse.status >= 200 && blockResponse.status < 300 ? 'green' :
+                      blockResponse.status >= 400 && blockResponse.status < 500 ? 'orange' : 'red'
+                    } variant="solid">
+                      {blockResponse.status}
+                    </Badge>
+                  )}
+                  {blockResponse?.duration && (
+                    <Badge size="sm" variant="outline">
+                      {blockResponse.duration}ms
+                    </Badge>
+                  )}
+                </HStack>
+                <Button size="xs" variant="ghost" onClick={() => setBlockResponse(null)}>
+                  ×
+                </Button>
+              </HStack>
+            </CardHeader>
+            <CardBody py={2}>
+              <Tabs size="sm">
+                <TabList>
+                  {blockResponse && (
+                    <>
+                      <Tab fontSize="xs">
+                        <HStack spacing={1}>
+                          <Text>Actual</Text>
+                          <Badge size="xs" colorScheme="green" variant="outline">Live</Badge>
+                        </HStack>
+                      </Tab>
+                      <Tab fontSize="xs">Headers</Tab>
+                    </>
+                  )}
+                  {expectedResponse && (
+                    <Tab fontSize="xs">
+                      <HStack spacing={1}>
+                        <Text>Expected</Text>
+                        <Badge size="xs" colorScheme="blue" variant="outline">Doc</Badge>
+                      </HStack>
+                    </Tab>
+                  )}
+                </TabList>
+                <TabPanels>
+                  {blockResponse && (
+                    <>
+                      <TabPanel p={2}>
+                        <Box
+                          as="pre"
+                          bg={useColorModeValue('gray.50', 'gray.800')}
+                          p={3}
+                          borderRadius="md"
+                          overflow="auto"
+                          fontSize="xs"
+                          fontFamily="mono"
+                          maxH="200px"
+                          whiteSpace="pre-wrap"
+                        >
+                          {blockResponse.error
+                            ? blockResponse.message
+                            : JSON.stringify(blockResponse.data, null, 2)}
+                        </Box>
+                      </TabPanel>
+                      <TabPanel p={2}>
+                        <Box
+                          as="pre"
+                          bg={useColorModeValue('gray.50', 'gray.800')}
+                          p={3}
+                          borderRadius="md"
+                          overflow="auto"
+                          fontSize="xs"
+                          fontFamily="mono"
+                          maxH="200px"
+                        >
+                          {JSON.stringify(blockResponse.headers || {}, null, 2)}
+                        </Box>
+                      </TabPanel>
+                    </>
+                  )}
+                  {expectedResponse && (
+                    <TabPanel p={2}>
+                      <Box
+                        as="pre"
+                        bg={useColorModeValue('blue.50', 'blue.900')}
+                        p={3}
+                        borderRadius="md"
+                        overflow="auto"
+                        fontSize="xs"
+                        fontFamily="mono"
+                        maxH="200px"
+                        whiteSpace="pre-wrap"
+                      >
+                        {expectedResponse}
+                      </Box>
+                    </TabPanel>
+                  )}
+                </TabPanels>
+              </Tabs>
+            </CardBody>
+          </Card>
+        )}
+      </VStack>
+    )
+  }
 
   const HttpMethodBadge = ({ method }) => {
     const colors = {
@@ -187,25 +779,103 @@ function Documentation() {
 
   return (
     <VStack align="stretch" spacing={6}>
-      <HStack justify="space-between">
-        <HStack>
-          <FiBook />
-          <Heading size="lg">API Documentation</Heading>
+      <VStack align="stretch" spacing={4}>
+        <HStack justify="space-between">
+          <HStack>
+            <FiBook />
+            <Heading size="lg">API Documentation</Heading>
+          </HStack>
+          <FormControl maxW="200px">
+            <Select
+              value={selectedCollection}
+              onChange={(e) => setSelectedCollection(e.target.value)}
+              placeholder="Select collection"
+            >
+              {collections.map((collection) => (
+                <option key={collection.name} value={collection.name}>
+                  {collection.name}
+                </option>
+              ))}
+            </Select>
+          </FormControl>
         </HStack>
-        <FormControl maxW="200px">
-          <Select
-            value={selectedCollection}
-            onChange={(e) => setSelectedCollection(e.target.value)}
-            placeholder="Select collection"
-          >
-            {collections.map((collection) => (
-              <option key={collection.name} value={collection.name}>
-                {collection.name}
-              </option>
-            ))}
-          </Select>
-        </FormControl>
-      </HStack>
+
+        <Card bg={cardBg}>
+          <CardHeader>
+            <HStack spacing={4}>
+              <Heading size="md">Test Configuration</Heading>
+              <Badge colorScheme="green" variant="outline">
+                Live API Testing
+              </Badge>
+            </HStack>
+          </CardHeader>
+          <CardBody>
+            <VStack align="stretch" spacing={4}>
+              <HStack spacing={4}>
+                <FormControl>
+                  <FormLabel>Authentication Mode</FormLabel>
+                  <Select 
+                    value={authMode} 
+                    onChange={(e) => setAuthMode(e.target.value)}
+                    maxW="200px"
+                  >
+                    <option value="masterkey">Master Key</option>
+                    <option value="userpass">Username & Password</option>
+                  </Select>
+                </FormControl>
+                
+                <FormControl>
+                  <FormLabel>Server URL</FormLabel>
+                  <Input
+                    value={serverUrl}
+                    onChange={(e) => setServerUrl(e.target.value)}
+                    placeholder="http://localhost:2403"
+                    isReadOnly
+                    bg={useColorModeValue('gray.50', 'gray.600')}
+                  />
+                </FormControl>
+              </HStack>
+
+              {authMode === 'masterkey' ? (
+                <FormControl>
+                  <FormLabel>Master Key</FormLabel>
+                  <Input
+                    type="password"
+                    value={masterKey}
+                    onChange={(e) => setMasterKey(e.target.value)}
+                    placeholder="mk_your_master_key_here"
+                  />
+                </FormControl>
+              ) : (
+                <HStack spacing={4}>
+                  <FormControl>
+                    <FormLabel>Username</FormLabel>
+                    <Input
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="username@example.com"
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>Password</FormLabel>
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="password"
+                    />
+                  </FormControl>
+                </HStack>
+              )}
+              
+              <Text fontSize="sm" color="gray.500">
+                💡 Configure your credentials above, then click the ▶️ play buttons on curl examples to test them live!
+              </Text>
+            </VStack>
+          </CardBody>
+        </Card>
+      </VStack>
+
 
       <Tabs>
         <TabList>
@@ -245,16 +915,6 @@ function Documentation() {
                 }
               ]} />
 
-              <Alert status="info">
-                <AlertIcon />
-                <Box>
-                  <AlertTitle>Collection API!</AlertTitle>
-                  <AlertDescription>
-                    Complete REST API for your collections with MongoDB-style queries, filtering, and more.
-                    Select a collection above to see examples.
-                  </AlertDescription>
-                </Box>
-              </Alert>
 
               <Card bg={cardBg}>
                 <CardHeader>
@@ -269,12 +929,11 @@ function Documentation() {
                         <HttpMethodBadge method="GET" />
                         <Text fontWeight="bold">Get All Documents</Text>
                       </HStack>
-                      <CodeBlock language="bash" title="Get all documents">
-{`curl -X GET "${serverUrl}/${selectedCollection}"`}
-                      </CodeBlock>
-                      <Text fontSize="sm" color="gray.600" mb={2}>Response:</Text>
-                      <CodeBlock language="json">
-{`[
+                      <CodeBlock 
+                        language="bash" 
+                        title="Get all documents" 
+                        executable
+                        expectedResponse={`[
   {
     "id": "doc123",
     "title": "Example Document",
@@ -282,6 +941,8 @@ function Documentation() {
     "updatedAt": "2024-06-22T10:00:00Z"
   }
 ]`}
+                      >
+{`curl -X GET "${serverUrl}/${selectedCollection}"`}
                       </CodeBlock>
                     </Box>
 
@@ -291,7 +952,7 @@ function Documentation() {
                         <HttpMethodBadge method="GET" />
                         <Text fontWeight="bold">Get Single Document</Text>
                       </HStack>
-                      <CodeBlock language="bash" title="Get document by ID">
+                      <CodeBlock language="bash" title="Get document by ID" executable>
 {`curl -X GET "${serverUrl}/${selectedCollection}/doc123"`}
                       </CodeBlock>
                     </Box>
@@ -302,7 +963,7 @@ function Documentation() {
                         <HttpMethodBadge method="POST" />
                         <Text fontWeight="bold">Create Document</Text>
                       </HStack>
-                      <CodeBlock language="bash" title="Create new document">
+                      <CodeBlock language="bash" title="Create new document" executable>
 {`curl -X POST "${serverUrl}/${selectedCollection}" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -431,15 +1092,6 @@ curl "${serverUrl}/${selectedCollection}?\\$fields={\\"title\\":1,\\"status\\":1
                 }
               ]} />
 
-              <Alert status="warning">
-                <AlertIcon />
-                <Box>
-                  <AlertTitle>Master Key Security!</AlertTitle>
-                  <AlertDescription>
-                    The master key provides full administrative access. Keep it secure and never expose it in client-side code.
-                  </AlertDescription>
-                </Box>
-              </Alert>
 
               <Card bg={cardBg}>
                 <CardHeader>
@@ -487,7 +1139,7 @@ curl "${serverUrl}/${selectedCollection}?\\$fields={\\"title\\":1,\\"status\\":1
                     
                     <Box>
                       <Text fontWeight="bold" mb={3}>Via Header (Recommended)</Text>
-                      <CodeBlock language="bash" title="X-Master-Key header">
+                      <CodeBlock language="bash" title="X-Master-Key header" executable>
 {`curl -H "X-Master-Key: ${masterKey}" \\
   "${serverUrl}/_admin/info"`}
                       </CodeBlock>
@@ -552,16 +1204,6 @@ curl "${serverUrl}/${selectedCollection}?\\$fields={\\"title\\":1,\\"status\\":1
                 }
               ]} />
 
-              <Alert status="info">
-                <AlertIcon />
-                <Box>
-                  <AlertTitle>User Management API</AlertTitle>
-                  <AlertDescription>
-                    Create and manage users programmatically. When registration is disabled, 
-                    only master key holders can create users.
-                  </AlertDescription>
-                </Box>
-              </Alert>
 
               <Card bg={cardBg}>
                 <CardHeader>
@@ -694,16 +1336,6 @@ curl -b cookies.txt "${serverUrl}/users/me"`}
                 }
               ]} />
 
-              <Alert status="success">
-                <AlertIcon />
-                <Box>
-                  <AlertTitle>Secure by Default!</AlertTitle>
-                  <AlertDescription>
-                    Go-Deployd uses industry-standard security practices including bcrypt password hashing (cost 12),
-                    secure session management, and master key protection.
-                  </AlertDescription>
-                </Box>
-              </Alert>
 
               <Card bg={cardBg}>
                 <CardHeader>
@@ -786,15 +1418,6 @@ curl -H "Authorization: Bearer session_token_here" \\
                 }
               ]} />
 
-              <Alert status="warning">
-                <AlertIcon />
-                <Box>
-                  <AlertTitle>Admin API Access</AlertTitle>
-                  <AlertDescription>
-                    All admin API endpoints require master key authentication. These provide full system management capabilities.
-                  </AlertDescription>
-                </Box>
-              </Alert>
 
               <Card bg={cardBg}>
                 <CardHeader>
@@ -1350,6 +1973,79 @@ export DATABASE_URL="mongodb://localhost:27017/deployd_prod"
 
         </TabPanels>
       </Tabs>
+
+      {/* Request Editor Modal */}
+      <Modal isOpen={isEditorOpen} onClose={onEditorClose} size="4xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Edit Request</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack align="stretch" spacing={4}>
+              <HStack spacing={4}>
+                <FormControl maxW="120px">
+                  <FormLabel>Method</FormLabel>
+                  <Select value={editMethod} onChange={(e) => setEditMethod(e.target.value)}>
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                  </Select>
+                </FormControl>
+                
+                <FormControl flex="1">
+                  <FormLabel>URL</FormLabel>
+                  <Input
+                    value={editUrl}
+                    onChange={(e) => setEditUrl(e.target.value)}
+                    placeholder="/collections/todos/doc123"
+                  />
+                </FormControl>
+              </HStack>
+
+              <FormControl>
+                <FormLabel>Headers (JSON)</FormLabel>
+                <Textarea
+                  value={editHeaders}
+                  onChange={(e) => setEditHeaders(e.target.value)}
+                  placeholder='{"Content-Type": "application/json", "X-Master-Key": "..."}'
+                  fontFamily="mono"
+                  fontSize="sm"
+                  rows={6}
+                />
+              </FormControl>
+
+              {editMethod !== 'GET' && (
+                <FormControl>
+                  <FormLabel>Body (JSON)</FormLabel>
+                  <Textarea
+                    value={editBody}
+                    onChange={(e) => setEditBody(e.target.value)}
+                    placeholder='{"title": "Updated Document", "id": "doc123"}'
+                    fontFamily="mono"
+                    fontSize="sm"
+                    rows={8}
+                  />
+                </FormControl>
+              )}
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onEditorClose}>
+              Cancel
+            </Button>
+            <Button 
+              colorScheme="green" 
+              onClick={executeEditedRequest}
+              isLoading={responseLoading}
+              loadingText="Executing"
+              leftIcon={<FiPlay />}
+            >
+              Execute Request
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </VStack>
   )
 }

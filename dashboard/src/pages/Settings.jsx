@@ -536,26 +536,6 @@ function Settings() {
                       </HStack>
                     </FormControl>
 
-                    <Divider />
-
-                    <Box>
-                      <Text fontWeight="medium" mb={2}>Theme Information</Text>
-                      <VStack align="start" spacing={2}>
-                        <HStack>
-                          <Text fontSize="sm" fontWeight="medium">Current Theme:</Text>
-                          <Badge colorScheme="brand">{colorMode === 'dark' ? 'Dark' : 'Light'}</Badge>
-                        </HStack>
-                        <HStack>
-                          <Text fontSize="sm" fontWeight="medium">UI Framework:</Text>
-                          <Badge variant="outline">Chakra UI</Badge>
-                        </HStack>
-                        <HStack>
-                          <Text fontSize="sm" fontWeight="medium">Brand Color:</Text>
-                          <Box w={4} h={4} bg="brand.500" borderRadius="sm" />
-                          <Code fontSize="xs">#3182CE</Code>
-                        </HStack>
-                      </VStack>
-                    </Box>
                   </VStack>
                 </CardBody>
               </Card>

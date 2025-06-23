@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   Box,
   VStack,
@@ -28,6 +28,7 @@ import {
   TabPanel,
   IconButton,
   useClipboard,
+  useColorModeValue,
 } from '@chakra-ui/react'
 import {
   FiPlay,
@@ -35,43 +36,12 @@ import {
   FiTrash2,
   FiSave,
   FiDownload,
+  FiDatabase,
+  FiRefreshCw,
 } from 'react-icons/fi'
 import { apiService } from '../services/api'
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE']
-
-const PRESET_REQUESTS = {
-  'Get Collections': {
-    method: 'GET',
-    url: '/_admin/collections',
-    headers: '{}',
-    body: ''
-  },
-  'Get Todos': {
-    method: 'GET',
-    url: '/todos',
-    headers: '{}',
-    body: ''
-  },
-  'Create Todo': {
-    method: 'POST',
-    url: '/todos',
-    headers: '{"Content-Type": "application/json"}',
-    body: '{\n  "title": "Test Todo",\n  "completed": false,\n  "priority": 1\n}'
-  },
-  'Update Todo': {
-    method: 'PUT',
-    url: '/todos/{id}',
-    headers: '{"Content-Type": "application/json"}',
-    body: '{\n  "completed": true\n}'
-  },
-  'Delete Todo': {
-    method: 'DELETE',
-    url: '/todos/{id}',
-    headers: '{}',
-    body: ''
-  }
-}
 
 function ApiTester() {
   const [method, setMethod] = useState('GET')
@@ -81,10 +51,148 @@ function ApiTester() {
   const [response, setResponse] = useState(null)
   const [loading, setLoading] = useState(false)
   const [history, setHistory] = useState([])
+  const [collections, setCollections] = useState([])
+  const [selectedCollection, setSelectedCollection] = useState('')
+  const [collectionSchema, setCollectionSchema] = useState(null)
   
   const toast = useToast()
   const responseRef = useRef()
   const { onCopy } = useClipboard(response ? JSON.stringify(response, null, 2) : '')
+
+  useEffect(() => {
+    loadCollections()
+  }, [])
+
+  const loadCollections = async () => {
+    try {
+      const data = await apiService.getCollections()
+      setCollections(data || [])
+      if (data && data.length > 0) {
+        setSelectedCollection(data[0].name)
+        setUrl(`/${data[0].name}`)
+        loadCollectionSchema(data[0].name)
+      }
+    } catch (err) {
+      console.error('Failed to load collections:', err)
+    }
+  }
+
+  const loadCollectionSchema = async (collectionName) => {
+    try {
+      const schema = await apiService.getCollection(collectionName)
+      setCollectionSchema(schema)
+    } catch (err) {
+      console.error('Failed to load collection schema:', err)
+      setCollectionSchema(null)
+    }
+  }
+
+  const handleCollectionChange = (collectionName) => {
+    setSelectedCollection(collectionName)
+    setUrl(`/${collectionName}`)
+    loadCollectionSchema(collectionName)
+    generateSampleBody(collectionName)
+  }
+
+  const generateSampleBody = (collectionName) => {
+    if (!collectionSchema?.properties) return
+    
+    const sampleData = {}
+    Object.entries(collectionSchema.properties).forEach(([key, prop]) => {
+      if (key === 'id' || key === 'createdAt' || key === 'updatedAt') return
+      
+      switch (prop.type) {
+        case 'string':
+          sampleData[key] = prop.default || `Sample ${key}`
+          break
+        case 'number':
+          sampleData[key] = prop.default || 1
+          break
+        case 'boolean':
+          sampleData[key] = prop.default !== undefined ? prop.default : true
+          break
+        case 'date':
+          sampleData[key] = new Date().toISOString()
+          break
+        default:
+          if (prop.default !== undefined) {
+            sampleData[key] = prop.default
+          }
+      }
+    })
+    
+    if (Object.keys(sampleData).length > 0) {
+      setBody(JSON.stringify(sampleData, null, 2))
+    }
+  }
+
+  const generateSampleBodyString = () => {
+    if (!collectionSchema?.properties) {
+      return '{\n  "title": "Sample Item",\n  "description": "Sample description"\n}'
+    }
+    
+    const sampleData = {}
+    Object.entries(collectionSchema.properties).forEach(([key, prop]) => {
+      if (key === 'id' || key === 'createdAt' || key === 'updatedAt') return
+      
+      switch (prop.type) {
+        case 'string':
+          sampleData[key] = prop.default || `Sample ${key}`
+          break
+        case 'number':
+          sampleData[key] = prop.default || 1
+          break
+        case 'boolean':
+          sampleData[key] = prop.default !== undefined ? prop.default : true
+          break
+        case 'date':
+          sampleData[key] = new Date().toISOString()
+          break
+        default:
+          if (prop.default !== undefined) {
+            sampleData[key] = prop.default
+          }
+      }
+    })
+    
+    return JSON.stringify(sampleData, null, 2)
+  }
+
+  const getPresetRequests = () => {
+    const collection = selectedCollection || 'todos'
+    return {
+      'Get Collections': {
+        method: 'GET',
+        url: '/_admin/collections',
+        headers: '{}',
+        body: ''
+      },
+      [`Get All ${collection}`]: {
+        method: 'GET',
+        url: `/${collection}`,
+        headers: '{}',
+        body: ''
+      },
+      [`Create ${collection}`]: {
+        method: 'POST',
+        url: `/${collection}`,
+        headers: '{"Content-Type": "application/json"}',
+        body: generateSampleBodyString()
+      },
+      [`Update ${collection}`]: {
+        method: 'PUT',
+        url: `/${collection}/{id}`,
+        headers: '{"Content-Type": "application/json"}',
+        body: '{\n  "title": "Updated Item"\n}'
+      },
+      [`Delete ${collection}`]: {
+        method: 'DELETE',
+        url: `/${collection}/{id}`,
+        headers: '{}',
+        body: ''
+      }
+    }
+  }
 
   const executeRequest = async () => {
     if (!url.trim()) {
@@ -192,7 +300,8 @@ function ApiTester() {
   }
 
   const loadPreset = (presetName) => {
-    const preset = PRESET_REQUESTS[presetName]
+    const presetRequests = getPresetRequests()
+    const preset = presetRequests[presetName]
     if (preset) {
       setMethod(preset.method)
       setUrl(preset.url)
@@ -245,12 +354,65 @@ function ApiTester() {
         </HStack>
       </HStack>
 
-      <Alert status="info" variant="left-accent">
-        <AlertIcon />
-        <AlertDescription>
-          Test your collection APIs and custom endpoints. Use the presets below or create custom requests.
-        </AlertDescription>
-      </Alert>
+      <Card>
+        <CardHeader>
+          <Heading size="md">Collection Target</Heading>
+        </CardHeader>
+        <CardBody>
+          <HStack spacing={4}>
+            <FormControl flex="1">
+              <FormLabel>Select Collection</FormLabel>
+              <HStack>
+                <Select 
+                  value={selectedCollection} 
+                  onChange={(e) => handleCollectionChange(e.target.value)}
+                  placeholder="Choose a collection"
+                >
+                  {collections.map((collection) => (
+                    <option key={collection.name} value={collection.name}>
+                      {collection.name}
+                    </option>
+                  ))}
+                </Select>
+                <IconButton
+                  icon={<FiRefreshCw />}
+                  onClick={loadCollections}
+                  variant="outline"
+                  aria-label="Refresh collections"
+                />
+              </HStack>
+            </FormControl>
+            
+            {collectionSchema?.properties && (
+              <FormControl>
+                <FormLabel>Schema Properties</FormLabel>
+                <VStack align="start" spacing={1} maxH="100px" overflowY="auto">
+                  {Object.entries(collectionSchema.properties).map(([key, prop]) => (
+                    <HStack key={key} spacing={2}>
+                      <Badge size="sm" colorScheme={prop.required ? "red" : "gray"}>
+                        {key}
+                      </Badge>
+                      <Text fontSize="xs" color="gray.500">
+                        {prop.type} {prop.required && "*"}
+                      </Text>
+                    </HStack>
+                  ))}
+                </VStack>
+              </FormControl>
+            )}
+            
+            <Button
+              leftIcon={<FiDatabase />}
+              onClick={() => generateSampleBody(selectedCollection)}
+              variant="outline"
+              size="sm"
+            >
+              Generate Sample
+            </Button>
+          </HStack>
+        </CardBody>
+      </Card>
+
 
       <Card>
         <CardHeader>
@@ -258,7 +420,7 @@ function ApiTester() {
         </CardHeader>
         <CardBody>
           <HStack wrap="wrap" spacing={2}>
-            {Object.keys(PRESET_REQUESTS).map((presetName) => (
+            {Object.keys(getPresetRequests()).map((presetName) => (
               <Button
                 key={presetName}
                 size="sm"
@@ -304,8 +466,10 @@ function ApiTester() {
                 isLoading={loading}
                 loadingText="Sending"
                 alignSelf="end"
+                size="lg"
+                px={8}
               >
-                Send
+                Send Request
               </Button>
             </HStack>
 
@@ -387,7 +551,7 @@ function ApiTester() {
                 <TabPanel>
                   <Box
                     as="pre"
-                    bg="gray.50"
+                    bg={useColorModeValue('gray.50', 'gray.800')}
                     p={4}
                     borderRadius="md"
                     overflow="auto"
@@ -404,7 +568,7 @@ function ApiTester() {
                 <TabPanel>
                   <Box
                     as="pre"
-                    bg="gray.50"
+                    bg={useColorModeValue('gray.50', 'gray.800')}
                     p={4}
                     borderRadius="md"
                     overflow="auto"
@@ -418,7 +582,7 @@ function ApiTester() {
                 <TabPanel>
                   <Box
                     as="pre"
-                    bg="gray.50"
+                    bg={useColorModeValue('gray.50', 'gray.800')}
                     p={4}
                     borderRadius="md"
                     overflow="auto"
@@ -446,11 +610,11 @@ function ApiTester() {
                 <HStack
                   key={item.id}
                   p={3}
-                  bg="gray.50"
+                  bg={useColorModeValue('gray.50', 'gray.700')}
                   borderRadius="md"
                   justify="space-between"
                   cursor="pointer"
-                  _hover={{ bg: 'gray.100' }}
+                  _hover={{ bg: useColorModeValue('gray.100', 'gray.600') }}
                   onClick={() => {
                     setMethod(item.method)
                     setUrl(item.url)

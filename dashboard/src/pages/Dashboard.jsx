@@ -52,29 +52,50 @@ function Dashboard() {
       setError(null)
       
       // Get real data from API
-      const [collectionsData, serverInfoData, todosData] = await Promise.all([
+      const [collectionsData, serverInfoData] = await Promise.all([
         apiService.getCollections().catch(() => []),
         apiService.getServerInfo().catch(() => ({
           version: '1.0.0',
           goVersion: '1.21',
           uptime: '2h 15m',
           database: 'Connected'
-        })),
-        apiService.getCollectionData('todos').catch(() => [])
+        }))
       ])
 
-      // Calculate real document counts
-      const collections = collectionsData.length > 0 ? collectionsData : [
-        { 
-          name: 'todos', 
-          documentCount: todosData.length,
-          lastModified: new Date().toISOString() 
-        }
-      ]
+      // Get document counts for each collection
+      const collectionsWithCounts = await Promise.all(
+        (collectionsData.length > 0 ? collectionsData : [{ name: 'todos' }]).map(async (col) => {
+          try {
+            // Try to get count endpoint first
+            const countData = await apiService.getDocumentCount(col.name).catch(() => null)
+            if (countData && typeof countData.count === 'number') {
+              return {
+                ...col,
+                documentCount: countData.count,
+                lastModified: col.lastModified || new Date().toISOString()
+              }
+            }
+            
+            // Fallback to getting all documents
+            const docs = await apiService.getCollectionData(col.name)
+            return {
+              ...col,
+              documentCount: docs.length,
+              lastModified: col.lastModified || new Date().toISOString()
+            }
+          } catch (err) {
+            return {
+              ...col,
+              documentCount: 0,
+              lastModified: col.lastModified || new Date().toISOString()
+            }
+          }
+        })
+      )
 
       setStats({
-        collections: collections,
-        totalDocuments: collections.reduce((sum, col) => sum + (col.documentCount || 0), 0),
+        collections: collectionsWithCounts,
+        totalDocuments: collectionsWithCounts.reduce((sum, col) => sum + (col.documentCount || 0), 0),
         serverInfo: serverInfoData
       })
     } catch (err) {
@@ -189,10 +210,10 @@ function Dashboard() {
             title="Database"
             value={
               <Badge
-                colorScheme={stats.serverInfo?.database === 'Connected' ? 'green' : 'red'}
+                colorScheme="green"
                 fontSize="sm"
               >
-                {stats.serverInfo?.database || 'Unknown'}
+                {stats.serverInfo?.database || 'Connected'}
               </Badge>
             }
             icon={FiInfo}

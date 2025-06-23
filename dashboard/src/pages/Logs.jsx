@@ -193,16 +193,6 @@ function Logs() {
         </HStack>
       </HStack>
 
-      <Alert status="info">
-        <AlertIcon />
-        <Box>
-          <AlertTitle>Secure Logging!</AlertTitle>
-          <AlertDescription>
-            Logs are stored in JSONL format and protected by master key authentication. 
-            Use deployd.log() in your event scripts to add custom log entries.
-          </AlertDescription>
-        </Box>
-      </Alert>
 
       <Card bg={cardBg}>
         <CardHeader>
