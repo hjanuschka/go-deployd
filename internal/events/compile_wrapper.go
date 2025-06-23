@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// createGoWrapper creates a wrapper that implements the plugin interface
-func createGoWrapper(userCode string) string {
+// CreateGoWrapper creates a wrapper that implements the plugin interface
+func CreateGoWrapper(userCode string) string {
 	// Parse user code to extract imports and functions separately
 	lines := strings.Split(userCode, "\n")
 	var imports []string
@@ -39,6 +39,8 @@ func createGoWrapper(userCode string) string {
 	userImports := strings.Join(imports, "\n")
 	userFunctions := strings.Join(functions, "\n")
 	template := `package main
+
+import "reflect"
 
 %s
 
@@ -105,9 +107,33 @@ type eventHandler struct{}
 
 // Run implements the plugin interface
 func (h eventHandler) Run(ctx interface{}) error {
-	// Convert the interface to our EventContext
-	eventCtx := ctx.(*EventContext)
-	return Run(eventCtx)
+	// Use reflection to extract field values since types don't match exactly
+	v := reflect.ValueOf(ctx)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	
+	// Extract field values using reflection
+	localCtx := &EventContext{
+		Data:     getFieldValue(v, "Data").(map[string]interface{}),
+		Query:    getFieldValue(v, "Query").(map[string]interface{}),
+		Me:       getFieldValue(v, "Me").(map[string]interface{}),
+		IsRoot:   getFieldValue(v, "IsRoot").(bool),
+		Internal: getFieldValue(v, "Internal").(bool),
+		Errors:   getFieldValue(v, "Errors").(map[string]string),
+		Cancel:   getFieldValue(v, "Cancel").(func(string, int)),
+	}
+	
+	return Run(localCtx)
+}
+
+// Helper function to get field value by name
+func getFieldValue(v reflect.Value, fieldName string) interface{} {
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() {
+		return nil
+	}
+	return field.Interface()
 }
 `
 	return fmt.Sprintf(template, userImports, userFunctions)

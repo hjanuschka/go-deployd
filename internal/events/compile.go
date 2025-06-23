@@ -85,7 +85,7 @@ func CompileGoPlugin(sourcePath, pluginPath string) error {
 	
 	// Create a temporary wrapper file in the temp directory
 	wrapperPath := filepath.Join(tempDir, "main.go")
-	wrapper := createGoWrapper(string(source))
+	wrapper := CreateGoWrapper(string(source))
 	
 	if err := os.WriteFile(wrapperPath, []byte(wrapper), 0644); err != nil {
 		return fmt.Errorf("failed to write wrapper: %w", err)
@@ -146,8 +146,19 @@ golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632
 		fmt.Printf("Go mod download output: %s\n", modOutput)
 	}
 	
-	// Compile the plugin using the same Go version
-	cmd := exec.Command(goExe, "build", "-buildmode=plugin", "-o", pluginPath, "main.go")
+	// Ensure target directory exists
+	if err := os.MkdirAll(filepath.Dir(pluginPath), 0755); err != nil {
+		return fmt.Errorf("failed to create plugin directory: %w", err)
+	}
+	
+	// Convert to absolute path to ensure correct output location
+	absPluginPath, err := filepath.Abs(pluginPath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %w", err)
+	}
+	
+	// Compile the plugin using the same Go version with absolute output path
+	cmd := exec.Command(goExe, "build", "-buildmode=plugin", "-o", absPluginPath, "main.go")
 	cmd.Env = append(os.Environ(), 
 		"GO111MODULE=on",
 		"GOWORK=off", // Disable workspace mode
@@ -156,6 +167,11 @@ golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632
 	
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("compilation failed: %w\nOutput: %s", err, output)
+	}
+	
+	// Verify the plugin file was created
+	if _, err := os.Stat(absPluginPath); err != nil {
+		return fmt.Errorf("plugin file not created at expected location %s: %w", absPluginPath, err)
 	}
 
 	return nil
