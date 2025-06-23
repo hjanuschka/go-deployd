@@ -616,21 +616,51 @@ func Run(ctx *EventContext) error {
         return nil
     }
     
+    // Helper function to get user ID from context with multiple field name attempts
+    getUserID := func() string {
+        // Try all possible field name variations for compatibility
+        if userID, ok := ctx.Me["userId"].(string); ok {
+            return userID
+        }
+        if userID, ok := ctx.Me["id"].(string); ok {
+            return userID
+        }
+        if userID, ok := ctx.Me["userid"].(string); ok {
+            return userID
+        }
+        if userID, ok := ctx.Me["UserID"].(string); ok {
+            return userID
+        }
+        // Check nested user object (from admin sessions)
+        if userObj, ok := ctx.Me["user"].(map[string]interface{}); ok {
+            if userID, ok := userObj["userId"].(string); ok {
+                return userID
+            }
+            if userID, ok := userObj["userid"].(string); ok {
+                return userID
+            }
+            if userID, ok := userObj["id"].(string); ok {
+                return userID
+            }
+        }
+        return ""
+    }
+    
+    currentUserID := getUserID()
+    if currentUserID == "" {
+        ctx.Cancel("Unable to determine user ID", 400)
+        return nil
+    }
+    
     // For single document requests, check ownership
     if docUserID, exists := ctx.Data["userId"].(string); exists {
-        // Try both userId and id fields for compatibility
-        if ctx.Me["userId"] != docUserID && ctx.Me["id"] != docUserID {
+        if currentUserID != docUserID {
             ctx.Cancel("Document not found", 404)
             return nil
         }
     } else {
         // Multiple documents - filter by userId
-        // Try both userId and id fields for compatibility
-        if userID, ok := ctx.Me["userId"].(string); ok {
-            ctx.Query["userId"] = userID
-        } else if userID, ok := ctx.Me["id"].(string); ok {
-            ctx.Query["userId"] = userID
-        }
+        ctx.Query["userId"] = currentUserID
     }
     
     return nil

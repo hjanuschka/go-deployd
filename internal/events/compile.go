@@ -214,16 +214,12 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 			switch userData := user.(type) {
 			case bson.M:
 				eventCtx.Me = userData
-				// Add id field for compatibility if userId exists
-				if userId, exists := userData["userId"]; exists {
-					userData["id"] = userId
-				}
+				// Add compatibility fields for all possible variations
+				addCompatibilityFields(userData)
 			case map[string]interface{}:
 				eventCtx.Me = userData
-				// Add id field for compatibility if userId exists
-				if userId, exists := userData["userId"]; exists {
-					userData["id"] = userId
-				}
+				// Add compatibility fields for all possible variations
+				addCompatibilityFields(userData)
 			default:
 				// Try to convert struct to map for compatibility
 				if userMap := convertUserToMap(userData); userMap != nil {
@@ -363,4 +359,27 @@ func convertUserToMap(userData interface{}) map[string]interface{} {
 	}
 	
 	return result
+}
+
+// addCompatibilityFields adds multiple field name variations for user ID compatibility
+func addCompatibilityFields(userData map[string]interface{}) {
+	// Find any user ID field and create all variations
+	var userID interface{}
+	if val, exists := userData["userId"]; exists {
+		userID = val
+	} else if val, exists := userData["userid"]; exists {
+		userID = val
+	} else if val, exists := userData["UserID"]; exists {
+		userID = val
+	} else if val, exists := userData["id"]; exists {
+		userID = val
+	}
+	
+	// If we found a user ID, ensure all variations exist
+	if userID != nil {
+		userData["userId"] = userID
+		userData["userid"] = userID
+		userData["UserID"] = userID
+		userData["id"] = userID
+	}
 }
