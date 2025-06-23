@@ -54,33 +54,43 @@ export const apiService = {
 
   // Data operations
   getCollectionData: async (name, params = {}) => {
-    const response = await api.get(`/${name}`, { params })
+    // Add $skipEvents for admin dashboard to bypass event validation
+    const requestParams = { ...params, $skipEvents: true }
+    const response = await api.get(`/${name}`, { params: requestParams })
     return response.data
   },
 
   createDocument: async (collection, data) => {
-    const response = await api.post(`/${collection}`, data)
+    // Add $skipEvents for admin dashboard to bypass event validation
+    const requestData = { ...data, $skipEvents: true }
+    const response = await api.post(`/${collection}`, requestData)
     return response.data
   },
 
   updateDocument: async (collection, id, data) => {
-    const response = await api.put(`/${collection}/${id}`, data)
+    // Add $skipEvents for admin dashboard to bypass event validation
+    const requestData = { ...data, $skipEvents: true }
+    const response = await api.put(`/${collection}/${id}`, requestData)
     return response.data
   },
 
   deleteDocument: async (collection, id) => {
-    const response = await api.delete(`/${collection}/${id}`)
+    // Add $skipEvents for admin dashboard to bypass event validation
+    const response = await api.delete(`/${collection}/${id}?$skipEvents=true`)
     return response.data
   },
 
   getDocument: async (collection, id) => {
-    const response = await api.get(`/${collection}/${id}`)
+    // Add $skipEvents for admin dashboard to bypass event validation
+    const response = await api.get(`/${collection}/${id}?$skipEvents=true`)
     return response.data
   },
 
   // Count documents
   getDocumentCount: async (collection, query = {}) => {
-    const response = await api.get(`/${collection}/count`, { params: query })
+    // Add $skipEvents for admin dashboard to bypass event validation
+    const requestParams = { ...query, $skipEvents: true }
+    const response = await api.get(`/${collection}/count`, { params: requestParams })
     return response.data
   },
 

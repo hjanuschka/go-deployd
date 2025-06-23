@@ -113,15 +113,15 @@ func (h eventHandler) Run(ctx interface{}) error {
 		v = v.Elem()
 	}
 	
-	// Extract field values using reflection
+	// Extract field values using reflection with safe type assertions
 	localCtx := &EventContext{
-		Data:     getFieldValue(v, "Data").(map[string]interface{}),
-		Query:    getFieldValue(v, "Query").(map[string]interface{}),
-		Me:       getFieldValue(v, "Me").(map[string]interface{}),
-		IsRoot:   getFieldValue(v, "IsRoot").(bool),
-		Internal: getFieldValue(v, "Internal").(bool),
-		Errors:   getFieldValue(v, "Errors").(map[string]string),
-		Cancel:   getFieldValue(v, "Cancel").(func(string, int)),
+		Data:     safeGetMapField(v, "Data"),
+		Query:    safeGetMapField(v, "Query"),
+		Me:       safeGetMapField(v, "Me"),
+		IsRoot:   safeGetBoolField(v, "IsRoot"),
+		Internal: safeGetBoolField(v, "Internal"),
+		Errors:   safeGetStringMapField(v, "Errors"),
+		Cancel:   safeGetCancelField(v, "Cancel"),
 	}
 	
 	return Run(localCtx)
@@ -134,6 +134,51 @@ func getFieldValue(v reflect.Value, fieldName string) interface{} {
 		return nil
 	}
 	return field.Interface()
+}
+
+// Safe helper functions for type conversion
+func safeGetMapField(v reflect.Value, fieldName string) map[string]interface{} {
+	val := getFieldValue(v, fieldName)
+	if val == nil {
+		return make(map[string]interface{})
+	}
+	if mapVal, ok := val.(map[string]interface{}); ok {
+		return mapVal
+	}
+	return make(map[string]interface{})
+}
+
+func safeGetBoolField(v reflect.Value, fieldName string) bool {
+	val := getFieldValue(v, fieldName)
+	if val == nil {
+		return false
+	}
+	if boolVal, ok := val.(bool); ok {
+		return boolVal
+	}
+	return false
+}
+
+func safeGetStringMapField(v reflect.Value, fieldName string) map[string]string {
+	val := getFieldValue(v, fieldName)
+	if val == nil {
+		return make(map[string]string)
+	}
+	if mapVal, ok := val.(map[string]string); ok {
+		return mapVal
+	}
+	return make(map[string]string)
+}
+
+func safeGetCancelField(v reflect.Value, fieldName string) func(string, int) {
+	val := getFieldValue(v, fieldName)
+	if val == nil {
+		return func(string, int) {} // no-op function
+	}
+	if cancelFunc, ok := val.(func(string, int)); ok {
+		return cancelFunc
+	}
+	return func(string, int) {} // no-op function
 }
 `
 	return fmt.Sprintf(template, userImports, userFunctions)

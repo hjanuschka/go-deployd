@@ -123,18 +123,26 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 			return ctx.WriteError(404, "Document not found")
 		}
 		
-		// Run Get event for single document
-		if err := c.runGetEvent(ctx, doc); err != nil {
-			if scriptErr, ok := err.(*events.ScriptError); ok {
-				return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+		// Check for $skipEvents parameter in query to bypass events
+		skipEvents := ctx.Query["$skipEvents"] == "true"
+		
+		// Run Get event for single document (skip if $skipEvents is true)
+		if !skipEvents {
+			if err := c.runGetEvent(ctx, doc); err != nil {
+				if scriptErr, ok := err.(*events.ScriptError); ok {
+					return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+				}
+				return ctx.WriteError(500, err.Error())
 			}
-			return ctx.WriteError(500, err.Error())
 		}
 		
 		return ctx.WriteJSON(doc)
 	}
 	
 	// Get multiple documents
+	// Check for $skipEvents parameter in query to bypass events
+	skipEvents := ctx.Query["$skipEvents"] == "true"
+	
 	// First extract query options like $sort, $limit, $skip
 	opts, cleanQuery := c.extractQueryOptions(ctx.Query)
 	
@@ -147,13 +155,15 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 		return ctx.WriteError(500, err.Error())
 	}
 	
-	// Run Get event for each document
+	// Run Get event for each document (skip if $skipEvents is true)
 	filteredDocs := make([]map[string]interface{}, 0)
 	for _, doc := range docs {
-		if err := c.runGetEvent(ctx, doc); err != nil {
-			// Skip documents that fail the Get event
-			if _, ok := err.(*events.ScriptError); ok {
-				continue
+		if !skipEvents {
+			if err := c.runGetEvent(ctx, doc); err != nil {
+				// Skip documents that fail the Get event
+				if _, ok := err.(*events.ScriptError); ok {
+					continue
+				}
 			}
 		}
 		filteredDocs = append(filteredDocs, doc)
@@ -201,26 +211,40 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 		"sanitized":     sanitized,
 	})
 	
+	// Check for $skipEvents parameter to bypass all events
+	skipEvents := false
+	if val, exists := ctx.Body["$skipEvents"]; exists {
+		if skip, ok := val.(bool); ok && skip {
+			skipEvents = true
+			// Remove $skipEvents from sanitized data
+			delete(sanitized, "$skipEvents")
+		}
+	}
+	
 	// Set default values
 	c.setDefaults(sanitized)
 	
-	// Run Validate event
-	if err := c.runValidateEvent(ctx, sanitized); err != nil {
-		if scriptErr, ok := err.(*events.ScriptError); ok {
-			return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+	// Run Validate event (skip if $skipEvents is true)
+	if !skipEvents {
+		if err := c.runValidateEvent(ctx, sanitized); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+			}
+			if validationErr, ok := err.(*events.ValidationError); ok {
+				return ctx.WriteError(400, validationErr.Error())
+			}
+			return ctx.WriteError(500, err.Error())
 		}
-		if validationErr, ok := err.(*events.ValidationError); ok {
-			return ctx.WriteError(400, validationErr.Error())
-		}
-		return ctx.WriteError(500, err.Error())
 	}
 	
-	// Run Post event
-	if err := c.runPostEvent(ctx, sanitized); err != nil {
-		if scriptErr, ok := err.(*events.ScriptError); ok {
-			return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+	// Run Post event (skip if $skipEvents is true)
+	if !skipEvents {
+		if err := c.runPostEvent(ctx, sanitized); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+			}
+			return ctx.WriteError(500, err.Error())
 		}
-		return ctx.WriteError(500, err.Error())
 	}
 	
 	// Insert document
@@ -283,6 +307,16 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 	
 	sanitized := c.sanitize(ctx.Body)
 	
+	// Check for $skipEvents parameter to bypass all events
+	skipEvents := false
+	if val, exists := ctx.Body["$skipEvents"]; exists {
+		if skip, ok := val.(bool); ok && skip {
+			skipEvents = true
+			// Remove $skipEvents from sanitized data
+			delete(sanitized, "$skipEvents")
+		}
+	}
+	
 	// Merge with existing document
 	merged := make(map[string]interface{})
 	for k, v := range previous {
@@ -292,23 +326,27 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 		merged[k] = v
 	}
 	
-	// Run Validate event
-	if err := c.runValidateEvent(ctx, merged); err != nil {
-		if scriptErr, ok := err.(*events.ScriptError); ok {
-			return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+	// Run Validate event (skip if $skipEvents is true)
+	if !skipEvents {
+		if err := c.runValidateEvent(ctx, merged); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+			}
+			if validationErr, ok := err.(*events.ValidationError); ok {
+				return ctx.WriteError(400, validationErr.Error())
+			}
+			return ctx.WriteError(500, err.Error())
 		}
-		if validationErr, ok := err.(*events.ValidationError); ok {
-			return ctx.WriteError(400, validationErr.Error())
-		}
-		return ctx.WriteError(500, err.Error())
 	}
 	
-	// Run Put event
-	if err := c.runPutEvent(ctx, merged); err != nil {
-		if scriptErr, ok := err.(*events.ScriptError); ok {
-			return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+	// Run Put event (skip if $skipEvents is true)
+	if !skipEvents {
+		if err := c.runPutEvent(ctx, merged); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+			}
+			return ctx.WriteError(500, err.Error())
 		}
-		return ctx.WriteError(500, err.Error())
 	}
 	
 	// Update document - for SQLite we need to update individual fields, not set the entire data
