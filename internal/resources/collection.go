@@ -204,22 +204,22 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 		"body":     ctx.Body,
 	})
 	
+	// Check for $skipEvents parameter to bypass all events (before sanitization)
+	skipEvents := false
+	if val, exists := ctx.Body["$skipEvents"]; exists {
+		if skip, ok := val.(bool); ok && skip {
+			skipEvents = true
+		}
+		// Remove $skipEvents from body so it doesn't interfere with validation/sanitization
+		delete(ctx.Body, "$skipEvents")
+	}
+	
 	sanitized := c.sanitize(ctx.Body)
 	
 	logging.Debug("Sanitization complete", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 		"sanitizedKeys": getDataKeys(sanitized),
 		"sanitized":     sanitized,
 	})
-	
-	// Check for $skipEvents parameter to bypass all events
-	skipEvents := false
-	if val, exists := ctx.Body["$skipEvents"]; exists {
-		if skip, ok := val.(bool); ok && skip {
-			skipEvents = true
-			// Remove $skipEvents from sanitized data
-			delete(sanitized, "$skipEvents")
-		}
-	}
 	
 	// Set default values
 	c.setDefaults(sanitized)
@@ -300,6 +300,16 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 		return ctx.WriteError(404, "Document not found")
 	}
 	
+	// Check for $skipEvents parameter to bypass all events (before sanitization)
+	skipEvents := false
+	if val, exists := ctx.Body["$skipEvents"]; exists {
+		if skip, ok := val.(bool); ok && skip {
+			skipEvents = true
+		}
+		// Remove $skipEvents from body so it doesn't interfere with validation/sanitization
+		delete(ctx.Body, "$skipEvents")
+	}
+	
 	// Validate and sanitize body
 	if err := c.validate(ctx.Body, false); err != nil {
 		return ctx.WriteError(400, err.Error())
@@ -307,14 +317,13 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 	
 	sanitized := c.sanitize(ctx.Body)
 	
-	// Check for $skipEvents parameter to bypass all events
-	skipEvents := false
-	if val, exists := ctx.Body["$skipEvents"]; exists {
-		if skip, ok := val.(bool); ok && skip {
-			skipEvents = true
-			// Remove $skipEvents from sanitized data
-			delete(sanitized, "$skipEvents")
+	// Check if there are any fields to update after sanitization
+	if len(sanitized) == 0 {
+		// If skipEvents was specified but no actual fields to update, return the existing document
+		if skipEvents {
+			return ctx.WriteJSON(previous)
 		}
+		return ctx.WriteError(400, "No fields to update")
 	}
 	
 	// Merge with existing document
@@ -352,17 +361,27 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 	// Update document - for SQLite we need to update individual fields, not set the entire data
 	updateQuery := database.NewQueryBuilder().Where("id", "$eq", id)
 	updateBuilder := database.NewUpdateBuilder()
+	updateCount := 0
 	for key, value := range sanitized {
-		updateBuilder.Set(key, value)
+		// Skip the id field - it should not be updated
+		if key != "id" {
+			updateBuilder.Set(key, value)
+			updateCount++
+		}
 	}
-	result, err := c.store.Update(ctx.Context(), updateQuery, updateBuilder)
+	
+	// Check if we have any fields to update
+	if updateCount == 0 {
+		return ctx.WriteError(400, "No valid fields to update")
+	}
+	
+	_, err = c.store.Update(ctx.Context(), updateQuery, updateBuilder)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
 	
-	if result.ModifiedCount() == 0 {
-		return ctx.WriteError(404, "Document not found")
-	}
+	// Note: We don't check ModifiedCount() because it can be 0 if the document
+	// already has the same values, which is a successful operation
 	
 	// Return updated document
 	findQuery := database.NewQueryBuilder().Where("id", "$eq", id)
@@ -519,11 +538,6 @@ func (c *Collection) sanitize(data map[string]interface{}) map[string]interface{
 	}
 	
 	sanitized := make(map[string]interface{})
-	
-	// Always preserve the ID field if provided
-	if id, exists := data["id"]; exists {
-		sanitized["id"] = id
-	}
 	
 	for name, prop := range c.config.Properties {
 		if value, exists := data[name]; exists {
@@ -794,7 +808,7 @@ func (c *Collection) ReloadScripts() error {
 // isMongoCommand checks if the request body contains MongoDB operators
 func (c *Collection) isMongoCommand(body map[string]interface{}) bool {
 	for key := range body {
-		if strings.HasPrefix(key, "$") {
+		if strings.HasPrefix(key, "$") && key != "$skipEvents" {
 			return true
 		}
 	}

@@ -69,7 +69,9 @@ export const apiService = {
 
   updateDocument: async (collection, id, data) => {
     // Add $skipEvents for admin dashboard to bypass event validation
-    const requestData = { ...data, $skipEvents: true }
+    // Remove id from data since it's in the URL
+    const { id: _, ...dataWithoutId } = data
+    const requestData = { ...dataWithoutId, $skipEvents: true }
     const response = await api.put(`/${collection}/${id}`, requestData)
     return response.data
   },
