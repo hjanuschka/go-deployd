@@ -17,7 +17,15 @@ export const AuthProvider = ({ children }) => {
 
   // Check for existing authentication on mount
   useEffect(() => {
-    checkAuth()
+    // Try to get master key from localStorage first
+    const storedMasterKey = localStorage.getItem('masterKey')
+    if (storedMasterKey) {
+      setMasterKey(storedMasterKey)
+      setIsAuthenticated(true)
+      setLoading(false)
+    } else {
+      checkAuth()
+    }
   }, [])
 
   const checkAuth = async () => {
@@ -55,6 +63,8 @@ export const AuthProvider = ({ children }) => {
       if (data.success) {
         setIsAuthenticated(true)
         setMasterKey(key)
+        // Store master key in localStorage for persistence
+        localStorage.setItem('masterKey', key)
         return { success: true }
       } else {
         return { success: false, message: data.message || 'Invalid master key' }
@@ -67,6 +77,8 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setIsAuthenticated(false)
     setMasterKey('')
+    // Clear master key from localStorage
+    localStorage.removeItem('masterKey')
     // Clear cookies by making a request to logout endpoint
     fetch('/_admin/auth/logout', {
       method: 'POST',

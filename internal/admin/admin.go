@@ -62,6 +62,9 @@ func NewAdminHandler(db database.DatabaseInterface, router *router.Router, admin
 		securityConfig = config.DefaultSecurityConfig()
 	}
 	
+	// Log master key on startup
+	fmt.Printf("🔐 Master Key: %s\n", securityConfig.MasterKey)
+	
 	authHandler := NewAuthHandler(db, sessions, securityConfig)
 	
 	return &AdminHandler{
@@ -164,20 +167,8 @@ func (h *AdminHandler) getCollections(w http.ResponseWriter, r *http.Request) {
 					// Get file modification time
 					stat, _ := os.Stat(configFile)
 					
-					// Convert properties to interface map
-					props := make(map[string]interface{})
-					for name, prop := range config.Properties {
-						propMap := map[string]interface{}{
-							"type": prop.Type,
-						}
-						if prop.Required {
-							propMap["required"] = true
-						}
-						if prop.Default != nil {
-							propMap["default"] = prop.Default
-						}
-						props[name] = propMap
-					}
+					// Convert properties to interface map and add hardcoded timestamp fields
+					props := h.buildPropertiesMap(config.Properties)
 					
 					collections = append(collections, CollectionInfo{
 						Name:          collectionName,
@@ -234,20 +225,8 @@ func (h *AdminHandler) getCollection(w http.ResponseWriter, r *http.Request) {
 	// Get file modification time
 	stat, _ := os.Stat(configFile)
 	
-	// Convert properties to interface map
-	props := make(map[string]interface{})
-	for propName, prop := range config.Properties {
-		propMap := map[string]interface{}{
-			"type": prop.Type,
-		}
-		if prop.Required {
-			propMap["required"] = true
-		}
-		if prop.Default != nil {
-			propMap["default"] = prop.Default
-		}
-		props[propName] = propMap
-	}
+	// Convert properties to interface map and add hardcoded timestamp fields
+	props := h.buildPropertiesMap(config.Properties)
 	
 	collection := CollectionInfo{
 		Name:          name,
@@ -266,6 +245,43 @@ func getString(m map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+// buildPropertiesMap converts collection properties to interface map and adds hardcoded timestamp fields
+func (h *AdminHandler) buildPropertiesMap(configProperties map[string]resources.Property) map[string]interface{} {
+	props := make(map[string]interface{})
+	
+	// Add properties from config
+	for name, prop := range configProperties {
+		propMap := map[string]interface{}{
+			"type": prop.Type,
+		}
+		if prop.Required {
+			propMap["required"] = true
+		}
+		if prop.Default != nil {
+			propMap["default"] = prop.Default
+		}
+		props[name] = propMap
+	}
+	
+	// Add hardcoded timestamp fields (these are always present and non-editable)
+	props["createdAt"] = map[string]interface{}{
+		"type":     "date",
+		"required": false,
+		"default":  "now",
+		"readonly": true,
+		"system":   true,
+	}
+	props["updatedAt"] = map[string]interface{}{
+		"type":     "date", 
+		"required": false,
+		"default":  "now",
+		"readonly": true,
+		"system":   true,
+	}
+	
+	return props
 }
 
 func (h *AdminHandler) createCollection(w http.ResponseWriter, r *http.Request) {
@@ -334,11 +350,13 @@ func (h *AdminHandler) createCollection(w http.ResponseWriter, r *http.Request) 
 	// Add to router (we need to implement this)
 	h.router.AddResource(collection)
 	
-	// Return created collection info
+	// Return created collection info with hardcoded timestamp fields
+	// Convert the created properties to the proper format
+	createdProps := h.buildPropertiesMap(configProps)
 	response := CollectionInfo{
 		Name:          name,
 		DocumentCount: 0,
-		Properties:    properties,
+		Properties:    createdProps,
 		LastModified:  time.Now(),
 	}
 	
@@ -415,10 +433,12 @@ func (h *AdminHandler) updateCollection(w http.ResponseWriter, r *http.Request) 
 	store := h.db.CreateStore(name)
 	count, _ := store.Count(r.Context(), database.NewQueryBuilder())
 	
+	// Convert the updated properties to include hardcoded timestamp fields
+	updatedProps := h.buildPropertiesMap(configProps)
 	response := CollectionInfo{
 		Name:          name,
 		DocumentCount: count,
-		Properties:    properties,
+		Properties:    updatedProps,
 		LastModified:  time.Now(),
 	}
 	

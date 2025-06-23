@@ -71,6 +71,24 @@ function DocumentModal({ isOpen, onClose, document, collection, onSave }) {
     return Object.keys(newErrors).length === 0
   }
 
+  const formatReadonlyValue = (value, type) => {
+    if (!value) return ''
+    
+    switch (type) {
+      case 'date':
+        const date = new Date(value)
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      case 'boolean':
+        return value ? 'Yes' : 'No'
+      case 'array':
+        return Array.isArray(value) ? value.join(', ') : value
+      case 'object':
+        return typeof value === 'object' ? JSON.stringify(value, null, 2) : value
+      default:
+        return String(value)
+    }
+  }
+
   const handleSave = () => {
     if (!validateForm()) return
 
@@ -93,6 +111,20 @@ function DocumentModal({ isOpen, onClose, document, collection, onSave }) {
   const renderField = (name, property) => {
     const value = formData[name] || ''
     const error = errors[name]
+    
+    // Handle readonly fields - display as read-only text
+    if (property.readonly) {
+      const displayValue = formatReadonlyValue(value, property.type)
+      return (
+        <Input
+          value={displayValue}
+          isReadOnly={true}
+          bg="gray.50"
+          _hover={{ bg: "gray.50" }}
+          cursor="not-allowed"
+        />
+      )
+    }
 
     switch (property.type) {
       case 'string':
@@ -190,27 +222,29 @@ function DocumentModal({ isOpen, onClose, document, collection, onSave }) {
               </Alert>
             )}
             
-            {Object.entries(collection.properties || {}).map(([name, property]) => (
-              <FormControl key={name} isRequired={property.required} isInvalid={!!errors[name]}>
-                <FormLabel>
-                  {name}
-                  <Badge ml={2} colorScheme="blue" variant="subtle" fontSize="xs">
-                    {property.type}
-                  </Badge>
-                  {property.required && (
-                    <Badge ml={1} colorScheme="red" variant="subtle" fontSize="xs">
-                      required
+{Object.entries(collection.properties || {})
+              .filter(([name, property]) => !property.system && name !== 'createdAt' && name !== 'updatedAt')
+              .map(([name, property]) => (
+                <FormControl key={name} isRequired={property.required} isInvalid={!!errors[name]}>
+                  <FormLabel>
+                    {name}
+                    <Badge ml={2} colorScheme="blue" variant="subtle" fontSize="xs">
+                      {property.type}
                     </Badge>
+                    {property.required && (
+                      <Badge ml={1} colorScheme="red" variant="subtle" fontSize="xs">
+                        required
+                      </Badge>
+                    )}
+                  </FormLabel>
+                  {renderField(name, property)}
+                  {errors[name] && (
+                    <Text color="red.500" fontSize="sm" mt={1}>
+                      {errors[name]}
+                    </Text>
                   )}
-                </FormLabel>
-                {renderField(name, property)}
-                {errors[name] && (
-                  <Text color="red.500" fontSize="sm" mt={1}>
-                    {errors[name]}
-                  </Text>
-                )}
-              </FormControl>
-            ))}
+                </FormControl>
+              ))}
 
             {Object.keys(collection.properties || {}).length === 0 && (
               <Alert status="warning">

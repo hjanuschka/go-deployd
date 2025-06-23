@@ -10,11 +10,34 @@ const api = axios.create({
   withCredentials: true,
 })
 
+// Add request interceptor to include master key from localStorage if available
+api.interceptors.request.use(
+  (config) => {
+    // Get master key from localStorage or cookie
+    const masterKey = localStorage.getItem('masterKey')
+    if (masterKey) {
+      config.headers['X-Master-Key'] = masterKey
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
 // Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error('API Error:', error)
+    
+    // If we get 401, clear stored master key
+    if (error.response?.status === 401) {
+      localStorage.removeItem('masterKey')
+      // Optionally redirect to login page
+      window.location.href = '/_dashboard/login'
+    }
+    
     return Promise.reject(error)
   }
 )

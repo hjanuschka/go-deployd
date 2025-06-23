@@ -192,9 +192,21 @@ function PropertiesEditor({ collection, onUpdate }) {
                       <Text fontFamily="mono">{name}</Text>
                     </Td>
                     <Td>
-                      <Badge colorScheme="blue" variant="subtle">
-                        {property.type}
-                      </Badge>
+                      <HStack spacing={2}>
+                        <Badge colorScheme="blue" variant="subtle">
+                          {property.type}
+                        </Badge>
+                        {property.readonly && (
+                          <Badge colorScheme="gray" variant="solid" fontSize="xs">
+                            readonly
+                          </Badge>
+                        )}
+                        {property.system && (
+                          <Badge colorScheme="orange" variant="solid" fontSize="xs">
+                            system
+                          </Badge>
+                        )}
+                      </HStack>
                     </Td>
                     <Td>
                       {property.required ? (
@@ -209,23 +221,29 @@ function PropertiesEditor({ collection, onUpdate }) {
                       </Text>
                     </Td>
                     <Td>
-                      <HStack spacing={1}>
-                        <IconButton
-                          size="sm"
-                          icon={<FiEdit />}
-                          variant="outline"
-                          onClick={() => handleEditProperty(name, property)}
-                          aria-label="Edit property"
-                        />
-                        <IconButton
-                          size="sm"
-                          icon={<FiTrash2 />}
-                          colorScheme="red"
-                          variant="outline"
-                          onClick={() => handleDeleteProperty(name)}
-                          aria-label="Delete property"
-                        />
-                      </HStack>
+                      {property.system ? (
+                        <Badge colorScheme="gray" variant="subtle" fontSize="xs">
+                          System managed
+                        </Badge>
+                      ) : (
+                        <HStack spacing={1}>
+                          <IconButton
+                            size="sm"
+                            icon={<FiEdit />}
+                            variant="outline"
+                            onClick={() => handleEditProperty(name, property)}
+                            aria-label="Edit property"
+                          />
+                          <IconButton
+                            size="sm"
+                            icon={<FiTrash2 />}
+                            colorScheme="red"
+                            variant="outline"
+                            onClick={() => handleDeleteProperty(name)}
+                            aria-label="Delete property"
+                          />
+                        </HStack>
+                      )}
                     </Td>
                   </Tr>
                 ))}
