@@ -25,7 +25,7 @@ function Sidebar({ menuItems, onClose }) {
       {/* Logo */}
       <Box p={6}>
         <HStack spacing={3}>
-          <Box boxSize={12}>
+          <Box boxSize={16}>
             <img 
               src="/_dashboard/deployd-logo.png" 
               alt="go-deployd logo" 
