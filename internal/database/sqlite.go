@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -48,13 +49,26 @@ func NewSQLiteDatabase(config *Config) (DatabaseInterface, error) {
 	var dbPath string
 	if config.Host == "" || config.Host == "localhost" {
 		// Use file-based SQLite
-		if strings.HasSuffix(config.Name, ".db") {
+		if strings.HasSuffix(config.Name, ".db") || strings.HasSuffix(config.Name, ".sqlite") {
 			dbPath = config.Name
 		} else {
-			dbPath = filepath.Join("data", config.Name+".db")
+			// Default to deployd.sqlite if no specific file extension
+			if config.Name == "deployd" {
+				dbPath = "deployd.sqlite"
+			} else {
+				dbPath = config.Name + ".sqlite"
+			}
 		}
 	} else {
 		dbPath = config.Host
+	}
+
+	// Ensure the directory exists
+	dir := filepath.Dir(dbPath)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory: %w", err)
+		}
 	}
 
 	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_foreign_keys=on")

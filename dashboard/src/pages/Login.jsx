@@ -73,12 +73,13 @@ function Login({ onLogin }) {
       <VStack spacing={8} w="full" maxW="400px">
         {/* Logo and Title */}
         <VStack spacing={4}>
-          <Image
-            src="/deployd-icon.svg"
-            alt="Go-Deployd"
-            boxSize="80px"
-            filter={colorMode === 'dark' ? 'invert(1)' : 'none'}
-          />
+          <Box boxSize="80px">
+            <img 
+              src="/deployd-logo.png" 
+              alt="Go-Deployd logo" 
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+          </Box>
           <VStack spacing={2}>
             <Heading size="xl" textAlign="center" color="brand.500">
               Go-Deployd Dashboard
