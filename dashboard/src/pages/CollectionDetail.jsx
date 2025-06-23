@@ -200,7 +200,8 @@ function CollectionDetail() {
     
     switch (type) {
       case 'date':
-        return new Date(value).toLocaleDateString()
+        const date = new Date(value)
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       case 'boolean':
         return value ? 'Yes' : 'No'
       case 'object':
@@ -212,8 +213,27 @@ function CollectionDetail() {
   }
 
   const getTableColumns = () => {
-    if (!collection?.properties) return ['id']
-    return ['id', ...Object.keys(collection.properties)]
+    if (!collection?.properties) return ['id', 'createdAt', 'updatedAt']
+    
+    const columns = ['id']
+    const properties = Object.keys(collection.properties)
+    
+    // Add user-defined properties first (excluding timestamps)
+    properties.forEach(prop => {
+      if (prop !== 'createdAt' && prop !== 'updatedAt') {
+        columns.push(prop)
+      }
+    })
+    
+    // Always add timestamps at the end
+    if (properties.includes('createdAt')) {
+      columns.push('createdAt')
+    }
+    if (properties.includes('updatedAt')) {
+      columns.push('updatedAt')
+    }
+    
+    return columns
   }
 
   const handleSort = (column) => {

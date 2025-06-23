@@ -2,6 +2,7 @@ package main
 
 // Run filters or modifies retrieved documents
 func Run(ctx *EventContext) error {
+    ctx.Data["heli"] = 1234;
     // Hide sensitive fields from non-admin users
     if !ctx.IsRoot {
         ctx.Hide("internalNotes")

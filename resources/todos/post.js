@@ -1,1 +1,0 @@
-data.createdBy = "event-system"; data.priority = data.priority || 1;

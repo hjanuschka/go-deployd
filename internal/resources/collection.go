@@ -32,6 +32,26 @@ type Collection struct {
 }
 
 func NewCollection(name string, config *CollectionConfig, db database.DatabaseInterface) *Collection {
+	// Ensure required timestamp fields are present
+	if config == nil {
+		config = &CollectionConfig{Properties: make(map[string]Property)}
+	}
+	if config.Properties == nil {
+		config.Properties = make(map[string]Property)
+	}
+	
+	// Add required timestamp fields if not present
+	config.Properties["createdAt"] = Property{
+		Type:     "date",
+		Required: false,
+		Default:  "now",
+	}
+	config.Properties["updatedAt"] = Property{
+		Type:     "date", 
+		Required: false,
+		Default:  "now",
+	}
+	
 	return &Collection{
 		BaseResource:     NewBaseResource(name),
 		config:           config,
@@ -247,6 +267,9 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 		}
 	}
 	
+	// Set timestamps after events (cannot be overridden by events)
+	c.setTimestamps(sanitized, true)
+	
 	// Insert document
 	result, err := c.store.Insert(ctx.Context(), sanitized)
 	if err != nil {
@@ -357,6 +380,9 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 			return ctx.WriteError(500, err.Error())
 		}
 	}
+	
+	// Set timestamps after events (cannot be overridden by events)
+	c.setTimestamps(sanitized, false)
 	
 	// Update document - for SQLite we need to update individual fields, not set the entire data
 	updateQuery := database.NewQueryBuilder().Where("id", "$eq", id)
@@ -729,6 +755,19 @@ func (c *Collection) setDefaults(data map[string]interface{}) {
 			}
 		}
 	}
+}
+
+// setTimestamps sets createdAt and updatedAt fields, ensuring they cannot be overridden
+func (c *Collection) setTimestamps(data map[string]interface{}, isCreate bool) {
+	now := time.Now()
+	
+	if isCreate {
+		// On creation, always set createdAt to now (cannot be overridden)
+		data["createdAt"] = now
+	}
+	
+	// Always set updatedAt to now (cannot be overridden)
+	data["updatedAt"] = now
 }
 
 // Event runner methods

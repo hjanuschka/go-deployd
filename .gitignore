@@ -60,3 +60,24 @@ app.dpd.local
 
 # Main binary
 main
+deployd
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# PID files
+*.pid
+
+# Test/dev collections
+resources/x12/
+resources/test*/
+resources/*test/
+
+# E2E test results
+e2e/results/*.log
+e2e/results/*.pid
+
+# Web dashboard build assets (old versions)
+web/dashboard/assets/index-*.js
