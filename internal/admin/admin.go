@@ -262,16 +262,21 @@ func (h *AdminHandler) buildPropertiesMap(configProperties map[string]resources.
 		if prop.Default != nil {
 			propMap["default"] = prop.Default
 		}
+		if prop.Order != 0 {
+			propMap["order"] = prop.Order
+		}
 		props[name] = propMap
 	}
 	
 	// Add hardcoded timestamp fields (these are always present and non-editable)
+	// Give them high order values so they appear last
 	props["createdAt"] = map[string]interface{}{
 		"type":     "date",
 		"required": false,
 		"default":  "now",
 		"readonly": true,
 		"system":   true,
+		"order":    9998,
 	}
 	props["updatedAt"] = map[string]interface{}{
 		"type":     "date", 
@@ -279,6 +284,7 @@ func (h *AdminHandler) buildPropertiesMap(configProperties map[string]resources.
 		"default":  "now",
 		"readonly": true,
 		"system":   true,
+		"order":    9999,
 	}
 	
 	return props
@@ -317,6 +323,11 @@ func (h *AdminHandler) createCollection(w http.ResponseWriter, r *http.Request) 
 			}
 			if defaultVal, exists := propMap["default"]; exists {
 				prop.Default = defaultVal
+			}
+			if order, exists := propMap["order"]; exists {
+				if orderInt, ok := order.(float64); ok {
+					prop.Order = int(orderInt)
+				}
 			}
 			configProps[propName] = prop
 		}
@@ -398,6 +409,11 @@ func (h *AdminHandler) updateCollection(w http.ResponseWriter, r *http.Request) 
 			}
 			if defaultVal, exists := propMap["default"]; exists {
 				prop.Default = defaultVal
+			}
+			if order, exists := propMap["order"]; exists {
+				if orderInt, ok := order.(float64); ok {
+					prop.Order = int(orderInt)
+				}
 			}
 			configProps[propName] = prop
 		}

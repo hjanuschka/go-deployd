@@ -16,6 +16,7 @@ type Property struct {
 	Type     string      `json:"type"`
 	Required bool        `json:"required,omitempty"`
 	Default  interface{} `json:"default,omitempty"`
+	Order    int         `json:"order,omitempty"`
 }
 
 // BaseResource provides common functionality for all resources

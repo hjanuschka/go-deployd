@@ -224,6 +224,15 @@ function DocumentModal({ isOpen, onClose, document, collection, onSave }) {
             
 {Object.entries(collection.properties || {})
               .filter(([name, property]) => !property.system && name !== 'createdAt' && name !== 'updatedAt')
+              .sort(([nameA, propA], [nameB, propB]) => {
+                // Sort by order field if present, otherwise by name
+                const orderA = propA.order || 0
+                const orderB = propB.order || 0
+                if (orderA !== orderB) {
+                  return orderA - orderB
+                }
+                return nameA.localeCompare(nameB)
+              })
               .map(([name, property]) => (
                 <FormControl key={name} isRequired={property.required} isInvalid={!!errors[name]}>
                   <FormLabel>

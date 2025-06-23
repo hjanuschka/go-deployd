@@ -36,6 +36,7 @@ import {
   FiPlus,
   FiEdit,
   FiTrash2,
+  FiMenu,
 } from 'react-icons/fi'
 
 const PROPERTY_TYPES = [
@@ -56,6 +57,8 @@ function PropertiesEditor({ collection, onUpdate }) {
     required: false,
     default: ''
   })
+  const [draggedProperty, setDraggedProperty] = useState(null)
+  const [draggedOverProperty, setDraggedOverProperty] = useState(null)
   const toast = useToast()
 
   const handleAddProperty = () => {
@@ -110,6 +113,82 @@ function PropertiesEditor({ collection, onUpdate }) {
     }
   }
 
+  const handleDragStart = (e, propertyName) => {
+    setDraggedProperty(propertyName)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e, propertyName) => {
+    e.preventDefault()
+    setDraggedOverProperty(propertyName)
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDragEnd = () => {
+    setDraggedProperty(null)
+    setDraggedOverProperty(null)
+  }
+
+  const handleDrop = async (e, targetPropertyName) => {
+    e.preventDefault()
+    
+    if (draggedProperty && draggedProperty !== targetPropertyName) {
+      // Reorder properties
+      const properties = Object.entries(collection.properties || {})
+        .filter(([name]) => !collection.properties[name]?.system) // Don't reorder system properties
+        .sort(([nameA, propA], [nameB, propB]) => {
+          const orderA = propA.order || 0
+          const orderB = propB.order || 0
+          if (orderA !== orderB) {
+            return orderA - orderB
+          }
+          return nameA.localeCompare(nameB)
+        })
+
+      const draggedIndex = properties.findIndex(([name]) => name === draggedProperty)
+      const targetIndex = properties.findIndex(([name]) => name === targetPropertyName)
+      
+      if (draggedIndex !== -1 && targetIndex !== -1) {
+        // Remove dragged item and insert at target position
+        const [draggedItem] = properties.splice(draggedIndex, 1)
+        properties.splice(targetIndex, 0, draggedItem)
+        
+        // Update order values
+        const updatedProperties = { ...collection.properties }
+        properties.forEach(([name, property], index) => {
+          updatedProperties[name] = {
+            ...property,
+            order: index + 1
+          }
+        })
+        
+        try {
+          await onUpdate({
+            ...collection,
+            properties: updatedProperties
+          })
+          toast({
+            title: 'Properties reordered',
+            status: 'success',
+            duration: 2000,
+            isClosable: true,
+          })
+        } catch (error) {
+          toast({
+            title: 'Error reordering properties',
+            description: error.message,
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          })
+        }
+      }
+    }
+    
+    setDraggedProperty(null)
+    setDraggedOverProperty(null)
+  }
+
   const handleSaveProperty = async () => {
     if (!propertyForm.name.trim()) return
 
@@ -120,11 +199,26 @@ function PropertiesEditor({ collection, onUpdate }) {
       delete updatedProperties[editingProperty]
     }
 
+    // Calculate order for new properties
+    let order
+    if (!editingProperty) {
+      // For new properties, assign the next available order after the last moveable property
+      // but before system properties (which have orders 9998, 9999)
+      const moveableOrders = Object.values(updatedProperties)
+        .map(prop => prop.order || 0)
+        .filter(o => o > 0 && o < 9000) // Exclude system property orders
+      order = moveableOrders.length > 0 ? Math.max(...moveableOrders) + 1 : 1
+    } else {
+      // For edited properties, keep existing order
+      order = collection.properties[editingProperty]?.order || 1
+    }
+
     // Add/update the property
     updatedProperties[propertyForm.name] = {
       type: propertyForm.type,
       ...(propertyForm.required && { required: true }),
-      ...(propertyForm.default && { default: propertyForm.default })
+      ...(propertyForm.default && { default: propertyForm.default }),
+      order: order
     }
 
     try {
@@ -178,6 +272,7 @@ function PropertiesEditor({ collection, onUpdate }) {
             <Table variant="simple">
               <Thead>
                 <Tr>
+                  <Th width="20px"></Th>
                   <Th>Name</Th>
                   <Th>Type</Th>
                   <Th>Required</Th>
@@ -186,8 +281,42 @@ function PropertiesEditor({ collection, onUpdate }) {
                 </Tr>
               </Thead>
               <Tbody>
-                {Object.entries(collection.properties || {}).map(([name, property]) => (
-                  <Tr key={name}>
+                {Object.entries(collection.properties || {})
+                  .sort(([nameA, propA], [nameB, propB]) => {
+                    // Sort by order field if present, otherwise by name
+                    const orderA = propA.order || 0
+                    const orderB = propB.order || 0
+                    if (orderA !== orderB) {
+                      return orderA - orderB
+                    }
+                    return nameA.localeCompare(nameB)
+                  })
+                  .map(([name, property]) => (
+                  <Tr 
+                    key={name}
+                    draggable={!property.system}
+                    onDragStart={(e) => handleDragStart(e, name)}
+                    onDragOver={(e) => handleDragOver(e, name)}
+                    onDragEnd={handleDragEnd}
+                    onDrop={(e) => handleDrop(e, name)}
+                    bg={draggedProperty === name ? 'blue.50' : 
+                        draggedOverProperty === name ? 'gray.50' : 'transparent'}
+                    cursor={property.system ? 'default' : 'move'}
+                    opacity={draggedProperty === name ? 0.5 : 1}
+                  >
+                    <Td p={2}>
+                      {!property.system && (
+                        <IconButton
+                          size="xs"
+                          variant="ghost"
+                          icon={<FiMenu />}
+                          cursor="grab"
+                          color="gray.400"
+                          _hover={{ color: 'gray.600' }}
+                          aria-label="Drag to reorder"
+                        />
+                      )}
+                    </Td>
                     <Td>
                       <Text fontFamily="mono">{name}</Text>
                     </Td>
