@@ -30,9 +30,8 @@ func NewAuthHandler(db database.DatabaseInterface, sessions *sessions.SessionSto
 
 // SystemLoginRequest represents a system login request using master key
 type SystemLoginRequest struct {
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	MasterKey string `json:"masterKey"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
 }
 
 // SystemLoginResponse represents the response from system login
@@ -68,15 +67,8 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	
-	// Validate master key
-	if !ah.Security.ValidateMasterKey(req.MasterKey) {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": "Invalid master key",
-		})
-		return
-	}
+	// Master key is validated by RequireMasterKey middleware
+	// No need to validate it again here
 	
 	// Validate user identifier
 	if req.Username == "" && req.Email == "" {
@@ -351,8 +343,7 @@ func (ah *AuthHandler) RequireMasterKey(next http.HandlerFunc) http.HandlerFunc 
 
 // CreateUserRequest represents a request to create a user with master key
 type CreateUserRequest struct {
-	MasterKey string                 `json:"masterKey"`
-	UserData  map[string]interface{} `json:"userData"`
+	UserData map[string]interface{} `json:"userData"`
 }
 
 // HandleCreateUser creates a user with master key authentication
@@ -378,15 +369,8 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	
-	// Validate master key
-	if !ah.Security.ValidateMasterKey(req.MasterKey) {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": "Invalid master key",
-		})
-		return
-	}
+	// Master key is validated by RequireMasterKey middleware
+	// No need to validate it again here
 	
 	// Validate required user data
 	email, hasEmail := req.UserData["email"].(string)

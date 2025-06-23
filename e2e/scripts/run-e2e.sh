@@ -316,8 +316,8 @@ test_authentication_and_authorization() {
     local admin_response=$(curl -s -w "\n%{http_code}" -X POST \
         "http://localhost:$port/_admin/auth/create-user" \
         -H "Content-Type: application/json" \
+        -H "X-Master-Key: $master_key" \
         -d "{
-            \"masterKey\": \"$master_key\",
             \"userData\": {
                 \"username\": \"testadmin\",
                 \"email\": \"admin@test.com\",
@@ -338,8 +338,8 @@ test_authentication_and_authorization() {
     local user_response=$(curl -s -w "\n%{http_code}" -X POST \
         "http://localhost:$port/_admin/auth/create-user" \
         -H "Content-Type: application/json" \
+        -H "X-Master-Key: $master_key" \
         -d "{
-            \"masterKey\": \"$master_key\",
             \"userData\": {
                 \"username\": \"testuser\",
                 \"email\": \"user@test.com\",
@@ -486,7 +486,8 @@ test_authentication_and_authorization() {
     local system_admin_login=$(curl -s -c "$RESULTS_DIR/system_admin_cookies.txt" -X POST \
         "http://localhost:$port/_admin/auth/system-login" \
         -H "Content-Type: application/json" \
-        -d "{\"username\":\"testadmin\",\"masterKey\":\"$master_key\"}")
+        -H "X-Master-Key: $master_key" \
+        -d "{\"username\":\"testadmin\"}")
     
     local system_login_success=$(echo "$system_admin_login" | jq -r '.success // false')
     if [ "$system_login_success" = "true" ]; then
