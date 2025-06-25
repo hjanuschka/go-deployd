@@ -8,35 +8,27 @@ func Run(ctx *EventContext) error {
     }
     
     // Check if user is authenticated
-    if ctx.Me == nil {
+    if !ctx.Ctx.IsAuthenticated {
         ctx.Cancel("Authentication required", 401)
         return nil
     }
     
-    // Helper function to get user ID from context with multiple field name attempts
+    // Helper function to get user ID from JWT authentication context
     getUserID := func() string {
-        // Try all possible field name variations for compatibility
-        if userID, ok := ctx.Me["userId"].(string); ok {
-            return userID
+        // JWT authentication provides user ID directly via context
+        if ctx.Ctx != nil && ctx.Ctx.UserID != "" {
+            return ctx.Ctx.UserID
         }
-        if userID, ok := ctx.Me["id"].(string); ok {
-            return userID
-        }
-        if userID, ok := ctx.Me["userid"].(string); ok {
-            return userID
-        }
-        if userID, ok := ctx.Me["UserID"].(string); ok {
-            return userID
-        }
-        // Check nested user object (from admin sessions)
-        if userObj, ok := ctx.Me["user"].(map[string]interface{}); ok {
-            if userID, ok := userObj["userId"].(string); ok {
+        
+        // Fallback: try to get from Me object (for backward compatibility)
+        if ctx.Me != nil {
+            if userID, ok := ctx.Me["id"].(string); ok {
                 return userID
             }
-            if userID, ok := userObj["userid"].(string); ok {
+            if userID, ok := ctx.Me["userId"].(string); ok {
                 return userID
             }
-            if userID, ok := userObj["id"].(string); ok {
+            if userID, ok := ctx.Me["UserID"].(string); ok {
                 return userID
             }
         }
