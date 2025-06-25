@@ -1018,3 +1018,8 @@ func (c *Collection) simulateMongoOperations(doc map[string]interface{}, operati
 func (c *Collection) valuesEqual(a, b interface{}) bool {
 	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 }
+
+// GetConfig returns the collection configuration
+func (c *Collection) GetConfig() *CollectionConfig {
+	return c.config
+}

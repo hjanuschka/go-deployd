@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/hjanuschka/go-deployd/internal/auth"
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/database"
@@ -22,14 +24,27 @@ type Router struct {
 	sessions      *sessions.SessionStore
 	development   bool
 	configPath    string
+	jwtManager    *auth.JWTManager
 }
 
 func New(db database.DatabaseInterface, sessions *sessions.SessionStore, development bool, configPath string) *Router {
+	// Load security config to set up JWT
+	var jwtManager *auth.JWTManager
+	securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
+	if err == nil {
+		jwtDuration, err := time.ParseDuration(securityConfig.JWTExpiration)
+		if err != nil {
+			jwtDuration = 24 * time.Hour
+		}
+		jwtManager = auth.NewJWTManager(securityConfig.JWTSecret, jwtDuration)
+	}
+
 	r := &Router{
 		db:          db,
 		sessions:    sessions,
 		development: development,
 		configPath:  configPath,
+		jwtManager:  jwtManager,
 	}
 	
 	r.loadResources()
@@ -120,15 +135,61 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Set session cookie
 	r.sessions.SetSessionCookie(w, session)
 	
-	// Check for master key authentication
-	masterKey := req.Header.Get("X-Master-Key")
-	if masterKey != "" {
-		// Load security config to validate master key
-		securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
-		if err == nil && securityConfig.ValidateMasterKey(masterKey) {
-			// Set isRoot flag in session for master key authentication
-			session.Set("isRoot", true)
+	// Check for authentication (JWT token, master key, or session)
+	isAuthenticated := false
+	isRoot := false
+	userID := ""
+	username := ""
+
+	// 1. Check JWT token authentication
+	authHeader := req.Header.Get("Authorization")
+	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") && r.jwtManager != nil {
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if claims, err := r.jwtManager.ValidateToken(token); err == nil {
+			isAuthenticated = true
+			isRoot = claims.IsRoot
+			userID = claims.UserID
+			username = claims.Username
+			// Set session values for compatibility
+			session.Set("isRoot", isRoot)
+			session.Set("userID", userID)
+			session.Set("username", username)
 			session.Save(r.sessions)
+		}
+	}
+
+	// 2. Check for master key authentication
+	if !isAuthenticated {
+		masterKey := req.Header.Get("X-Master-Key")
+		if masterKey != "" {
+			// Load security config to validate master key
+			securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
+			if err == nil && securityConfig.ValidateMasterKey(masterKey) {
+				isAuthenticated = true
+				isRoot = true
+				userID = "root"
+				username = "root"
+				// Set session values
+				session.Set("isRoot", true)
+				session.Set("userID", userID)
+				session.Set("username", username)
+				session.Save(r.sessions)
+			}
+		}
+	}
+
+	// 3. Check session authentication (if not already authenticated)
+	if !isAuthenticated {
+		if rootFlag, ok := session.Get("isRoot").(bool); ok && rootFlag {
+			isAuthenticated = true
+			isRoot = true
+		}
+		if uid, ok := session.Get("userID").(string); ok && uid != "" {
+			isAuthenticated = true
+			userID = uid
+		}
+		if uname, ok := session.Get("username").(string); ok {
+			username = uname
 		}
 	}
 	

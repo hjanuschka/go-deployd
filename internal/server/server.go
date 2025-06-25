@@ -13,12 +13,17 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/hjanuschka/go-deployd/internal/admin"
+	"github.com/hjanuschka/go-deployd/internal/auth"
+	appconfig "github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/database"
 	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/metrics"
+	"github.com/hjanuschka/go-deployd/internal/resources"
 	"github.com/hjanuschka/go-deployd/internal/router"
 	"github.com/hjanuschka/go-deployd/internal/sessions"
+	"github.com/hjanuschka/go-deployd/internal/swagger"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 type Config struct {
@@ -35,13 +40,15 @@ type Config struct {
 }
 
 type Server struct {
-	config      *Config
-	db          database.DatabaseInterface
-	sessions    *sessions.SessionStore
-	router      *router.Router
+	config       *Config
+	db           database.DatabaseInterface
+	sessions     *sessions.SessionStore
+	router       *router.Router
 	adminHandler *admin.AdminHandler
-	upgrader    websocket.Upgrader
-	httpMux     *mux.Router
+	upgrader     websocket.Upgrader
+	httpMux      *mux.Router
+	jwtManager   *auth.JWTManager
+	securityConfig *appconfig.SecurityConfig
 }
 
 func New(config *Config) (*Server, error) {
@@ -81,6 +88,25 @@ func New(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to initialize logging: %w", err)
 	}
 
+	// Load security configuration
+	configDir := appconfig.GetConfigDir()
+	securityConfig, err := appconfig.LoadSecurityConfig(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load security config: %w", err)
+	}
+
+	// Parse JWT expiration duration
+	jwtDuration, err := time.ParseDuration(securityConfig.JWTExpiration)
+	if err != nil {
+		jwtDuration = 24 * time.Hour // Default to 24 hours if parsing fails
+		logging.Error("Failed to parse JWT expiration, using default 24h", "auth", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	// Create JWT manager
+	jwtManager := auth.NewJWTManager(securityConfig.JWTSecret, jwtDuration)
+
 	// Log server startup
 	logging.Info("Starting go-deployd server", "server", map[string]interface{}{
 		"port":         config.Port,
@@ -98,6 +124,8 @@ func New(config *Config) (*Server, error) {
 			},
 		},
 		httpMux: mux.NewRouter(),
+		jwtManager: jwtManager,
+		securityConfig: securityConfig,
 	}
 
 	s.router = router.New(s.db, s.sessions, config.Development, config.ConfigPath)
@@ -130,8 +158,14 @@ func (s *Server) setupRoutes() {
 	// Built-in API routes (like original Deployd)
 	s.setupBuiltinRoutes()
 
+	// Authentication routes
+	s.setupAuthRoutes()
+
 	// Metrics API routes
 	s.setupMetricsRoutes()
+
+	// API documentation routes
+	s.setupSwaggerRoutes()
 
 	// Serve dashboard static files with authentication
 	dashboardPath := filepath.Join("web", "dashboard")
@@ -556,4 +590,273 @@ func (s *Server) handlePeriodsMetrics(w http.ResponseWriter, r *http.Request) {
 		"period":  period,
 		"count":   len(metricsData),
 	})
+}
+
+func (s *Server) setupAuthRoutes() {
+	// Login endpoint
+	s.httpMux.HandleFunc("/auth/login", s.handleLogin).Methods("POST", "OPTIONS")
+	// Token validation endpoint
+	s.httpMux.HandleFunc("/auth/validate", s.handleTokenValidation).Methods("GET", "OPTIONS")
+}
+
+// LoginRequest represents the login request payload
+type LoginRequest struct {
+	Username  string `json:"username,omitempty"`
+	Password  string `json:"password,omitempty"`
+	MasterKey string `json:"masterKey,omitempty"`
+}
+
+// LoginResponse represents the login response
+type LoginResponse struct {
+	Token     string                 `json:"token"`
+	ExpiresAt int64                  `json:"expiresAt"`
+	User      map[string]interface{} `json:"user,omitempty"`
+	IsRoot    bool                   `json:"isRoot"`
+}
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	// Enable CORS
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	var userID, username string
+	var isRoot bool
+	var userData map[string]interface{}
+
+	// Check for master key authentication
+	if req.MasterKey != "" {
+		if s.securityConfig.ValidateMasterKey(req.MasterKey) {
+			userID = "root"
+			username = "root"
+			isRoot = true
+		} else {
+			http.Error(w, `{"error": "Invalid master key"}`, http.StatusUnauthorized)
+			return
+		}
+	} else if req.Username != "" && req.Password != "" {
+		// For now, user authentication is not fully implemented
+		// This would require proper context setup and user collection handling
+		http.Error(w, `{"error": "User authentication not available"}`, http.StatusNotImplemented)
+		return
+	} else {
+		http.Error(w, `{"error": "Username/password or masterKey required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Generate JWT token
+	token, err := s.jwtManager.GenerateToken(userID, username, isRoot)
+	if err != nil {
+		logging.Error("Failed to generate JWT token", "auth", map[string]interface{}{
+			"error": err.Error(),
+		})
+		http.Error(w, `{"error": "Failed to generate token"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate expiration time
+	duration, _ := time.ParseDuration(s.securityConfig.JWTExpiration)
+	expiresAt := time.Now().Add(duration).Unix()
+
+	// Prepare response
+	response := LoginResponse{
+		Token:     token,
+		ExpiresAt: expiresAt,
+		IsRoot:    isRoot,
+		User:      userData,
+	}
+
+	// Also set session for backward compatibility
+	session, _ := s.sessions.GetSessionFromRequest(r)
+	session.Set("userID", userID)
+	session.Set("username", username)
+	session.Set("isRoot", isRoot)
+	session.Save(s.sessions)
+	s.sessions.SetSessionCookie(w, session)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func (s *Server) handleTokenValidation(w http.ResponseWriter, r *http.Request) {
+	// Enable CORS
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Extract token from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, `{"error": "Authorization header required"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Remove "Bearer " prefix
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == authHeader {
+		http.Error(w, `{"error": "Bearer token required"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Validate token
+	claims, err := s.jwtManager.ValidateToken(token)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "Invalid token: %s"}`, err.Error()), http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"valid":    true,
+		"userID":   claims.UserID,
+		"username": claims.Username,
+		"isRoot":   claims.IsRoot,
+		"exp":      claims.ExpiresAt.Unix(),
+	})
+}
+
+func (s *Server) setupSwaggerRoutes() {
+	// Create swagger generator
+	baseURL := fmt.Sprintf("http://localhost:%d", s.config.Port)
+	generator := swagger.NewGenerator(baseURL, s.router.GetResources())
+
+	// Overall API documentation
+	s.httpMux.HandleFunc("/api/docs/openapi.json", s.handleOverallSwagger(generator)).Methods("GET")
+	
+	// Collection-specific API documentation
+	s.httpMux.HandleFunc("/api/docs/{collection}/openapi.json", s.handleCollectionSwagger(generator)).Methods("GET")
+	
+	// Swagger UI for overall API
+	s.httpMux.PathPrefix("/api/docs/").Handler(httpSwagger.Handler(
+		httpSwagger.URL("/api/docs/openapi.json"),
+		httpSwagger.DeepLinking(true),
+	))
+
+	// Collection-specific Swagger UI
+	s.httpMux.HandleFunc("/api/docs/{collection}/", s.handleCollectionSwaggerUI()).Methods("GET")
+}
+
+func (s *Server) handleOverallSwagger(generator *swagger.Generator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Enable CORS
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+
+		spec, err := generator.GenerateSpec()
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "Failed to generate API spec: %s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(spec)
+	}
+}
+
+func (s *Server) handleCollectionSwagger(generator *swagger.Generator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		collectionName := vars["collection"]
+
+		// Enable CORS
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+
+		// Find the collection
+		var targetCollection resources.Resource
+		for _, collection := range s.router.GetResources() {
+			if collection.GetName() == collectionName {
+				targetCollection = collection
+				break
+			}
+		}
+
+		if targetCollection == nil {
+			http.Error(w, fmt.Sprintf(`{"error": "Collection '%s' not found"}`, collectionName), http.StatusNotFound)
+			return
+		}
+
+		spec, err := generator.GenerateCollectionSpec(targetCollection)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "Failed to generate API spec: %s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(spec)
+	}
+}
+
+func (s *Server) handleCollectionSwaggerUI() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		collectionName := vars["collection"]
+
+		// Redirect to Swagger UI with collection-specific spec
+		swaggerURL := fmt.Sprintf("/api/docs/%s/openapi.json", collectionName)
+		
+		// Serve custom Swagger UI HTML
+		html := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <title>%s API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@3.52.5/swagger-ui.css" />
+    <style>
+        html {
+            box-sizing: border-box;
+            overflow: -moz-scrollbars-vertical;
+            overflow-y: scroll;
+        }
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+        body {
+            margin:0;
+            background: #fafafa;
+        }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@3.52.5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@3.52.5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            const ui = SwaggerUIBundle({
+                url: '%s',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout"
+            });
+        }
+    </script>
+</body>
+</html>
+`, strings.Title(collectionName), swaggerURL)
+
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(html))
+	}
 }

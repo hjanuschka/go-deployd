@@ -13,8 +13,10 @@ import (
 type SecurityConfig struct {
 	MasterKey           string `json:"masterKey"`
 	SessionTTL          int    `json:"sessionTTL"`          // in seconds
-	TokenTTL            int    `json:"tokenTTL"`            // in seconds
+	TokenTTL            int    `json:"tokenTTL"`            // in seconds (deprecated, use JWTExpiration)
 	AllowRegistration   bool   `json:"allowRegistration"`   // allow public user registration
+	JWTSecret           string `json:"jwtSecret"`           // JWT signing secret
+	JWTExpiration       string `json:"jwtExpiration"`       // JWT expiration duration (e.g., "24h", "1d")
 }
 
 // DefaultSecurityConfig returns the default security configuration
@@ -22,8 +24,10 @@ func DefaultSecurityConfig() *SecurityConfig {
 	return &SecurityConfig{
 		MasterKey:         "",
 		SessionTTL:        86400,  // 24 hours
-		TokenTTL:          2592000, // 30 days
+		TokenTTL:          2592000, // 30 days (deprecated)
 		AllowRegistration: true,   // allow registration by default
+		JWTSecret:         "",
+		JWTExpiration:     "24h",  // 24 hours default
 	}
 }
 
@@ -73,6 +77,23 @@ func LoadSecurityConfig(configDir string) (*SecurityConfig, error) {
 		fmt.Printf("🔐 Generated missing master key: %s\n", config.MasterKey)
 	}
 	
+	// Generate JWT secret if it's missing
+	if config.JWTSecret == "" {
+		config.JWTSecret = generateJWTSecret()
+		if err := SaveSecurityConfig(&config, configDir); err != nil {
+			return nil, fmt.Errorf("failed to save updated security config: %w", err)
+		}
+		fmt.Printf("🔑 Generated JWT secret\n")
+	}
+	
+	// Set default JWT expiration if missing
+	if config.JWTExpiration == "" {
+		config.JWTExpiration = "24h"
+		if err := SaveSecurityConfig(&config, configDir); err != nil {
+			return nil, fmt.Errorf("failed to save updated security config: %w", err)
+		}
+	}
+	
 	return &config, nil
 }
 
@@ -103,6 +124,17 @@ func generateMasterKey() string {
 	}
 	
 	return "mk_" + hex.EncodeToString(bytes)
+}
+
+// generateJWTSecret generates a cryptographically secure JWT secret
+func generateJWTSecret() string {
+	// Generate 32 bytes (256 bits) of random data
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		panic(fmt.Sprintf("failed to generate secure JWT secret: %v", err))
+	}
+	
+	return hex.EncodeToString(bytes)
 }
 
 // ValidateMasterKey checks if the provided key matches the configured master key
