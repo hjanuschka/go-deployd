@@ -89,7 +89,7 @@ export default function Metrics() {
       };
 
       // Build collection query parameter
-      const collectionParam = selectedCollection !== 'all' ? `?collection=${selectedCollection}` : '';
+      const collectionParam = selectedCollection !== 'overall' && selectedCollection !== 'all' ? `?collection=${selectedCollection}` : '';
 
       // Fetch system stats
       const systemResponse = await fetch('/_dashboard/api/metrics/system', { headers });
@@ -114,7 +114,7 @@ export default function Metrics() {
       setAggregatedMetrics(aggregatedData.metrics || []);
 
       // Fetch event-specific metrics for selected collection
-      if (selectedCollection !== 'all') {
+      if (selectedCollection !== 'overall' && selectedCollection !== 'all') {
         const eventResponse = await fetch(`/_dashboard/api/metrics/events?collection=${selectedCollection}&period=${aggregatedPeriod}`, { headers });
         if (eventResponse.ok) {
           const eventData = await eventResponse.json();
@@ -227,7 +227,8 @@ export default function Metrics() {
             >
               {collections.map(collection => (
                 <option key={collection} value={collection}>
-                  {collection === 'all' ? 'All Collections' : collection}
+                  {collection === 'overall' ? 'Overall' : 
+                   collection === 'all' ? 'All Collections' : collection}
                 </option>
               ))}
             </select>
@@ -435,7 +436,7 @@ export default function Metrics() {
       </SimpleGrid>
 
       {/* Event Performance (when collection is selected) */}
-      {selectedCollection !== 'all' && Object.keys(eventMetrics).length > 0 && (
+      {selectedCollection !== 'overall' && selectedCollection !== 'all' && Object.keys(eventMetrics).length > 0 && (
         <Card bg={cardBg} borderColor={borderColor}>
           <CardHeader>
             <Heading size="md">Event Performance - {selectedCollection}</Heading>
