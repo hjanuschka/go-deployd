@@ -6684,6 +6684,930 @@
         "remote_addr": "[::1]:54946",
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
       }
+    },
+    {
+      "id": "20250625111420-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:20.690153+02:00",
+      "duration": 201250,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:50534",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111420-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:20.798074+02:00",
+      "duration": 222667,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:50536",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111420-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:20.799441+02:00",
+      "duration": 145083,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 170,
+        "remote_addr": "[::1]:50534",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111420-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:20.80033+02:00",
+      "duration": 45042,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:50537",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.608632+02:00",
+      "duration": 1191167,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 782,
+        "remote_addr": "[::1]:50534",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.63998+02:00",
+      "duration": 35541500,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 173847,
+        "remote_addr": "[::1]:50537",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.653112+02:00",
+      "duration": 14753000,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 174218,
+        "remote_addr": "[::1]:50534",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.662176+02:00",
+      "duration": 21803500,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 174590,
+        "remote_addr": "[::1]:50536",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.784499+02:00",
+      "duration": 97167,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 111,
+        "remote_addr": "[::1]:50536",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.823686+02:00",
+      "duration": 34125,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/events",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 75,
+        "remote_addr": "[::1]:50534",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.823776+02:00",
+      "duration": 114625,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9319,
+        "remote_addr": "[::1]:50536",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.838844+02:00",
+      "duration": 201916,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9329,
+        "remote_addr": "[::1]:50536",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.838891+02:00",
+      "duration": 208458,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9329,
+        "remote_addr": "[::1]:50534",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111421-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:14:21.921829+02:00",
+      "duration": 28709,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/events",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 864,
+        "remote_addr": "[::1]:50534",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111520-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:20.96333+02:00",
+      "duration": 1308500,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 172,
+        "remote_addr": "[::1]:51566",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111520-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:20.96643+02:00",
+      "duration": 1434375,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:51567",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111520-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:20.967266+02:00",
+      "duration": 47834,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:51566",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111521-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:21.062997+02:00",
+      "duration": 163375,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 782,
+        "remote_addr": "[::1]:51566",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111521-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:21.065169+02:00",
+      "duration": 1464917,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 179013,
+        "remote_addr": "[::1]:51567",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111521-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:21.067222+02:00",
+      "duration": 1859250,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 179386,
+        "remote_addr": "[::1]:51566",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111521-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:21.105116+02:00",
+      "duration": 22875,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 111,
+        "remote_addr": "[::1]:51566",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111521-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:21.149064+02:00",
+      "duration": 159666,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9320,
+        "remote_addr": "[::1]:51566",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111521-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:21.149386+02:00",
+      "duration": 66083,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9328,
+        "remote_addr": "[::1]:51567",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111521-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:15:21.152245+02:00",
+      "duration": 14209,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/events",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 75,
+        "remote_addr": "[::1]:51567",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.096461+02:00",
+      "duration": 275083,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:52814",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.186181+02:00",
+      "duration": 285041,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:52815",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.188863+02:00",
+      "duration": 89541,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:52816",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.216766+02:00",
+      "duration": 85542,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:52819",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.455911+02:00",
+      "duration": 1166209,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 182694,
+        "remote_addr": "[::1]:52819",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.467141+02:00",
+      "duration": 60042,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 781,
+        "remote_addr": "[::1]:52816",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.469155+02:00",
+      "duration": 1804167,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 183435,
+        "remote_addr": "[::1]:52815",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.481814+02:00",
+      "duration": 4151833,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 183808,
+        "remote_addr": "[::1]:52819",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.491098+02:00",
+      "duration": 22792,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 111,
+        "remote_addr": "[::1]:52819",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.532002+02:00",
+      "duration": 33458,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/events",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 75,
+        "remote_addr": "[::1]:52819",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.533865+02:00",
+      "duration": 80042,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9330,
+        "remote_addr": "[::1]:52819",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.535156+02:00",
+      "duration": 201334,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9321,
+        "remote_addr": "[::1]:52815",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.569463+02:00",
+      "duration": 207291,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9329,
+        "remote_addr": "[::1]:52815",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111621-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:16:21.632988+02:00",
+      "duration": 29666,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/events",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 866,
+        "remote_addr": "[::1]:52815",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.019797+02:00",
+      "duration": 532334,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:53293",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.02071+02:00",
+      "duration": 167417,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 172,
+        "remote_addr": "[::1]:53294",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.021911+02:00",
+      "duration": 49792,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 172,
+        "remote_addr": "[::1]:53295",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.02582+02:00",
+      "duration": 243791,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 172,
+        "remote_addr": "[::1]:53296",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.03861+02:00",
+      "duration": 72334,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 782,
+        "remote_addr": "[::1]:53295",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.040239+02:00",
+      "duration": 2235042,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 187850,
+        "remote_addr": "[::1]:53296",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.043287+02:00",
+      "duration": 1740209,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 188590,
+        "remote_addr": "[::1]:53296",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.047673+02:00",
+      "duration": 1566875,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 188963,
+        "remote_addr": "[::1]:53295",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.072556+02:00",
+      "duration": 58625,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 111,
+        "remote_addr": "[::1]:53295",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.083773+02:00",
+      "duration": 98833,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9321,
+        "remote_addr": "[::1]:53295",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.102021+02:00",
+      "duration": 85458,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9321,
+        "remote_addr": "[::1]:53295",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.102062+02:00",
+      "duration": 10417,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/events",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 75,
+        "remote_addr": "[::1]:53296",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.139148+02:00",
+      "duration": 196542,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9331,
+        "remote_addr": "[::1]:53295",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111721-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:17:21.199012+02:00",
+      "duration": 32291,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/events",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 865,
+        "remote_addr": "[::1]:53295",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.110598+02:00",
+      "duration": 270416,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 172,
+        "remote_addr": "[::1]:53748",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.11378+02:00",
+      "duration": 195750,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 172,
+        "remote_addr": "[::1]:53750",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.114557+02:00",
+      "duration": 57208,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 172,
+        "remote_addr": "[::1]:53751",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.117591+02:00",
+      "duration": 469584,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/system",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 171,
+        "remote_addr": "[::1]:53748",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.149778+02:00",
+      "duration": 54291,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 782,
+        "remote_addr": "[::1]:53748",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.152004+02:00",
+      "duration": 2370666,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 193005,
+        "remote_addr": "[::1]:53751",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.154161+02:00",
+      "duration": 2453791,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 193373,
+        "remote_addr": "[::1]:53750",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.171796+02:00",
+      "duration": 1748667,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/detailed",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 194119,
+        "remote_addr": "[::1]:53748",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.184646+02:00",
+      "duration": 37292,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 111,
+        "remote_addr": "[::1]:53748",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.21052+02:00",
+      "duration": 1077000,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9322,
+        "remote_addr": "[::1]:53748",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.229697+02:00",
+      "duration": 20416,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/events",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 75,
+        "remote_addr": "[::1]:53748",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.229753+02:00",
+      "duration": 70500,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9322,
+        "remote_addr": "[::1]:53750",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.341931+02:00",
+      "duration": 179333,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/periods",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 9321,
+        "remote_addr": "[::1]:53748",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
+    },
+    {
+      "id": "20250625111821-000000",
+      "type": 0,
+      "timestamp": "2025-06-25T11:18:21.416204+02:00",
+      "duration": 30709,
+      "method": "GET",
+      "path": "/_dashboard/api/metrics/events",
+      "status": 200,
+      "metadata": {
+        "bytes_written": 866,
+        "remote_addr": "[::1]:53748",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+      }
     }
   ],
   "hourly_agg": {
@@ -6789,13 +7713,13 @@
       "timestamp": "2025-06-25T11:00:00+02:00",
       "collection": "_dashboard/api/metrics/detailed",
       "period": "hourly",
-      "count": 11,
-      "avg_duration": 2870507.272727273,
-      "min_duration": 69541,
-      "max_duration": 13132791,
+      "count": 30,
+      "avg_duration": 4259213.833333334,
+      "min_duration": 54291,
+      "max_duration": 35541500,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 11,
+      "request_count": 30,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -6817,13 +7741,13 @@
       "timestamp": "2025-06-25T11:00:00+02:00",
       "collection": "_dashboard/api/metrics/events",
       "period": "hourly",
-      "count": 5,
-      "avg_duration": 79091.6,
-      "min_duration": 13584,
+      "count": 14,
+      "avg_duration": 44961.28571428572,
+      "min_duration": 10417,
       "max_duration": 173792,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 5,
+      "request_count": 14,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -6845,13 +7769,13 @@
       "timestamp": "2025-06-25T11:00:00+02:00",
       "collection": "_dashboard/api/metrics/periods",
       "period": "hourly",
-      "count": 11,
-      "avg_duration": 612382.8181818182,
+      "count": 30,
+      "avg_duration": 330734.7666666667,
       "min_duration": 16834,
       "max_duration": 3099000,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 11,
+      "request_count": 30,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -6873,13 +7797,13 @@
       "timestamp": "2025-06-25T11:00:00+02:00",
       "collection": "_dashboard/api/metrics/system",
       "period": "hourly",
-      "count": 11,
-      "avg_duration": 564984.7272727273,
-      "min_duration": 70375,
+      "count": 30,
+      "avg_duration": 411369.4,
+      "min_duration": 45042,
       "max_duration": 3036458,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 11,
+      "request_count": 30,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -7281,13 +8205,13 @@
       "timestamp": "2025-06-25T02:00:00+02:00",
       "collection": "_dashboard/api/metrics/detailed",
       "period": "daily",
-      "count": 107,
-      "avg_duration": 1971273.7196261683,
+      "count": 126,
+      "avg_duration": 2437516.8492063493,
       "min_duration": 29042,
-      "max_duration": 16231459,
+      "max_duration": 35541500,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 107,
+      "request_count": 126,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -7295,13 +8219,13 @@
       "timestamp": "2025-06-25T02:00:00+02:00",
       "collection": "_dashboard/api/metrics/events",
       "period": "daily",
-      "count": 56,
-      "avg_duration": 80087.82142857139,
-      "min_duration": 13584,
+      "count": 65,
+      "avg_duration": 72598.73846153844,
+      "min_duration": 10417,
       "max_duration": 595625,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 56,
+      "request_count": 65,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -7309,13 +8233,13 @@
       "timestamp": "2025-06-25T02:00:00+02:00",
       "collection": "_dashboard/api/metrics/periods",
       "period": "daily",
-      "count": 97,
-      "avg_duration": 284991.8453608246,
+      "count": 116,
+      "avg_duration": 265776.2155172411,
       "min_duration": 16833,
       "max_duration": 3099000,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 97,
+      "request_count": 116,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -7323,13 +8247,13 @@
       "timestamp": "2025-06-25T02:00:00+02:00",
       "collection": "_dashboard/api/metrics/system",
       "period": "daily",
-      "count": 107,
-      "avg_duration": 471336.0186915888,
-      "min_duration": 46000,
+      "count": 126,
+      "avg_duration": 448882.5714285714,
+      "min_duration": 45042,
       "max_duration": 3983666,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 107,
+      "request_count": 126,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -7731,13 +8655,13 @@
       "timestamp": "2025-06-01T00:00:00+02:00",
       "collection": "_dashboard/api/metrics/detailed",
       "period": "monthly",
-      "count": 107,
-      "avg_duration": 1971273.7196261683,
+      "count": 126,
+      "avg_duration": 2437516.8492063493,
       "min_duration": 29042,
-      "max_duration": 16231459,
+      "max_duration": 35541500,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 107,
+      "request_count": 126,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -7745,13 +8669,13 @@
       "timestamp": "2025-06-01T00:00:00+02:00",
       "collection": "_dashboard/api/metrics/events",
       "period": "monthly",
-      "count": 56,
-      "avg_duration": 80087.82142857139,
-      "min_duration": 13584,
+      "count": 65,
+      "avg_duration": 72598.73846153844,
+      "min_duration": 10417,
       "max_duration": 595625,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 56,
+      "request_count": 65,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -7759,13 +8683,13 @@
       "timestamp": "2025-06-01T00:00:00+02:00",
       "collection": "_dashboard/api/metrics/periods",
       "period": "monthly",
-      "count": 97,
-      "avg_duration": 284991.8453608246,
+      "count": 116,
+      "avg_duration": 265776.2155172411,
       "min_duration": 16833,
       "max_duration": 3099000,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 97,
+      "request_count": 116,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -7773,13 +8697,13 @@
       "timestamp": "2025-06-01T00:00:00+02:00",
       "collection": "_dashboard/api/metrics/system",
       "period": "monthly",
-      "count": 107,
-      "avg_duration": 471336.0186915888,
-      "min_duration": 46000,
+      "count": 126,
+      "avg_duration": 448882.5714285714,
+      "min_duration": 45042,
       "max_duration": 3983666,
       "error_count": 0,
       "error_rate": 0,
-      "request_count": 107,
+      "request_count": 126,
       "database_ops": 0,
       "hook_calls": 0
     },
@@ -8136,5 +9060,5 @@
       }
     ]
   },
-  "last_save": "2025-06-25T11:02:57.794748+02:00"
+  "last_save": "2025-06-25T11:18:25.593388+02:00"
 }
