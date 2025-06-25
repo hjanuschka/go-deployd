@@ -441,7 +441,7 @@ func (c *Collector) GetDetailedMetricsByCollection(collection string, since time
 	for _, metric := range c.detailedMetrics {
 		if metric.Timestamp.After(since) {
 			metricCollection := c.extractCollection(metric)
-			if collection == "all" || metricCollection == collection {
+			if collection == "overall" || collection == "all" || metricCollection == collection {
 				result = append(result, metric)
 			}
 		}
@@ -468,7 +468,7 @@ func (c *Collector) GetAggregatedMetrics(period string, collection string, since
 	var result []AggregatedMetric
 	for _, agg := range aggMap {
 		if agg.Timestamp.After(since) {
-			if collection == "all" || collection == "" || agg.Collection == collection {
+			if collection == "overall" || collection == "all" || collection == "" || agg.Collection == collection {
 				result = append(result, agg)
 			}
 		}
@@ -480,7 +480,7 @@ func (c *Collector) GetEventMetrics(collection string) map[string][]Metric {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if collection == "all" || collection == "" {
+	if collection == "overall" || collection == "all" || collection == "" {
 		return c.eventMetrics
 	}
 
@@ -498,6 +498,7 @@ func (c *Collector) GetCollections() []string {
 	defer c.mu.RUnlock()
 
 	collections := make(map[string]bool)
+	collections["overall"] = true
 	collections["all"] = true
 	collections["system"] = true
 

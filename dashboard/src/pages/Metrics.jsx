@@ -48,7 +48,7 @@ export default function Metrics() {
   const [aggregatedMetrics, setAggregatedMetrics] = useState([]);
   const [eventMetrics, setEventMetrics] = useState({});
   const [collections, setCollections] = useState(['all']);
-  const [selectedCollection, setSelectedCollection] = useState('all');
+  const [selectedCollection, setSelectedCollection] = useState('overall');
   const [timeRange, setTimeRange] = useState('24h');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
