@@ -114,8 +114,9 @@ export default function Metrics() {
       setAggregatedMetrics(aggregatedData.metrics || []);
 
       // Fetch event-specific metrics for selected collection
-      if (selectedCollection !== 'overall' && selectedCollection !== 'all') {
-        const eventResponse = await fetch(`/_dashboard/api/metrics/events?collection=${selectedCollection}&period=${aggregatedPeriod}`, { headers });
+      if (selectedCollection !== 'all') {
+        const eventCollectionParam = selectedCollection === 'overall' ? '' : `&collection=${selectedCollection}`;
+        const eventResponse = await fetch(`/_dashboard/api/metrics/events?period=${aggregatedPeriod}${eventCollectionParam}`, { headers });
         if (eventResponse.ok) {
           const eventData = await eventResponse.json();
           setEventMetrics(eventData.events || {});
@@ -436,10 +437,10 @@ export default function Metrics() {
       </SimpleGrid>
 
       {/* Event Performance (when collection is selected) */}
-      {selectedCollection !== 'overall' && selectedCollection !== 'all' && Object.keys(eventMetrics).length > 0 && (
+      {selectedCollection !== 'all' && Object.keys(eventMetrics).length > 0 && (
         <Card bg={cardBg} borderColor={borderColor}>
           <CardHeader>
-            <Heading size="md">Event Performance - {selectedCollection}</Heading>
+            <Heading size="md">Event Performance{selectedCollection !== 'overall' ? ` - ${selectedCollection}` : ''}</Heading>
           </CardHeader>
           <CardBody>
             <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
