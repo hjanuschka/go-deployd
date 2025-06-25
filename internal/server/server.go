@@ -597,6 +597,8 @@ func (s *Server) setupAuthRoutes() {
 	s.httpMux.HandleFunc("/auth/login", s.handleLogin).Methods("POST", "OPTIONS")
 	// Token validation endpoint
 	s.httpMux.HandleFunc("/auth/validate", s.handleTokenValidation).Methods("GET", "OPTIONS")
+	// User info endpoint
+	s.httpMux.HandleFunc("/auth/me", s.handleMe).Methods("GET", "OPTIONS")
 }
 
 // LoginRequest represents the login request payload
@@ -677,13 +679,6 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		User:      userData,
 	}
 
-	// Also set session for backward compatibility
-	session, _ := s.sessions.GetSessionFromRequest(r)
-	session.Set("userID", userID)
-	session.Set("username", username)
-	session.Set("isRoot", isRoot)
-	session.Save(s.sessions)
-	s.sessions.SetSessionCookie(w, session)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -729,6 +724,73 @@ func (s *Server) handleTokenValidation(w http.ResponseWriter, r *http.Request) {
 		"isRoot":   claims.IsRoot,
 		"exp":      claims.ExpiresAt.Unix(),
 	})
+}
+
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	// Enable CORS
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Extract token from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, `{"error": "Authorization header required"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Remove "Bearer " prefix
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == authHeader {
+		http.Error(w, `{"error": "Bearer token required"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Validate token
+	claims, err := s.jwtManager.ValidateToken(token)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "Invalid token: %s"}`, err.Error()), http.StatusUnauthorized)
+		return
+	}
+
+	// For root users, return basic info
+	if claims.IsRoot {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":       claims.UserID,
+			"username": claims.Username,
+			"isRoot":   claims.IsRoot,
+		})
+		return
+	}
+
+	// For regular users, fetch user data from users collection
+	usersCollection := s.router.GetCollection("users")
+	if usersCollection == nil {
+		http.Error(w, `{"error": "Users collection not found"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch user data by ID
+	store := s.db.CreateStore("users")
+	
+	// Create query to find user by ID
+	query := database.NewQueryBuilder()
+	query.Where("id", "=", claims.UserID)
+	
+	userData, err := store.FindOne(r.Context(), query)
+	if err != nil {
+		http.Error(w, `{"error": "User not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(userData)
 }
 
 func (s *Server) setupSwaggerRoutes() {

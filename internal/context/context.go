@@ -14,14 +14,19 @@ type Context struct {
 	Request      *http.Request
 	Response     http.ResponseWriter
 	Resource     Resource
-	Session      *sessions.Session
-	SessionStore *sessions.SessionStore
+	Session      *sessions.Session  // Deprecated: kept for backward compatibility
+	SessionStore *sessions.SessionStore // Deprecated: kept for backward compatibility
 	Router       Router
 	URL          string
 	Query        map[string]interface{}
 	Body         map[string]interface{}
 	Method       string
 	Development  bool
+	// JWT Authentication data
+	UserID       string
+	Username     string
+	IsRoot       bool
+	IsAuthenticated bool
 	ctx          context.Context
 }
 
@@ -36,7 +41,40 @@ type Router interface {
 	Route(ctx *Context) error
 }
 
-func New(req *http.Request, res http.ResponseWriter, resource Resource, session *sessions.Session, sessionStore *sessions.SessionStore) *Context {
+// AuthData contains authentication information
+type AuthData struct {
+	UserID       string
+	Username     string
+	IsRoot       bool
+	IsAuthenticated bool
+}
+
+func New(req *http.Request, res http.ResponseWriter, resource Resource, auth *AuthData) *Context {
+	ctx := &Context{
+		Request:      req,
+		Response:     res,
+		Resource:     resource,
+		Method:       req.Method,
+		ctx:          req.Context(),
+	}
+
+	// Set authentication data
+	if auth != nil {
+		ctx.UserID = auth.UserID
+		ctx.Username = auth.Username
+		ctx.IsRoot = auth.IsRoot
+		ctx.IsAuthenticated = auth.IsAuthenticated
+	}
+
+	ctx.parseURL()
+	ctx.parseQuery()
+	ctx.parseBody()
+
+	return ctx
+}
+
+// NewWithSession creates a context with session support (deprecated)
+func NewWithSession(req *http.Request, res http.ResponseWriter, resource Resource, session *sessions.Session, sessionStore *sessions.SessionStore) *Context {
 	ctx := &Context{
 		Request:      req,
 		Response:     res,

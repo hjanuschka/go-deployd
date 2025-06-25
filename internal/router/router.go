@@ -1,7 +1,6 @@
 package router
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -125,17 +124,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	
-	// Get or create session
-	session, err := r.sessions.GetSessionFromRequest(req)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Session error: %v", err), http.StatusInternalServerError)
-		return
-	}
-	
-	// Set session cookie
-	r.sessions.SetSessionCookie(w, session)
-	
-	// Check for authentication (JWT token, master key, or session)
+	// Check for authentication (JWT token or master key only)
 	isAuthenticated := false
 	isRoot := false
 	userID := ""
@@ -150,15 +139,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			isRoot = claims.IsRoot
 			userID = claims.UserID
 			username = claims.Username
-			// Set session values for compatibility
-			session.Set("isRoot", isRoot)
-			session.Set("userID", userID)
-			session.Set("username", username)
-			session.Save(r.sessions)
 		}
 	}
 
-	// 2. Check for master key authentication
+	// 2. Check for master key authentication (fallback for admin operations)
 	if !isAuthenticated {
 		masterKey := req.Header.Get("X-Master-Key")
 		if masterKey != "" {
@@ -169,27 +153,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				isRoot = true
 				userID = "root"
 				username = "root"
-				// Set session values
-				session.Set("isRoot", true)
-				session.Set("userID", userID)
-				session.Set("username", username)
-				session.Save(r.sessions)
 			}
-		}
-	}
-
-	// 3. Check session authentication (if not already authenticated)
-	if !isAuthenticated {
-		if rootFlag, ok := session.Get("isRoot").(bool); ok && rootFlag {
-			isAuthenticated = true
-			isRoot = true
-		}
-		if uid, ok := session.Get("userID").(string); ok && uid != "" {
-			isAuthenticated = true
-			userID = uid
-		}
-		if uname, ok := session.Get("username").(string); ok {
-			username = uname
 		}
 	}
 	
@@ -200,8 +164,14 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	
-	// Create context
-	ctx := context.New(req, w, resource, session, r.sessions)
+	// Create context with authentication data
+	authData := &context.AuthData{
+		UserID:       userID,
+		Username:     username,
+		IsRoot:       isRoot,
+		IsAuthenticated: isAuthenticated,
+	}
+	ctx := context.New(req, w, resource, authData)
 	
 	// Handle the request
 	if err := resource.Handle(ctx); err != nil {
