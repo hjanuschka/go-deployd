@@ -33,7 +33,9 @@ if (this.createdAt) {
     this.createdAtFormatted = new Date(this.createdAt).toLocaleDateString();
 }
 
-// Log access for audit trail (only for authenticated users)
-if (me) {
-    console.log('Pet accessed:', this.name, 'by user:', me.id);
-}
+// Access logged for audit trail
+deployd.log("Pet data accessed", {
+    petId: data.id,
+    user: me,
+    hiddenFields: !me
+});

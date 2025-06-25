@@ -9,6 +9,13 @@ import (
 
 // Process data when creating new pets (Go version)
 func Run(ctx *EventContext) error {
+    // Log the creation attempt
+    deployd.Log("New pet creation started", map[string]interface{}{
+        "name": ctx.Data["name"],
+        "species": ctx.Data["species"],
+        "user": ctx.Me,
+    })
+    
     // Auto-generate unique identifier if not provided
     if _, hasPetId := ctx.Data["petId"]; !hasPetId {
         petId := fmt.Sprintf("PET-%d-%s", time.Now().Unix(), generateRandomString(8))

@@ -1554,6 +1554,7 @@ curl -H "Authorization: Bearer session_token_here" \\
                   subsections: [
                     { id: 'js-validation', title: 'Basic Validation Example' },
                     { id: 'npm-modules', title: 'Using npm Modules' },
+                    { id: 'js-logging', title: 'Logging and Debugging' },
                     { id: 'js-globals', title: 'Available Global Functions' }
                   ]
                 },
@@ -1563,6 +1564,7 @@ curl -H "Authorization: Bearer session_token_here" \\
                   subsections: [
                     { id: 'go-validation', title: 'Basic Validation Example' },
                     { id: 'go-packages', title: 'Using Third-Party Packages' },
+                    { id: 'go-logging', title: 'Logging and Debugging' },
                     { id: 'go-methods', title: 'Available EventContext Methods' }
                   ]
                 }
@@ -1714,8 +1716,42 @@ const nodemailer = require('nodemailer');
                     </Box>
 
                     <Box>
+                      <Text fontWeight="bold" mb={3}>Logging and Debugging</Text>
+                      <Text mb={2}>
+                        JavaScript events have access to <Code>deployd.log()</Code> for structured logging that 
+                        integrates with the server's logging system.
+                      </Text>
+                      <CodeBlock language="javascript">
+{`// Basic logging
+deployd.log("User action performed");
+
+// Structured logging with data
+deployd.log("Pet created", {
+    name: data.name,
+    species: data.species,
+    user: me,
+    timestamp: new Date()
+});
+
+// Conditional logging
+if (me && me.role === 'admin') {
+    deployd.log("Admin action", {
+        action: "bulk_update",
+        affectedDocs: updateCount,
+        adminUser: me.username
+    });
+}`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="gray.600" mt={2}>
+                        💡 Logging is automatically disabled in production mode for performance. 
+                        Logs appear in server output with source identification (e.g., "js:todos").
+                      </Text>
+                    </Box>
+
+                    <Box>
                       <Text fontWeight="bold" mb={3}>Available Global Functions</Text>
                       <VStack spacing={1} align="stretch">
+                        <Text>• <Code>deployd.log(message, data)</Code> - Structured logging (development only)</Text>
                         <Text>• <Code>error(field, message)</Code> - Add validation error</Text>
                         <Text>• <Code>hide(field)</Code> - Remove field from response</Text>
                         <Text>• <Code>protect(field)</Code> - Remove field from data</Text>
@@ -1825,8 +1861,42 @@ var EventHandler = &EventHandler{}`}
                     </Box>
 
                     <Box>
+                      <Text fontWeight="bold" mb={3}>Logging and Debugging</Text>
+                      <Text mb={2}>
+                        Go events have access to <Code>deployd.Log()</Code> for structured logging that 
+                        integrates with the server's logging system.
+                      </Text>
+                      <CodeBlock language="go">
+{`// Basic logging
+deployd.Log("User action performed")
+
+// Structured logging with data
+deployd.Log("Pet created", map[string]interface{}{
+    "name":      ctx.Data["name"],
+    "species":   ctx.Data["species"],
+    "user":      ctx.Me,
+    "timestamp": time.Now(),
+})
+
+// Conditional logging
+if ctx.IsRoot {
+    deployd.Log("Admin action", map[string]interface{}{
+        "action":       "bulk_update",
+        "affectedDocs": updateCount,
+        "adminUser":    ctx.Me["username"],
+    })
+}`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="gray.600" mt={2}>
+                        💡 Logging is automatically disabled in production mode for performance. 
+                        Logs appear in server output with source identification (e.g., "go:todos").
+                      </Text>
+                    </Box>
+
+                    <Box>
                       <Text fontWeight="bold" mb={3}>Available EventContext Methods</Text>
                       <VStack spacing={1} align="stretch">
+                        <Text>• <Code>deployd.Log(message, data)</Code> - Structured logging (development only)</Text>
                         <Text>• <Code>Error(field, message)</Code> - Add validation error</Text>
                         <Text>• <Code>Hide(field)</Code> - Remove field from response</Text>
                         <Text>• <Code>Protect(field)</Code> - Remove field from data</Text>

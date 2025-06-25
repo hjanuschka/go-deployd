@@ -28,6 +28,8 @@ type EventContext struct {
 	Internal   bool
 	Errors     map[string]string
 	Cancel     func(message string, statusCode int)
+	Log        func(message string, data ...map[string]interface{})
+	Resource   interface{ GetName() string }
 	hideFields []string
 }
 
@@ -206,6 +208,7 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 		Query:    ctx.Query,
 		Internal: false,
 		IsRoot:   ctx.Session != nil && ctx.Session.IsRoot(),
+		Resource: ctx.Resource,
 	}
 
 	if ctx.Session != nil {
@@ -237,6 +240,26 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 			StatusCode: statusCode,
 		}
 		panic("CANCEL")
+	}
+	
+	// Set up log function
+	eventCtx.Log = func(message string, data ...map[string]interface{}) {
+		// Only log in development mode
+		if !ctx.Development {
+			return
+		}
+		
+		source := "go"
+		if eventCtx.Resource != nil {
+			source = fmt.Sprintf("go:%s", eventCtx.Resource.GetName())
+		}
+		
+		var logData map[string]interface{}
+		if len(data) > 0 {
+			logData = data[0]
+		}
+		
+		logging.Info(message, source, logData)
 	}
 
 	// Use reflection to call the Run method

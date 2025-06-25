@@ -21,6 +21,7 @@ type Context struct {
 	Query        map[string]interface{}
 	Body         map[string]interface{}
 	Method       string
+	Development  bool
 	ctx          context.Context
 }
 

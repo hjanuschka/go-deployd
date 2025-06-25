@@ -40,9 +40,22 @@ func CreateGoWrapper(userCode string) string {
 	userFunctions := strings.Join(functions, "\n")
 	template := `package main
 
-import "reflect"
+import (
+	"reflect"
+)
 
 %s
+
+// deployd provides utility functions for event handlers
+var deployd = struct {
+	// Log writes a message to the application logs
+	Log func(message string, data ...map[string]interface{})
+}{
+	Log: func(message string, data ...map[string]interface{}) {
+		// This is a fallback function - actual logging is handled by the runtime
+		// when the context is properly set up in compile.go
+	},
+}
 
 // EventContext provides context for event scripts
 type EventContext struct {
@@ -66,6 +79,9 @@ type EventContext struct {
 	
 	// Cancel cancels the current operation with an error
 	Cancel func(message string, statusCode int)
+	
+	// Log writes a message to the application logs
+	Log func(message string, data ...map[string]interface{})
 	
 	// Hide removes a field from the response
 	hideFields []string
@@ -122,6 +138,7 @@ func (h eventHandler) Run(ctx interface{}) error {
 		Internal: safeGetBoolField(v, "Internal"),
 		Errors:   safeGetStringMapField(v, "Errors"),
 		Cancel:   safeGetCancelField(v, "Cancel"),
+		Log:      safeGetLogField(v, "Log"),
 	}
 	
 	return Run(localCtx)
@@ -179,6 +196,17 @@ func safeGetCancelField(v reflect.Value, fieldName string) func(string, int) {
 		return cancelFunc
 	}
 	return func(string, int) {} // no-op function
+}
+
+func safeGetLogField(v reflect.Value, fieldName string) func(string, ...map[string]interface{}) {
+	val := getFieldValue(v, fieldName)
+	if val == nil {
+		return deployd.Log // fallback to global deployd.Log
+	}
+	if logFunc, ok := val.(func(string, ...map[string]interface{})); ok {
+		return logFunc
+	}
+	return deployd.Log // fallback to global deployd.Log
 }
 `
 	return fmt.Sprintf(template, userImports, userFunctions)

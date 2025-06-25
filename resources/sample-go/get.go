@@ -83,6 +83,11 @@ func Run(ctx *EventContext) error {
     }
     
     // Access logged for audit trail
+    deployd.Log("Pet data accessed", map[string]interface{}{
+        "petId": ctx.Data["id"],
+        "user": ctx.Me,
+        "hiddenFields": len(ctx.Me) == 0,
+    })
     
     return nil
 }
