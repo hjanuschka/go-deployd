@@ -14,6 +14,16 @@ const (
 	DatabaseTypePostgres DatabaseType = "postgres"
 )
 
+// Config represents database connection configuration
+type Config struct {
+	Host     string
+	Port     int
+	Name     string
+	Username string // For MySQL/PostgreSQL
+	Password string // For MySQL/PostgreSQL
+	SSL      bool   // For MySQL/PostgreSQL
+}
+
 // DatabaseInterface defines the common interface for all database implementations
 type DatabaseInterface interface {
 	CreateStore(namespace string) StoreInterface

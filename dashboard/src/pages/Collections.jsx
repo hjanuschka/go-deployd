@@ -29,6 +29,7 @@ import {
   useColorModeValue,
   Spinner,
   useToast,
+  Flex,
 } from '@chakra-ui/react'
 import {
   FiDatabase,
@@ -37,6 +38,8 @@ import {
   FiTrash2,
   FiEye,
   FiRefreshCw,
+  FiChevronLeft,
+  FiChevronRight,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { apiService } from '../services/api'
@@ -46,6 +49,8 @@ function Collections() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [newCollectionName, setNewCollectionName] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [collectionsPerPage] = useState(12) // 4 rows x 3 columns
   const { isOpen, onOpen, onClose } = useDisclosure()
   const navigate = useNavigate()
   const toast = useToast()
@@ -176,6 +181,16 @@ function Collections() {
       .length
   }
 
+  // Pagination logic
+  const indexOfLastCollection = currentPage * collectionsPerPage
+  const indexOfFirstCollection = indexOfLastCollection - collectionsPerPage
+  const currentCollections = collections.slice(indexOfFirstCollection, indexOfLastCollection)
+  const totalPages = Math.ceil(collections.length / collectionsPerPage)
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber)
+  }
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minH="300px">
@@ -225,8 +240,50 @@ function Collections() {
         </HStack>
       </HStack>
 
-      <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }} gap={6}>
-        {collections.map((collection) => (
+      {collections.length > 0 && (
+        <VStack spacing={6} align="stretch">
+          <HStack justify="space-between" align="center">
+            <Text fontSize="sm" color="gray.600">
+              Showing {indexOfFirstCollection + 1}-{Math.min(indexOfLastCollection, collections.length)} of {collections.length} collections
+            </Text>
+            
+            {totalPages > 1 && (
+              <HStack spacing={2}>
+                <IconButton
+                  icon={<FiChevronLeft />}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  isDisabled={currentPage === 1}
+                  aria-label="Previous page"
+                />
+                
+                {Array.from({ length: totalPages }, (_, index) => (
+                  <Button
+                    key={index + 1}
+                    size="sm"
+                    variant={currentPage === index + 1 ? "solid" : "outline"}
+                    colorScheme={currentPage === index + 1 ? "brand" : "gray"}
+                    onClick={() => handlePageChange(index + 1)}
+                  >
+                    {index + 1}
+                  </Button>
+                ))}
+                
+                <IconButton
+                  icon={<FiChevronRight />}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  isDisabled={currentPage === totalPages}
+                  aria-label="Next page"
+                />
+              </HStack>
+            )}
+          </HStack>
+
+          <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }} gap={6}>
+            {currentCollections.map((collection) => (
           <GridItem key={collection.name}>
             <Card 
               bg={cardBg}
@@ -311,52 +368,85 @@ function Collections() {
           </GridItem>
         ))}
 
-        {/* Add new collection card */}
-        <GridItem>
-          <Card 
-            bg={cardBg}
-            shadow="md"
-            borderWidth="2px"
-            borderStyle="dashed"
-            borderColor="brand.300"
-            _hover={{ 
-              borderColor: 'brand.500',
-              bg: useColorModeValue('brand.50', 'gray.600')
-            }}
-            transition="all 0.2s"
-            h="full"
-            cursor="pointer"
+            {/* Add new collection card only on first page */}
+            {currentPage === 1 && (
+              <GridItem>
+                <Card 
+                  bg={cardBg}
+                  shadow="md"
+                  borderWidth="2px"
+                  borderStyle="dashed"
+                  borderColor="brand.300"
+                  _hover={{ 
+                    borderColor: 'brand.500',
+                    bg: useColorModeValue('brand.50', 'gray.600')
+                  }}
+                  transition="all 0.2s"
+                  h="full"
+                  cursor="pointer"
+                  onClick={onOpen}
+                >
+                  <CardBody>
+                    <VStack 
+                      justify="center" 
+                      align="center" 
+                      h="full" 
+                      minH="200px"
+                      spacing={4}
+                    >
+                      <Box
+                        p={4}
+                        borderRadius="full"
+                        bg="brand.100"
+                        color="brand.500"
+                      >
+                        <FiPlus size={32} />
+                      </Box>
+                      <VStack spacing={1}>
+                        <Heading size="md" color="brand.600">
+                          Create Collection
+                        </Heading>
+                        <Text fontSize="sm" color="gray.500" textAlign="center">
+                          Add a new data collection to your API
+                        </Text>
+                      </VStack>
+                    </VStack>
+                  </CardBody>
+                </Card>
+              </GridItem>
+            )}
+          </Grid>
+        </VStack>
+      )}
+
+      {collections.length === 0 && !loading && (
+        <VStack spacing={6} align="center" py={12}>
+          <Box
+            p={6}
+            borderRadius="full"
+            bg="gray.100"
+            color="gray.400"
+          >
+            <FiDatabase size={48} />
+          </Box>
+          <VStack spacing={2}>
+            <Heading size="lg" color="gray.600">
+              No collections yet
+            </Heading>
+            <Text color="gray.500" textAlign="center">
+              Create your first collection to start building your API
+            </Text>
+          </VStack>
+          <Button
+            leftIcon={<FiPlus />}
+            colorScheme="brand"
+            size="lg"
             onClick={onOpen}
           >
-            <CardBody>
-              <VStack 
-                justify="center" 
-                align="center" 
-                h="full" 
-                minH="200px"
-                spacing={4}
-              >
-                <Box
-                  p={4}
-                  borderRadius="full"
-                  bg="brand.100"
-                  color="brand.500"
-                >
-                  <FiPlus size={32} />
-                </Box>
-                <VStack spacing={1}>
-                  <Heading size="md" color="brand.600">
-                    Create Collection
-                  </Heading>
-                  <Text fontSize="sm" color="gray.500" textAlign="center">
-                    Add a new data collection to your API
-                  </Text>
-                </VStack>
-              </VStack>
-            </CardBody>
-          </Card>
-        </GridItem>
-      </Grid>
+            Create Your First Collection
+          </Button>
+        </VStack>
+      )}
 
       {/* Create Collection Modal */}
       <Modal isOpen={isOpen} onClose={onClose}>

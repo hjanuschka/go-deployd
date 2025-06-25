@@ -1,4 +1,41 @@
-.PHONY: build run run_sqlite test clean deps mongo-start mongo-stop mongo-status dashboard dashboard-dev dashboard-build e2e-test
+.PHONY: help build run run_sqlite run_mysql test clean deps mongo-start mongo-stop mongo-status dashboard dashboard-dev dashboard-build e2e-test e2e-test-mysql
+
+# Show help message with available targets
+help:
+	@echo "🚀 go-deployd Makefile Commands"
+	@echo ""
+	@echo "🏗️  Build Commands:"
+	@echo "  make build                Build the binary"
+	@echo "  make build-all           Build for multiple platforms"
+	@echo "  make dashboard-build     Build dashboard for production"
+	@echo ""
+	@echo "▶️  Run Commands:"
+	@echo "  make run                 Run with MongoDB (requires MongoDB)"
+	@echo "  make run_sqlite          Run with SQLite (no external DB required)"
+	@echo "  make run_mysql           Run with MySQL (requires .env config)"
+	@echo "  make dashboard-dev       Run dashboard in dev mode"
+	@echo ""
+	@echo "🧪 Test Commands:"
+	@echo "  make test                Run Go tests"
+	@echo "  make e2e-test            Run E2E tests (SQLite + MongoDB)"
+	@echo "  make e2e-test-sqlite     Run E2E tests (SQLite only)"
+	@echo "  make e2e-test-mysql      Run MySQL E2E tests (requires .env)"
+	@echo ""
+	@echo "🗄️  Database Commands:"
+	@echo "  make mongo-start         Start local MongoDB"
+	@echo "  make mongo-stop          Stop local MongoDB"
+	@echo "  make mongo-status        Check MongoDB status"
+	@echo ""
+	@echo "🧹 Utility Commands:"
+	@echo "  make clean               Clean build artifacts"
+	@echo "  make clean-all           Clean everything (DB data, builds, etc.)"
+	@echo "  make deps                Install/update Go dependencies"
+	@echo "  make fmt                 Format Go code"
+	@echo "  make lint                Lint Go code (requires golangci-lint)"
+	@echo ""
+	@echo "📚 Setup:"
+	@echo "  For MySQL: cp .env.example .env && edit .env"
+	@echo "  For development: make deps && make dashboard-build"
 
 # Build the application
 build:
@@ -59,6 +96,21 @@ run: mongo-start dashboard-build
 run_sqlite: dashboard-build
 	@echo "🚀 Starting go-deployd with SQLite and dashboard..."
 	go run cmd/deployd/main.go -dev -db-type sqlite
+
+# Run the application in development mode with MySQL (requires MySQL server and .env config)
+run_mysql: dashboard-build
+	@echo "🚀 Starting go-deployd with MySQL..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create .env file with MySQL configuration."; \
+		echo "📝 Example:"; \
+		echo "   cp .env.example .env"; \
+		echo "   # Edit .env with your MySQL settings"; \
+		exit 1; \
+	fi
+	@echo "📄 Loading configuration from .env file..."
+	@./scripts/run_mysql.sh --check-config
+	@echo "✅ Configuration validated. Starting server..."
+	@./scripts/run_mysql.sh
 
 # Run with custom port
 run-port:
@@ -127,3 +179,16 @@ e2e-test-sqlite:
 	@echo "🧪 Running E2E tests (SQLite only)..."
 	@chmod +x e2e/scripts/run-e2e.sh
 	@./e2e/scripts/run-e2e.sh
+
+# Run E2E tests for MySQL (requires MySQL server and .env config)
+e2e-test-mysql:
+	@echo "🧪 Running MySQL E2E tests..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create .env file with MySQL configuration."; \
+		echo "📝 Example:"; \
+		echo "   cp .env.example .env"; \
+		echo "   # Edit .env with your E2E_MYSQL_* settings"; \
+		exit 1; \
+	fi
+	@chmod +x e2e/scripts/run-mysql-e2e.sh
+	@./e2e/scripts/run-mysql-e2e.sh

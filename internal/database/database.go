@@ -9,7 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type Config struct {
+type LegacyConfig struct {
 	Host string
 	Port int
 	Name string
@@ -18,10 +18,10 @@ type Config struct {
 type Database struct {
 	client *mongo.Client
 	db     *mongo.Database
-	config *Config
+	config *LegacyConfig
 }
 
-func New(config *Config) (*Database, error) {
+func New(config *LegacyConfig) (*Database, error) {
 	uri := fmt.Sprintf("mongodb://%s:%d", config.Host, config.Port)
 	
 	clientOptions := options.Client().ApplyURI(uri)

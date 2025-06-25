@@ -16,13 +16,16 @@ import (
 
 func main() {
 	var (
-		port    = flag.Int("port", 2403, "server port")
-		dbType  = flag.String("db-type", "mongodb", "database type (mongodb, sqlite, mysql, postgres)")
-		dbHost  = flag.String("db-host", "localhost", "database host")
-		dbPort  = flag.Int("db-port", 0, "database port (0 = use default for db-type)")
-		dbName  = flag.String("db-name", "deployd", "database name")
-		config  = flag.String("config", "", "configuration file path")
-		dev     = flag.Bool("dev", false, "development mode")
+		port     = flag.Int("port", 2403, "server port")
+		dbType   = flag.String("db-type", "mongodb", "database type (mongodb, sqlite, mysql, postgres)")
+		dbHost   = flag.String("db-host", "localhost", "database host")
+		dbPort   = flag.Int("db-port", 0, "database port (0 = use default for db-type)")
+		dbName   = flag.String("db-name", "deployd", "database name")
+		dbUser   = flag.String("db-user", "", "database username")
+		dbPass   = flag.String("db-pass", "", "database password")
+		dbSSL    = flag.Bool("db-ssl", false, "enable SSL for database connection")
+		config   = flag.String("config", "", "configuration file path")
+		dev      = flag.Bool("dev", false, "development mode")
 	)
 	flag.Parse()
 
@@ -52,21 +55,27 @@ func main() {
 	}
 
 	srv, err := server.New(&server.Config{
-		Port:           *port,
-		DatabaseType:   *dbType,
-		DatabaseHost:   *dbHost,
-		DatabasePort:   *dbPort,
-		DatabaseName:   *dbName,
-		ConfigPath:     *config,
-		Development:    *dev,
+		Port:             *port,
+		DatabaseType:     *dbType,
+		DatabaseHost:     *dbHost,
+		DatabasePort:     *dbPort,
+		DatabaseName:     *dbName,
+		DatabaseUsername: *dbUser,
+		DatabasePassword: *dbPass,
+		DatabaseSSL:      *dbSSL,
+		ConfigPath:       *config,
+		Development:      *dev,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 
 	httpServer := &http.Server{
-		Addr:    fmt.Sprintf(":%d", *port),
-		Handler: srv,
+		Addr:         fmt.Sprintf(":%d", *port),
+		Handler:      srv,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	go func() {

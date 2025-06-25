@@ -30,6 +30,7 @@ import {
   useDisclosure,
   useToast,
   useColorModeValue,
+  Flex,
 } from '@chakra-ui/react'
 import {
   FiRefreshCw,
@@ -39,6 +40,8 @@ import {
   FiCode,
   FiChevronUp,
   FiChevronDown,
+  FiChevronLeft,
+  FiChevronRight,
 } from 'react-icons/fi'
 import { apiService } from '../services/api'
 import DocumentModal from '../components/DocumentModal'
@@ -62,6 +65,8 @@ function CollectionDetail() {
   const [editingDocument, setEditingDocument] = useState(null)
   const [sortColumn, setSortColumn] = useState('id')
   const [sortDirection, setSortDirection] = useState('asc')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [documentsPerPage] = useState(50)
   const { isOpen, onOpen, onClose } = useDisclosure()
   const toast = useToast()
 
@@ -134,7 +139,14 @@ function CollectionDetail() {
 
     try {
       await apiService.deleteDocument(name, id)
-      setDocuments(documents.filter(doc => doc.id !== id))
+      const updatedDocuments = documents.filter(doc => doc.id !== id)
+      setDocuments(updatedDocuments)
+      
+      // Reset to first page if current page would be empty
+      const newTotalPages = Math.ceil(updatedDocuments.length / documentsPerPage)
+      if (currentPage > newTotalPages && newTotalPages > 0) {
+        setCurrentPage(newTotalPages)
+      }
       
       toast({
         title: 'Document deleted',
@@ -250,7 +262,7 @@ function CollectionDetail() {
   const getSortedDocuments = () => {
     if (!documents.length) return documents
 
-    return [...documents].sort((a, b) => {
+    const sorted = [...documents].sort((a, b) => {
       let aValue = a[sortColumn]
       let bValue = b[sortColumn]
       
@@ -285,6 +297,11 @@ function CollectionDetail() {
       
       return sortDirection === 'desc' ? -result : result
     })
+
+    // Apply pagination
+    const indexOfLastDocument = currentPage * documentsPerPage
+    const indexOfFirstDocument = indexOfLastDocument - documentsPerPage
+    return sorted.slice(indexOfFirstDocument, indexOfLastDocument)
   }
 
   const getSortIcon = (column) => {
@@ -293,6 +310,15 @@ function CollectionDetail() {
     }
     return sortDirection === 'asc' ? <FiChevronUp /> : <FiChevronDown />
   }
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber)
+  }
+
+  // Calculate pagination values
+  const totalPages = Math.ceil(documents.length / documentsPerPage)
+  const indexOfLastDocument = currentPage * documentsPerPage
+  const indexOfFirstDocument = indexOfLastDocument - documentsPerPage
 
   if (loading) {
     return (
@@ -360,7 +386,14 @@ function CollectionDetail() {
             <TabPanel>
               <VStack align="stretch" spacing={4}>
                 <HStack justify="space-between">
-                  <Heading size="md">Documents ({documents.length})</Heading>
+                  <VStack align="start" spacing={1}>
+                    <Heading size="md">Documents ({documents.length})</Heading>
+                    {documents.length > 0 && totalPages > 1 && (
+                      <Text fontSize="sm" color="gray.600">
+                        Showing {indexOfFirstDocument + 1}-{Math.min(indexOfLastDocument, documents.length)} of {documents.length} documents
+                      </Text>
+                    )}
+                  </VStack>
                   <Button
                     leftIcon={<FiPlus />}
                     colorScheme="brand"
@@ -438,6 +471,41 @@ function CollectionDetail() {
                     </Tbody>
                   </Table>
                 </TableContainer>
+
+                {/* Pagination Controls */}
+                {documents.length > 0 && totalPages > 1 && (
+                  <HStack justify="center" spacing={2} pt={4}>
+                    <IconButton
+                      icon={<FiChevronLeft />}
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      isDisabled={currentPage === 1}
+                      aria-label="Previous page"
+                    />
+                    
+                    {Array.from({ length: totalPages }, (_, index) => (
+                      <Button
+                        key={index + 1}
+                        size="sm"
+                        variant={currentPage === index + 1 ? "solid" : "outline"}
+                        colorScheme={currentPage === index + 1 ? "brand" : "gray"}
+                        onClick={() => handlePageChange(index + 1)}
+                      >
+                        {index + 1}
+                      </Button>
+                    ))}
+                    
+                    <IconButton
+                      icon={<FiChevronRight />}
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      isDisabled={currentPage === totalPages}
+                      aria-label="Next page"
+                    />
+                  </HStack>
+                )}
 
                 {documents.length === 0 && (
                   <Box textAlign="center" py={8}>

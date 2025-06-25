@@ -5,101 +5,93 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/go-sql-driver/mysql"
 )
 
-// SQLiteDatabase implements DatabaseInterface for SQLite
-type SQLiteDatabase struct {
+// MySQLDatabase implements DatabaseInterface for MySQL
+type MySQLDatabase struct {
 	db            *sql.DB
 	config        *Config
 	schemaManager *SchemaManager
 }
 
-// SQLiteStore implements StoreInterface for SQLite
-type SQLiteStore struct {
+// MySQLStore implements StoreInterface for MySQL
+type MySQLStore struct {
 	tableName string
 	db        *sql.DB
-	database  *SQLiteDatabase
+	database  *MySQLDatabase
 }
 
-// SQLiteUpdateResult implements UpdateResult interface
-type SQLiteUpdateResult struct {
+// MySQLUpdateResult implements UpdateResult interface
+type MySQLUpdateResult struct {
 	modifiedCount int64
 	upsertedCount int64
 	upsertedID    interface{}
 }
 
-func (r *SQLiteUpdateResult) ModifiedCount() int64   { return r.modifiedCount }
-func (r *SQLiteUpdateResult) UpsertedCount() int64   { return r.upsertedCount }
-func (r *SQLiteUpdateResult) UpsertedID() interface{} { return r.upsertedID }
+func (r *MySQLUpdateResult) ModifiedCount() int64   { return r.modifiedCount }
+func (r *MySQLUpdateResult) UpsertedCount() int64   { return r.upsertedCount }
+func (r *MySQLUpdateResult) UpsertedID() interface{} { return r.upsertedID }
 
-// SQLiteDeleteResult implements DeleteResult interface
-type SQLiteDeleteResult struct {
+// MySQLDeleteResult implements DeleteResult interface
+type MySQLDeleteResult struct {
 	deletedCount int64
 }
 
-func (r *SQLiteDeleteResult) DeletedCount() int64 { return r.deletedCount }
+func (r *MySQLDeleteResult) DeletedCount() int64 { return r.deletedCount }
 
-// NewSQLiteDatabase creates a new SQLite database instance
-func NewSQLiteDatabase(config *Config) (DatabaseInterface, error) {
-	var dbPath string
-	if config.Host == "" || config.Host == "localhost" {
-		// Use file-based SQLite
-		if strings.HasSuffix(config.Name, ".db") || strings.HasSuffix(config.Name, ".sqlite") {
-			dbPath = config.Name
-		} else {
-			// Default to deployd.sqlite if no specific file extension
-			if config.Name == "deployd" {
-				dbPath = "deployd.sqlite"
-			} else {
-				dbPath = config.Name + ".sqlite"
-			}
-		}
+// NewMySQLDatabase creates a new MySQL database instance
+func NewMySQLDatabase(config *Config) (DatabaseInterface, error) {
+	// Build MySQL connection string
+	var dsn string
+	if config.Username != "" && config.Password != "" {
+		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci",
+			config.Username, config.Password, config.Host, config.Port, config.Name)
+	} else if config.Username != "" {
+		dsn = fmt.Sprintf("%s@tcp(%s:%d)/%s?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci",
+			config.Username, config.Host, config.Port, config.Name)
 	} else {
-		dbPath = config.Host
+		dsn = fmt.Sprintf("tcp(%s:%d)/%s?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci",
+			config.Host, config.Port, config.Name)
 	}
 
-	// Ensure the directory exists
-	dir := filepath.Dir(dbPath)
-	if dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create database directory: %w", err)
-		}
-	}
-
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open SQLite database: %w", err)
+		return nil, fmt.Errorf("failed to open MySQL database: %w", err)
 	}
+
+	// Configure connection pool
+	db.SetMaxOpenConns(50)          // Increased from 25
+	db.SetMaxIdleConns(10)          // Increased from 5
+	db.SetConnMaxLifetime(30 * time.Minute)
+	db.SetConnMaxIdleTime(5 * time.Minute)  // Add idle timeout
 
 	// Test connection
 	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping SQLite database: %w", err)
+		return nil, fmt.Errorf("failed to ping MySQL database: %w", err)
 	}
 
-	sqliteDB := &SQLiteDatabase{
+	mysqlDB := &MySQLDatabase{
 		db:     db,
 		config: config,
 	}
 
 	// Initialize schema manager
-	sqliteDB.schemaManager = NewSchemaManager(db, DatabaseTypeSQLite, "")
+	mysqlDB.schemaManager = NewSchemaManager(db, DatabaseTypeMySQL, "")
 
-	return sqliteDB, nil
+	return mysqlDB, nil
 }
 
-func (d *SQLiteDatabase) CreateStore(namespace string) StoreInterface {
+func (d *MySQLDatabase) CreateStore(namespace string) StoreInterface {
 	// Check if this collection should use column-based storage
 	schema, err := d.schemaManager.GetSchema(namespace)
 	if err != nil {
 		// Log error but fall back to JSON store
 		fmt.Printf("Warning: failed to get schema for %s, using JSON storage: %v\n", namespace, err)
-		store := &SQLiteStore{
+		store := &MySQLStore{
 			tableName: namespace,
 			db:        d.db,
 			database:  d,
@@ -114,7 +106,7 @@ func (d *SQLiteDatabase) CreateStore(namespace string) StoreInterface {
 		if err != nil {
 			// Log error but fall back to JSON store
 			fmt.Printf("Warning: failed to create column store for %s, using JSON storage: %v\n", namespace, err)
-			store := &SQLiteStore{
+			store := &MySQLStore{
 				tableName: namespace,
 				db:        d.db,
 				database:  d,
@@ -126,7 +118,7 @@ func (d *SQLiteDatabase) CreateStore(namespace string) StoreInterface {
 	}
 
 	// Use traditional JSON-based storage
-	store := &SQLiteStore{
+	store := &MySQLStore{
 		tableName: namespace,
 		db:        d.db,
 		database:  d,
@@ -138,13 +130,13 @@ func (d *SQLiteDatabase) CreateStore(namespace string) StoreInterface {
 	return store
 }
 
-func (d *SQLiteDatabase) Close() error {
+func (d *MySQLDatabase) Close() error {
 	return d.db.Close()
 }
 
-func (d *SQLiteDatabase) Drop() error {
-	// Get all table names
-	rows, err := d.db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+func (d *MySQLDatabase) Drop() error {
+	// Get all table names from information_schema
+	rows, err := d.db.Query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'")
 	if err != nil {
 		return fmt.Errorf("failed to get table names: %w", err)
 	}
@@ -161,7 +153,7 @@ func (d *SQLiteDatabase) Drop() error {
 
 	// Drop all tables
 	for _, table := range tables {
-		if _, err := d.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, table)); err != nil {
+		if _, err := d.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS `%s`", table)); err != nil {
 			return fmt.Errorf("failed to drop table %s: %w", table, err)
 		}
 	}
@@ -169,45 +161,36 @@ func (d *SQLiteDatabase) Drop() error {
 	return nil
 }
 
-func (d *SQLiteDatabase) GetType() DatabaseType {
-	return DatabaseTypeSQLite
+func (d *MySQLDatabase) GetType() DatabaseType {
+	return DatabaseTypeMySQL
 }
 
 // ensureTable creates the table if it doesn't exist
-func (s *SQLiteStore) ensureTable() error {
+func (s *MySQLStore) ensureTable() error {
 	quotedTable := s.quotedTableName()
 	createSQL := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
-			id TEXT PRIMARY KEY,
+			id VARCHAR(255) PRIMARY KEY,
 			data JSON NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			INDEX idx_created_at (created_at),
+			INDEX idx_updated_at (updated_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 	`, quotedTable)
 
 	if _, err := s.db.Exec(createSQL); err != nil {
 		return fmt.Errorf("failed to create table %s: %w", s.tableName, err)
 	}
 
-	// Create indexes for common queries
-	indexSQL := fmt.Sprintf(`
-		CREATE INDEX IF NOT EXISTS "idx_%s_id" ON %s(id);
-		CREATE INDEX IF NOT EXISTS "idx_%s_created_at" ON %s(created_at);
-		CREATE INDEX IF NOT EXISTS "idx_%s_updated_at" ON %s(updated_at);
-	`, s.tableName, quotedTable, s.tableName, quotedTable, s.tableName, quotedTable)
-
-	if _, err := s.db.Exec(indexSQL); err != nil {
-		return fmt.Errorf("failed to create indexes for table %s: %w", s.tableName, err)
-	}
-
 	return nil
 }
 
-func (s *SQLiteStore) CreateUniqueIdentifier() string {
+func (s *MySQLStore) CreateUniqueIdentifier() string {
 	return generateUniqueID()
 }
 
-func (s *SQLiteStore) Insert(ctx context.Context, document interface{}) (interface{}, error) {
+func (s *MySQLStore) Insert(ctx context.Context, document interface{}) (interface{}, error) {
 	doc, ok := document.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("document must be a map[string]interface{}")
@@ -242,7 +225,7 @@ func (s *SQLiteStore) Insert(ctx context.Context, document interface{}) (interfa
 	return doc, nil
 }
 
-func (s *SQLiteStore) Find(ctx context.Context, query QueryBuilder, opts QueryOptions) ([]map[string]interface{}, error) {
+func (s *MySQLStore) Find(ctx context.Context, query QueryBuilder, opts QueryOptions) ([]map[string]interface{}, error) {
 	baseSQL := fmt.Sprintf("SELECT data FROM %s", s.quotedTableName())
 	var args []interface{}
 
@@ -303,7 +286,7 @@ func (s *SQLiteStore) Find(ctx context.Context, query QueryBuilder, opts QueryOp
 	return results, nil
 }
 
-func (s *SQLiteStore) FindOne(ctx context.Context, query QueryBuilder) (map[string]interface{}, error) {
+func (s *MySQLStore) FindOne(ctx context.Context, query QueryBuilder) (map[string]interface{}, error) {
 	opts := QueryOptions{Limit: &[]int64{1}[0]}
 	results, err := s.Find(ctx, query, opts)
 	if err != nil {
@@ -317,15 +300,15 @@ func (s *SQLiteStore) FindOne(ctx context.Context, query QueryBuilder) (map[stri
 	return results[0], nil
 }
 
-func (s *SQLiteStore) Update(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
+func (s *MySQLStore) Update(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
 	return s.performUpdate(ctx, query, update, false)
 }
 
-func (s *SQLiteStore) UpdateOne(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
+func (s *MySQLStore) UpdateOne(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
 	return s.performUpdate(ctx, query, update, true)
 }
 
-func (s *SQLiteStore) performUpdate(ctx context.Context, query QueryBuilder, update UpdateBuilder, updateOne bool) (UpdateResult, error) {
+func (s *MySQLStore) performUpdate(ctx context.Context, query QueryBuilder, update UpdateBuilder, updateOne bool) (UpdateResult, error) {
 	// First, find the documents to update
 	existingDocs, err := s.Find(ctx, query, QueryOptions{})
 	if err != nil {
@@ -333,7 +316,7 @@ func (s *SQLiteStore) performUpdate(ctx context.Context, query QueryBuilder, upd
 	}
 
 	if len(existingDocs) == 0 {
-		return &SQLiteUpdateResult{modifiedCount: 0}, nil
+		return &MySQLUpdateResult{modifiedCount: 0}, nil
 	}
 
 	// If updateOne is true, only update the first document
@@ -374,10 +357,10 @@ func (s *SQLiteStore) performUpdate(ctx context.Context, query QueryBuilder, upd
 		}
 	}
 
-	return &SQLiteUpdateResult{modifiedCount: modifiedCount}, nil
+	return &MySQLUpdateResult{modifiedCount: modifiedCount}, nil
 }
 
-func (s *SQLiteStore) Remove(ctx context.Context, query QueryBuilder) (DeleteResult, error) {
+func (s *MySQLStore) Remove(ctx context.Context, query QueryBuilder) (DeleteResult, error) {
 	// First count how many will be deleted
 	count, err := s.Count(ctx, query)
 	if err != nil {
@@ -385,7 +368,7 @@ func (s *SQLiteStore) Remove(ctx context.Context, query QueryBuilder) (DeleteRes
 	}
 
 	if count == 0 {
-		return &SQLiteDeleteResult{deletedCount: 0}, nil
+		return &MySQLDeleteResult{deletedCount: 0}, nil
 	}
 
 	// Build DELETE query
@@ -403,10 +386,10 @@ func (s *SQLiteStore) Remove(ctx context.Context, query QueryBuilder) (DeleteRes
 		return nil, fmt.Errorf("failed to delete documents: %w", err)
 	}
 
-	return &SQLiteDeleteResult{deletedCount: count}, nil
+	return &MySQLDeleteResult{deletedCount: count}, nil
 }
 
-func (s *SQLiteStore) Count(ctx context.Context, query QueryBuilder) (int64, error) {
+func (s *MySQLStore) Count(ctx context.Context, query QueryBuilder) (int64, error) {
 	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s", s.quotedTableName())
 	var args []interface{}
 
@@ -425,8 +408,8 @@ func (s *SQLiteStore) Count(ctx context.Context, query QueryBuilder) (int64, err
 	return count, nil
 }
 
-// Specialized MongoDB-style operations (simplified implementations for SQLite)
-func (s *SQLiteStore) Increment(ctx context.Context, query QueryBuilder, increments map[string]interface{}) (UpdateResult, error) {
+// Specialized MongoDB-style operations
+func (s *MySQLStore) Increment(ctx context.Context, query QueryBuilder, increments map[string]interface{}) (UpdateResult, error) {
 	update := NewUpdateBuilder()
 	for field, value := range increments {
 		update.Inc(field, value)
@@ -434,7 +417,7 @@ func (s *SQLiteStore) Increment(ctx context.Context, query QueryBuilder, increme
 	return s.Update(ctx, query, update)
 }
 
-func (s *SQLiteStore) Push(ctx context.Context, query QueryBuilder, pushOps map[string]interface{}) (UpdateResult, error) {
+func (s *MySQLStore) Push(ctx context.Context, query QueryBuilder, pushOps map[string]interface{}) (UpdateResult, error) {
 	update := NewUpdateBuilder()
 	for field, value := range pushOps {
 		update.Push(field, value)
@@ -442,7 +425,7 @@ func (s *SQLiteStore) Push(ctx context.Context, query QueryBuilder, pushOps map[
 	return s.Update(ctx, query, update)
 }
 
-func (s *SQLiteStore) Pull(ctx context.Context, query QueryBuilder, pullOps map[string]interface{}) (UpdateResult, error) {
+func (s *MySQLStore) Pull(ctx context.Context, query QueryBuilder, pullOps map[string]interface{}) (UpdateResult, error) {
 	update := NewUpdateBuilder()
 	for field, value := range pullOps {
 		update.Pull(field, value)
@@ -450,7 +433,7 @@ func (s *SQLiteStore) Pull(ctx context.Context, query QueryBuilder, pullOps map[
 	return s.Update(ctx, query, update)
 }
 
-func (s *SQLiteStore) AddToSet(ctx context.Context, query QueryBuilder, addOps map[string]interface{}) (UpdateResult, error) {
+func (s *MySQLStore) AddToSet(ctx context.Context, query QueryBuilder, addOps map[string]interface{}) (UpdateResult, error) {
 	update := NewUpdateBuilder()
 	for field, value := range addOps {
 		update.AddToSet(field, value)
@@ -458,17 +441,17 @@ func (s *SQLiteStore) AddToSet(ctx context.Context, query QueryBuilder, addOps m
 	return s.Update(ctx, query, update)
 }
 
-func (s *SQLiteStore) PopFirst(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
-	// For SQLite, we'll implement this by updating arrays manually
-	return &SQLiteUpdateResult{modifiedCount: 0}, fmt.Errorf("PopFirst not yet implemented for SQLite")
+func (s *MySQLStore) PopFirst(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
+	// For MySQL, we'll implement this by updating arrays manually
+	return &MySQLUpdateResult{modifiedCount: 0}, fmt.Errorf("PopFirst not yet implemented for MySQL")
 }
 
-func (s *SQLiteStore) PopLast(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
-	// For SQLite, we'll implement this by updating arrays manually
-	return &SQLiteUpdateResult{modifiedCount: 0}, fmt.Errorf("PopLast not yet implemented for SQLite")
+func (s *MySQLStore) PopLast(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
+	// For MySQL, we'll implement this by updating arrays manually
+	return &MySQLUpdateResult{modifiedCount: 0}, fmt.Errorf("PopLast not yet implemented for MySQL")
 }
 
-func (s *SQLiteStore) Upsert(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
+func (s *MySQLStore) Upsert(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
 	// Try update first
 	result, err := s.Update(ctx, query, update)
 	if err != nil {
@@ -502,14 +485,14 @@ func (s *SQLiteStore) Upsert(ctx context.Context, query QueryBuilder, update Upd
 		return nil, fmt.Errorf("failed to upsert document: %w", err)
 	}
 
-	return &SQLiteUpdateResult{
+	return &MySQLUpdateResult{
 		modifiedCount: 0,
 		upsertedCount: 1,
 		upsertedID:    newDoc["id"],
 	}, nil
 }
 
-func (s *SQLiteStore) Aggregate(ctx context.Context, pipeline []map[string]interface{}) ([]map[string]interface{}, error) {
+func (s *MySQLStore) Aggregate(ctx context.Context, pipeline []map[string]interface{}) ([]map[string]interface{}, error) {
 	// Basic aggregation support - this is a simplified implementation
 	// For now, just return all documents
 	query := NewQueryBuilder()
@@ -518,12 +501,12 @@ func (s *SQLiteStore) Aggregate(ctx context.Context, pipeline []map[string]inter
 
 // Helper methods
 
-func (s *SQLiteStore) quotedTableName() string {
-	// Quote table names to handle special characters like hyphens
-	return fmt.Sprintf(`"%s"`, s.tableName)
+func (s *MySQLStore) quotedTableName() string {
+	// Quote table names with backticks for MySQL
+	return fmt.Sprintf("`%s`", s.tableName)
 }
 
-func (s *SQLiteStore) buildWhereClause(query QueryBuilder) (string, []interface{}) {
+func (s *MySQLStore) buildWhereClause(query QueryBuilder) (string, []interface{}) {
 	if sqlQuery, ok := query.(*SQLQueryBuilder); ok {
 		return sqlQuery.ToSQL()
 	}
@@ -539,7 +522,7 @@ func (s *SQLiteStore) buildWhereClause(query QueryBuilder) (string, []interface{
 	return sqlBuilder.ToSQL()
 }
 
-func (s *SQLiteStore) convertMapToSQLQuery(queryMap map[string]interface{}, builder *SQLQueryBuilder) {
+func (s *MySQLStore) convertMapToSQLQuery(queryMap map[string]interface{}, builder *SQLQueryBuilder) {
 	for field, value := range queryMap {
 		if field == "$or" {
 			// Handle OR conditions
@@ -570,7 +553,7 @@ func (s *SQLiteStore) convertMapToSQLQuery(queryMap map[string]interface{}, buil
 	}
 }
 
-func (s *SQLiteStore) applyFieldProjection(doc map[string]interface{}, fields map[string]int) map[string]interface{} {
+func (s *MySQLStore) applyFieldProjection(doc map[string]interface{}, fields map[string]int) map[string]interface{} {
 	result := make(map[string]interface{})
 
 	// Check if this is inclusion or exclusion
@@ -609,7 +592,7 @@ func (s *SQLiteStore) applyFieldProjection(doc map[string]interface{}, fields ma
 	return result
 }
 
-func (s *SQLiteStore) applyUpdateOperations(doc map[string]interface{}, updateMap map[string]interface{}) {
+func (s *MySQLStore) applyUpdateOperations(doc map[string]interface{}, updateMap map[string]interface{}) {
 	for operation, fields := range updateMap {
 		if fieldMap, ok := fields.(map[string]interface{}); ok {
 			switch operation {
@@ -682,7 +665,7 @@ func (s *SQLiteStore) applyUpdateOperations(doc map[string]interface{}, updateMa
 	}
 }
 
-func (s *SQLiteStore) toFloat64(value interface{}) (float64, bool) {
+func (s *MySQLStore) toFloat64(value interface{}) (float64, bool) {
 	switch v := value.(type) {
 	case float64:
 		return v, true
@@ -699,19 +682,19 @@ func (s *SQLiteStore) toFloat64(value interface{}) (float64, bool) {
 	}
 }
 
-func (s *SQLiteStore) valuesEqual(a, b interface{}) bool {
+func (s *MySQLStore) valuesEqual(a, b interface{}) bool {
 	aJSON, _ := json.Marshal(a)
 	bJSON, _ := json.Marshal(b)
 	return string(aJSON) == string(bJSON)
 }
 
-func (s *SQLiteStore) documentsEqual(a, b map[string]interface{}) bool {
+func (s *MySQLStore) documentsEqual(a, b map[string]interface{}) bool {
 	aJSON, _ := json.Marshal(a)
 	bJSON, _ := json.Marshal(b)
 	return string(aJSON) == string(bJSON)
 }
 
-// Register SQLite database factory
+// Register MySQL database factory
 func init() {
-	RegisterDatabaseFactory(DatabaseTypeSQLite, NewSQLiteDatabase)
+	RegisterDatabaseFactory(DatabaseTypeMySQL, NewMySQLDatabase)
 }

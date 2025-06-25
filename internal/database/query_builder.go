@@ -133,6 +133,12 @@ func (q *BaseQueryBuilder) ToMap() map[string]interface{} {
 // SQLQueryBuilder extends BaseQueryBuilder for SQL-specific functionality
 type SQLQueryBuilder struct {
 	*BaseQueryBuilder
+	rawConditions []RawCondition
+}
+
+type RawCondition struct {
+	SQL  string
+	Args []interface{}
 }
 
 func NewSQLQueryBuilder() *SQLQueryBuilder {
@@ -141,12 +147,22 @@ func NewSQLQueryBuilder() *SQLQueryBuilder {
 			conditions: make([]QueryCondition, 0),
 			orGroups:   make([][]QueryCondition, 0),
 		},
+		rawConditions: make([]RawCondition, 0),
 	}
+}
+
+// WhereRaw adds a raw SQL condition
+func (q *SQLQueryBuilder) WhereRaw(sql string, args ...interface{}) *SQLQueryBuilder {
+	q.rawConditions = append(q.rawConditions, RawCondition{
+		SQL:  sql,
+		Args: args,
+	})
+	return q
 }
 
 // ToSQL converts the query to SQL WHERE clause
 func (q *SQLQueryBuilder) ToSQL() (string, []interface{}) {
-	if len(q.conditions) == 0 && len(q.orGroups) == 0 {
+	if len(q.conditions) == 0 && len(q.orGroups) == 0 && len(q.rawConditions) == 0 {
 		return "", nil
 	}
 	
@@ -197,6 +213,12 @@ func (q *SQLQueryBuilder) ToSQL() (string, []interface{}) {
 				whereParts = append(whereParts, fmt.Sprintf("(%s)", strings.Join(orParts, " OR ")))
 			}
 		}
+	}
+	
+	// Add raw conditions
+	for _, rawCond := range q.rawConditions {
+		whereParts = append(whereParts, rawCond.SQL)
+		args = append(args, rawCond.Args...)
 	}
 	
 	if len(whereParts) == 0 {

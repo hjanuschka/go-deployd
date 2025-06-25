@@ -42,7 +42,12 @@ func (r *MongoDeleteResult) DeletedCount() int64 { return r.DeleteResult.Deleted
 
 // NewMongoDatabase creates a new MongoDB database instance that implements DatabaseInterface
 func NewMongoDatabase(config *Config) (DatabaseInterface, error) {
-	db, err := New(config)
+	legacyConfig := &LegacyConfig{
+		Host: config.Host,
+		Port: config.Port,
+		Name: config.Name,
+	}
+	db, err := New(legacyConfig)
 	if err != nil {
 		return nil, err
 	}

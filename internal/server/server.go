@@ -20,13 +20,16 @@ import (
 )
 
 type Config struct {
-	Port           int
-	DatabaseType   string
-	DatabaseHost   string
-	DatabasePort   int
-	DatabaseName   string
-	ConfigPath     string
-	Development    bool
+	Port               int
+	DatabaseType       string
+	DatabaseHost       string
+	DatabasePort       int
+	DatabaseName       string
+	DatabaseUsername   string
+	DatabasePassword   string
+	DatabaseSSL        bool
+	ConfigPath         string
+	Development        bool
 }
 
 type Server struct {
@@ -41,9 +44,12 @@ type Server struct {
 
 func New(config *Config) (*Server, error) {
 	dbConfig := &database.Config{
-		Host: config.DatabaseHost,
-		Port: config.DatabasePort,
-		Name: config.DatabaseName,
+		Host:     config.DatabaseHost,
+		Port:     config.DatabasePort,
+		Name:     config.DatabaseName,
+		Username: config.DatabaseUsername,
+		Password: config.DatabasePassword,
+		SSL:      config.DatabaseSSL,
 	}
 
 	// Determine database type
