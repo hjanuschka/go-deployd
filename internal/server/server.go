@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -15,6 +16,7 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/database"
 	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/logging"
+	"github.com/hjanuschka/go-deployd/internal/metrics"
 	"github.com/hjanuschka/go-deployd/internal/router"
 	"github.com/hjanuschka/go-deployd/internal/sessions"
 )
@@ -116,6 +118,9 @@ func New(config *Config) (*Server, error) {
 }
 
 func (s *Server) setupRoutes() {
+	// Apply metrics middleware to all routes
+	s.httpMux.Use(metrics.HTTPMiddleware)
+
 	// WebSocket endpoint for real-time features
 	s.httpMux.HandleFunc("/socket.io/", s.handleWebSocket)
 
@@ -124,6 +129,9 @@ func (s *Server) setupRoutes() {
 
 	// Built-in API routes (like original Deployd)
 	s.setupBuiltinRoutes()
+
+	// Metrics API routes
+	s.setupMetricsRoutes()
 
 	// Serve dashboard static files with authentication
 	dashboardPath := filepath.Join("web", "dashboard")
@@ -139,6 +147,16 @@ func (s *Server) setupRoutes() {
 func (s *Server) setupBuiltinRoutes() {
 	// Built-in collections list endpoint (like original Deployd)
 	s.httpMux.HandleFunc("/collections", s.handleCollections).Methods("GET")
+}
+
+func (s *Server) setupMetricsRoutes() {
+	// Metrics API endpoints
+	s.httpMux.HandleFunc("/_dashboard/api/metrics/detailed", s.handleDetailedMetrics).Methods("GET")
+	s.httpMux.HandleFunc("/_dashboard/api/metrics/aggregated", s.handleAggregatedMetrics).Methods("GET")
+	s.httpMux.HandleFunc("/_dashboard/api/metrics/system", s.handleSystemStats).Methods("GET")
+	s.httpMux.HandleFunc("/_dashboard/api/metrics/collections", s.handleCollectionsList).Methods("GET")
+	s.httpMux.HandleFunc("/_dashboard/api/metrics/events", s.handleEventMetrics).Methods("GET")
+	s.httpMux.HandleFunc("/_dashboard/api/metrics/periods", s.handlePeriodsMetrics).Methods("GET")
 }
 
 func (s *Server) handleCollections(w http.ResponseWriter, r *http.Request) {
@@ -307,4 +325,235 @@ func (s *Server) serveDashboardFile(w http.ResponseWriter, r *http.Request, dash
 	}
 	
 	http.ServeFile(w, r, fullPath)
+}
+
+func (s *Server) handleDetailedMetrics(w http.ResponseWriter, r *http.Request) {
+	// Check for master key authentication
+	masterKey := r.Header.Get("X-Master-Key")
+	if masterKey == "" {
+		if cookie, err := r.Cookie("masterKey"); err == nil {
+			masterKey = cookie.Value
+		}
+	}
+	
+	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Authentication required",
+		})
+		return
+	}
+
+	collection := r.URL.Query().Get("collection")
+	since := time.Now().Add(-24 * time.Hour) // Last 24 hours
+	if sinceParam := r.URL.Query().Get("since"); sinceParam != "" {
+		if parsedTime, err := time.Parse(time.RFC3339, sinceParam); err == nil {
+			since = parsedTime
+		}
+	}
+
+	collector := metrics.GetGlobalCollector()
+	var metricsData []metrics.Metric
+	if collection != "" && collection != "all" {
+		metricsData = collector.GetDetailedMetricsByCollection(collection, since)
+	} else {
+		metricsData = collector.GetDetailedMetrics(since)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"metrics": metricsData,
+		"since":   since,
+		"count":   len(metricsData),
+	})
+}
+
+func (s *Server) handleAggregatedMetrics(w http.ResponseWriter, r *http.Request) {
+	// Check for master key authentication
+	masterKey := r.Header.Get("X-Master-Key")
+	if masterKey == "" {
+		if cookie, err := r.Cookie("masterKey"); err == nil {
+			masterKey = cookie.Value
+		}
+	}
+	
+	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Authentication required",
+		})
+		return
+	}
+
+	collection := r.URL.Query().Get("collection")
+	since := time.Now().Add(-7 * 24 * time.Hour) // Last 7 days
+	if sinceParam := r.URL.Query().Get("since"); sinceParam != "" {
+		if parsedTime, err := time.Parse(time.RFC3339, sinceParam); err == nil {
+			since = parsedTime
+		}
+	}
+
+	collector := metrics.GetGlobalCollector()
+	metricsData := collector.GetAggregatedMetrics("hourly", collection, since)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"metrics": metricsData,
+		"since":   since,
+		"count":   len(metricsData),
+	})
+}
+
+func (s *Server) handleSystemStats(w http.ResponseWriter, r *http.Request) {
+	// Check for master key authentication
+	masterKey := r.Header.Get("X-Master-Key")
+	if masterKey == "" {
+		if cookie, err := r.Cookie("masterKey"); err == nil {
+			masterKey = cookie.Value
+		}
+	}
+	
+	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Authentication required",
+		})
+		return
+	}
+
+	collector := metrics.GetGlobalCollector()
+	stats := collector.GetSystemStats()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}
+
+func (s *Server) handleCollectionsList(w http.ResponseWriter, r *http.Request) {
+	// Check for master key authentication
+	masterKey := r.Header.Get("X-Master-Key")
+	if masterKey == "" {
+		if cookie, err := r.Cookie("masterKey"); err == nil {
+			masterKey = cookie.Value
+		}
+	}
+	
+	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Authentication required",
+		})
+		return
+	}
+
+	collector := metrics.GetGlobalCollector()
+	collections := collector.GetCollections()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"collections": collections,
+	})
+}
+
+func (s *Server) handleEventMetrics(w http.ResponseWriter, r *http.Request) {
+	// Check for master key authentication
+	masterKey := r.Header.Get("X-Master-Key")
+	if masterKey == "" {
+		if cookie, err := r.Cookie("masterKey"); err == nil {
+			masterKey = cookie.Value
+		}
+	}
+	
+	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Authentication required",
+		})
+		return
+	}
+
+	collection := r.URL.Query().Get("collection")
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "hourly"
+	}
+
+	// Default to last 24 hours for detailed, 7 days for others
+	var since time.Time
+	switch period {
+	case "detailed":
+		since = time.Now().Add(-24 * time.Hour)
+	case "hourly":
+		since = time.Now().Add(-7 * 24 * time.Hour)
+	case "daily":
+		since = time.Now().Add(-30 * 24 * time.Hour)
+	case "monthly":
+		since = time.Now().Add(-365 * 24 * time.Hour)
+	}
+
+	if sinceParam := r.URL.Query().Get("since"); sinceParam != "" {
+		if parsedTime, err := time.Parse(time.RFC3339, sinceParam); err == nil {
+			since = parsedTime
+		}
+	}
+
+	collector := metrics.GetGlobalCollector()
+	eventMetrics := collector.GetEventMetrics(collection)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"events": eventMetrics,
+		"since":  since,
+		"period": period,
+	})
+}
+
+func (s *Server) handlePeriodsMetrics(w http.ResponseWriter, r *http.Request) {
+	// Check for master key authentication
+	masterKey := r.Header.Get("X-Master-Key")
+	if masterKey == "" {
+		if cookie, err := r.Cookie("masterKey"); err == nil {
+			masterKey = cookie.Value
+		}
+	}
+	
+	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Authentication required",
+		})
+		return
+	}
+
+	collection := r.URL.Query().Get("collection")
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "daily"
+	}
+
+	var since time.Time
+	switch period {
+	case "daily":
+		since = time.Now().Add(-6 * 30 * 24 * time.Hour) // 6 months
+	case "monthly":
+		since = time.Now().Add(-12 * 30 * 24 * time.Hour) // 12 months
+	default:
+		since = time.Now().Add(-30 * 24 * time.Hour) // 30 days
+	}
+
+	if sinceParam := r.URL.Query().Get("since"); sinceParam != "" {
+		if parsedTime, err := time.Parse(time.RFC3339, sinceParam); err == nil {
+			since = parsedTime
+		}
+	}
+
+	collector := metrics.GetGlobalCollector()
+	metricsData := collector.GetAggregatedMetrics(period, collection, since)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"metrics": metricsData,
+		"since":   since,
+		"period":  period,
+		"count":   len(metricsData),
+	})
 }

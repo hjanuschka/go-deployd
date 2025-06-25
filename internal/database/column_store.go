@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/hjanuschka/go-deployd/internal/metrics"
 )
 
 // ColumnStore implements StoreInterface using column-based storage
@@ -50,9 +52,16 @@ func (s *ColumnStore) CreateUniqueIdentifier() string {
 
 // Insert inserts a document using column-based storage
 func (s *ColumnStore) Insert(ctx context.Context, document interface{}) (interface{}, error) {
+	start := time.Now()
+	defer func() {
+		metrics.RecordDatabaseOperation("insert", time.Since(start), nil)
+	}()
+
 	doc, ok := document.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("document must be a map[string]interface{}")
+		err := fmt.Errorf("document must be a map[string]interface{}")
+		metrics.RecordDatabaseOperation("insert", time.Since(start), err)
+		return nil, err
 	}
 
 	// Ensure the document has an ID
@@ -72,19 +81,25 @@ func (s *ColumnStore) Insert(ctx context.Context, document interface{}) (interfa
 	// Separate fields into columns and JSON data
 	columnValues, jsonData, err := s.separateData(doc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to separate data: %w", err)
+		err = fmt.Errorf("failed to separate data: %w", err)
+		metrics.RecordDatabaseOperation("insert", time.Since(start), err)
+		return nil, err
 	}
 
 	// Build INSERT SQL
 	sql, args, err := s.buildInsertSQL(columnValues, jsonData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build insert SQL: %w", err)
+		err = fmt.Errorf("failed to build insert SQL: %w", err)
+		metrics.RecordDatabaseOperation("insert", time.Since(start), err)
+		return nil, err
 	}
 
 	// Execute insert
 	_, err = s.db.ExecContext(ctx, sql, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to insert document: %w", err)
+		err = fmt.Errorf("failed to insert document: %w", err)
+		metrics.RecordDatabaseOperation("insert", time.Since(start), err)
+		return nil, err
 	}
 
 	return doc, nil

@@ -10,6 +10,7 @@ import (
 
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/logging"
+	"github.com/hjanuschka/go-deployd/internal/metrics"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -228,6 +229,9 @@ func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Co
 	
 	// Calculate execution time
 	duration := time.Since(startTime)
+	
+	// Record hook execution metrics
+	metrics.RecordHookExecution(collectionName, string(eventType), duration, err)
 	
 	// Log event completion with timing
 	if err != nil {

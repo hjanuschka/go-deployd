@@ -40,6 +40,7 @@ import {
   FiKey,
   FiBook,
   FiFileText,
+  FiActivity,
 } from 'react-icons/fi'
 import { useNavigate, useLocation } from 'react-router-dom'
 
@@ -51,6 +52,7 @@ import Documentation from './pages/Documentation'
 import Logs from './pages/Logs'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
+import Metrics from './pages/Metrics'
 import Sidebar from './components/Sidebar'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
@@ -58,6 +60,7 @@ const menuItems = [
   { text: 'Dashboard', icon: FiHome, path: '/' },
   { text: 'Collections', icon: FiDatabase, path: '/collections' },
   { text: 'API Tester', icon: FiTool, path: '/api-tester' },
+  { text: 'Metrics', icon: FiActivity, path: '/metrics' },
   { text: 'Documentation', icon: FiBook, path: '/documentation' },
   { text: 'Logs', icon: FiFileText, path: '/logs' },
   { text: 'Settings', icon: FiSettings, path: '/settings' }
@@ -169,6 +172,7 @@ function AuthenticatedApp() {
             <Route path="/collections" element={<Collections />} />
             <Route path="/collections/:name" element={<CollectionDetail />} />
             <Route path="/api-tester" element={<ApiTester />} />
+            <Route path="/metrics" element={<Metrics />} />
             <Route path="/documentation" element={<Documentation />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/settings" element={<Settings />} />
