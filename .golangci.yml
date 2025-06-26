@@ -1,0 +1,44 @@
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  skip-dirs:
+    - resources
+    - test_plugin
+  skip-files:
+    - "test_event_system.go"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: "_test\\.go"
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+    # Exclude linting of auto-generated files
+    - path: "resources/"
+      linters:
+        - typecheck
+        - unused
+        - deadcode
+    - path: "test_plugin/"
+      linters:
+        - typecheck
+        - unused
+        - deadcode
+
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - typecheck
+    - staticcheck
+    - unused
+    - ineffassign
+    - misspell
