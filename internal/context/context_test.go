@@ -444,7 +444,7 @@ func TestIntegration(t *testing.T) {
 			"name":   "Integration Test",
 			"status": "active",
 			"metadata": map[string]interface{}{
-				"source": "test",
+				"source":   "test",
 				"priority": 1,
 			},
 		}

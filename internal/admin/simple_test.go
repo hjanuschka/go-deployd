@@ -99,7 +99,7 @@ func TestGetString(t *testing.T) {
 		}
 
 		assert.Equal(t, "John", getString(m, "name"))
-		assert.Equal(t, "", getString(m, "age"))      // Not a string
+		assert.Equal(t, "", getString(m, "age"))     // Not a string
 		assert.Equal(t, "", getString(m, "missing")) // Missing key
 	})
 
@@ -180,4 +180,3 @@ func TestBuildPropertiesMap(t *testing.T) {
 		assert.Equal(t, 0, len(result))
 	})
 }
-

@@ -71,7 +71,7 @@ func TestValidateMasterKey(t *testing.T) {
 func TestSaveSecurityConfig(t *testing.T) {
 	t.Run("Save config to file", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		cfg := config.DefaultSecurityConfig()
 		cfg.MasterKey = "test_master_key"
 		cfg.JWTSecret = "test_jwt_secret"
@@ -99,7 +99,7 @@ func TestSaveSecurityConfig(t *testing.T) {
 
 	t.Run("Save config with custom email settings", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		cfg := config.DefaultSecurityConfig()
 		cfg.Email.Provider = "ses"
 		cfg.Email.From = "custom@example.com"
@@ -148,7 +148,7 @@ func TestLoadSecurityConfig(t *testing.T) {
 
 	t.Run("Load existing config file", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Create existing config
 		existingCfg := config.DefaultSecurityConfig()
 		existingCfg.MasterKey = "existing_master_key"
@@ -171,7 +171,7 @@ func TestLoadSecurityConfig(t *testing.T) {
 
 	t.Run("Load config with missing master key", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Create config without master key
 		existingCfg := config.DefaultSecurityConfig()
 		existingCfg.JWTSecret = "existing_jwt_secret"
@@ -191,7 +191,7 @@ func TestLoadSecurityConfig(t *testing.T) {
 
 	t.Run("Load config with missing JWT secret", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Create config without JWT secret
 		existingCfg := config.DefaultSecurityConfig()
 		existingCfg.MasterKey = "existing_master_key"
@@ -211,7 +211,7 @@ func TestLoadSecurityConfig(t *testing.T) {
 
 	t.Run("Load config with missing JWT expiration", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Create config without JWT expiration
 		existingCfg := config.DefaultSecurityConfig()
 		existingCfg.MasterKey = "existing_master_key"
@@ -232,7 +232,7 @@ func TestLoadSecurityConfig(t *testing.T) {
 
 	t.Run("Load invalid JSON config", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Create invalid JSON file
 		configFile := filepath.Join(tempDir, "security.json")
 		err := os.WriteFile(configFile, []byte("invalid json"), 0600)
@@ -283,25 +283,25 @@ func TestEmailConfigStruct(t *testing.T) {
 func TestMasterKeyGeneration(t *testing.T) {
 	t.Run("Master key format and uniqueness", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Generate first config
 		cfg1, err := config.LoadSecurityConfig(tempDir)
 		require.NoError(t, err)
-		
+
 		// Remove the config and generate again
 		os.RemoveAll(tempDir)
 		os.MkdirAll(tempDir, 0700)
-		
+
 		cfg2, err := config.LoadSecurityConfig(tempDir)
 		require.NoError(t, err)
 
 		// Master keys should be different
 		assert.NotEqual(t, cfg1.MasterKey, cfg2.MasterKey)
-		
+
 		// Both should have proper format
 		assert.Contains(t, cfg1.MasterKey, "mk_")
 		assert.Contains(t, cfg2.MasterKey, "mk_")
-		
+
 		// Should be reasonable length (mk_ + 96 hex chars = 99 total)
 		assert.Len(t, cfg1.MasterKey, 99)
 		assert.Len(t, cfg2.MasterKey, 99)
@@ -312,32 +312,32 @@ func TestJWTSecretGeneration(t *testing.T) {
 	t.Run("JWT secret format and uniqueness", func(t *testing.T) {
 		tempDir1 := t.TempDir()
 		tempDir2 := t.TempDir()
-		
+
 		// Create configs without JWT secrets
 		cfg1Base := config.DefaultSecurityConfig()
 		cfg1Base.MasterKey = "test_key_1"
 		err := config.SaveSecurityConfig(cfg1Base, tempDir1)
 		require.NoError(t, err)
-		
+
 		cfg2Base := config.DefaultSecurityConfig()
 		cfg2Base.MasterKey = "test_key_2"
 		err = config.SaveSecurityConfig(cfg2Base, tempDir2)
 		require.NoError(t, err)
-		
+
 		// Load configs - should generate JWT secrets
 		cfg1, err := config.LoadSecurityConfig(tempDir1)
 		require.NoError(t, err)
-		
+
 		cfg2, err := config.LoadSecurityConfig(tempDir2)
 		require.NoError(t, err)
 
 		// JWT secrets should be different
 		assert.NotEqual(t, cfg1.JWTSecret, cfg2.JWTSecret)
-		
+
 		// Should be hex strings of proper length (64 hex chars)
 		assert.Len(t, cfg1.JWTSecret, 64)
 		assert.Len(t, cfg2.JWTSecret, 64)
-		
+
 		// Should not contain mk_ prefix
 		assert.NotContains(t, cfg1.JWTSecret, "mk_")
 		assert.NotContains(t, cfg2.JWTSecret, "mk_")
@@ -347,34 +347,34 @@ func TestJWTSecretGeneration(t *testing.T) {
 func TestCompleteConfigurationFlow(t *testing.T) {
 	t.Run("Full configuration lifecycle", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// 1. Load config for first time (should create default)
 		cfg1, err := config.LoadSecurityConfig(tempDir)
 		require.NoError(t, err)
-		
+
 		assert.NotEmpty(t, cfg1.MasterKey)
 		assert.True(t, cfg1.AllowRegistration)
 		assert.Equal(t, "24h", cfg1.JWTExpiration)
-		
+
 		// 2. Modify config
 		cfg1.AllowRegistration = false
 		cfg1.JWTExpiration = "12h"
 		cfg1.Email.Provider = "ses"
 		cfg1.Email.From = "custom@myapp.com"
-		
+
 		err = config.SaveSecurityConfig(cfg1, tempDir)
 		require.NoError(t, err)
-		
+
 		// 3. Load config again (should preserve changes)
 		cfg2, err := config.LoadSecurityConfig(tempDir)
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, cfg1.MasterKey, cfg2.MasterKey)
 		assert.False(t, cfg2.AllowRegistration)
 		assert.Equal(t, "12h", cfg2.JWTExpiration)
 		assert.Equal(t, "ses", cfg2.Email.Provider)
 		assert.Equal(t, "custom@myapp.com", cfg2.Email.From)
-		
+
 		// 4. Test master key validation
 		assert.True(t, cfg2.ValidateMasterKey(cfg1.MasterKey))
 		assert.False(t, cfg2.ValidateMasterKey("wrong_key"))
@@ -384,18 +384,18 @@ func TestCompleteConfigurationFlow(t *testing.T) {
 func TestConfigPermissions(t *testing.T) {
 	t.Run("Config file has secure permissions", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		cfg := config.DefaultSecurityConfig()
 		cfg.MasterKey = "test_key"
-		
+
 		err := config.SaveSecurityConfig(cfg, tempDir)
 		require.NoError(t, err)
-		
+
 		// Check file permissions
 		configFile := filepath.Join(tempDir, "security.json")
 		stat, err := os.Stat(configFile)
 		require.NoError(t, err)
-		
+
 		// Should be 0600 (owner read/write only)
 		assert.Equal(t, os.FileMode(0600), stat.Mode().Perm())
 	})
