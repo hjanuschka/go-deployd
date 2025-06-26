@@ -19,17 +19,29 @@ issues:
         - errcheck
         - dupl
         - gosec
-    # Exclude linting of auto-generated files
-    - path: "resources/"
+    # Exclude ALL linting of resource files - they are event handlers not part of main package
+    - path: "resources/.*"
       linters:
         - typecheck
         - unused
         - deadcode
-    - path: "test_plugin/"
+        - gofmt
+        - goimports
+        - govet
+        - staticcheck
+        - ineffassign
+        - misspell
+    - path: "test_plugin/.*"
       linters:
         - typecheck
         - unused
         - deadcode
+        - gofmt
+        - goimports
+        - govet
+        - staticcheck
+        - ineffassign
+        - misspell
 
 linters:
   disable-all: true
