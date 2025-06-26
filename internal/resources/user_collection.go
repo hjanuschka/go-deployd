@@ -9,6 +9,8 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/database"
 	appcontext "github.com/hjanuschka/go-deployd/internal/context"
+	emailpkg "github.com/hjanuschka/go-deployd/internal/email"
+	"github.com/hjanuschka/go-deployd/internal/logging"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,6 +18,7 @@ import (
 type UserCollection struct {
 	*Collection
 	securityConfig *config.SecurityConfig
+	emailService   *emailpkg.EmailService
 }
 
 // UserSessionData represents the session data stored for authenticated users
@@ -39,14 +42,24 @@ func NewUserCollection(name string, collectionConfig *CollectionConfig, db datab
 		securityConfig = config.DefaultSecurityConfig()
 	}
 	
+	// Create email service
+	emailService := emailpkg.NewEmailService(&securityConfig.Email)
+	
 	return &UserCollection{
 		Collection:     collection,
 		securityConfig: securityConfig,
+		emailService:   emailService,
 	}
 }
 
 // Handle extends the base collection handler with authentication endpoints
 func (uc *UserCollection) Handle(ctx *appcontext.Context) error {
+	logging.Info("🔥 USER COLLECTION HANDLE", "user-collection", map[string]interface{}{
+		"method": ctx.Method,
+		"path":   ctx.Request.URL.Path,
+		"id":     ctx.GetID(),
+	})
+	
 	// Handle special authentication endpoints
 	if ctx.Method == "POST" {
 		switch ctx.GetID() {
@@ -74,167 +87,36 @@ func (uc *UserCollection) Handle(ctx *appcontext.Context) error {
 }
 
 // handleLogin authenticates a user and creates a session
+// DEPRECATED: This endpoint is deprecated. Use /auth/login with JWT tokens instead.
 func (uc *UserCollection) handleLogin(ctx *appcontext.Context) error {
-	// Get login credentials from context body
-	body := ctx.Body
-	if body == nil || len(body) == 0 {
-		return ctx.WriteError(400, "Request body is required")
-	}
-	
-	password, ok := body["password"].(string)
-	if !ok || password == "" {
-		return ctx.WriteError(400, "Password is required")
-	}
-	
-	username, hasUsername := body["username"].(string)
-	email, hasEmail := body["email"].(string)
-	
-	if !hasUsername && !hasEmail {
-		return ctx.WriteError(400, "Username or email is required")
-	}
-	
-	// Find user by username or email
-	var query database.QueryBuilder
-	if hasEmail && email != "" {
-		query = database.NewQueryBuilder().Where("email", "$eq", email)
-	} else if hasUsername && username != "" {
-		query = database.NewQueryBuilder().Where("username", "$eq", username)
-	} else {
-		return ctx.WriteError(400, "Username or email is required")
-	}
-	
-	user, err := uc.store.FindOne(ctx.Context(), query)
-	if err != nil {
-		return ctx.WriteError(500, "Database error")
-	}
-	
-	if user == nil {
-		return ctx.WriteError(401, "Invalid credentials")
-	}
-	
-	// Verify password
-	hashedPassword, ok := user["password"].(string)
-	if !ok {
-		return ctx.WriteError(500, "Invalid user data")
-	}
-	
-	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)); err != nil {
-		return ctx.WriteError(401, "Invalid credentials")
-	}
-	
-	// Generate session token
-	token := uc.generateToken()
-	
-	// Store session data
-	sessionData := UserSessionData{
-		UserID:    getStringField(user, "id"),
-		Username:  getStringField(user, "username"),
-		Email:     getStringField(user, "email"),
-		Role:      getStringField(user, "role"),
-		LoginTime: time.Now(),
-		Token:     token,
-	}
-	
-	// Set session data
-	ctx.Session.Set("user", sessionData)
-	ctx.Session.Set("isRoot", sessionData.Role == "admin")
-	
-	// Save session
-	if err := ctx.Session.Save(ctx.SessionStore); err != nil {
-		return ctx.WriteError(500, "Failed to save session")
-	}
-	
-	// Return user data (without password) and token
-	userResponse := make(map[string]interface{})
-	for k, v := range user {
-		if k != "password" {
-			userResponse[k] = v
-		}
-	}
-	userResponse["token"] = token
-	
-	return ctx.WriteJSON(userResponse)
+	ctx.Response.WriteHeader(410)
+	return ctx.WriteJSON(map[string]interface{}{
+		"error":   "Gone",
+		"message": "This login endpoint is deprecated. Please use /auth/login with JWT authentication instead.",
+		"redirect": "/auth/login",
+	})
 }
 
 // handleLogout clears the user session
+// DEPRECATED: This endpoint is deprecated. JWT tokens expire automatically.
 func (uc *UserCollection) handleLogout(ctx *appcontext.Context) error {
-	// Clear session data
-	ctx.Session.Set("user", nil)
-	ctx.Session.Set("isRoot", false)
-	
-	// Save session
-	if err := ctx.Session.Save(ctx.SessionStore); err != nil {
-		return ctx.WriteError(500, "Failed to save session")
-	}
-	
+	ctx.Response.WriteHeader(410)
 	return ctx.WriteJSON(map[string]interface{}{
-		"message": "Logged out successfully",
+		"error":   "Gone",
+		"message": "This logout endpoint is deprecated. JWT tokens expire automatically. Simply delete the client-side token.",
+		"info":    "JWT tokens are stateless and expire automatically based on server configuration.",
 	})
 }
 
 // handleMe returns the current user's information
+// DEPRECATED: This endpoint is deprecated. Use /auth/me instead.
 func (uc *UserCollection) handleMe(ctx *appcontext.Context) error {
-	userData := ctx.Session.Get("user")
-	if userData == nil {
-		return ctx.WriteError(401, "Not authenticated")
-	}
-	
-	// Handle both UserSessionData struct and map[string]interface{} formats
-	var userID string
-	switch data := userData.(type) {
-	case UserSessionData:
-		userID = data.UserID
-	case map[string]interface{}:
-		// Try multiple possible field names for compatibility
-		if id, ok := data["userId"].(string); ok {
-			userID = id
-		} else if id, ok := data["UserID"].(string); ok {
-			userID = id
-		} else if id, ok := data["userid"].(string); ok {
-			// MongoDB may convert field names to lowercase
-			userID = id
-		} else {
-			// Check if there's a nested user object (from admin login)
-			if userObj, ok := data["user"].(map[string]interface{}); ok {
-				if id, ok := userObj["userId"].(string); ok {
-					userID = id
-				} else if id, ok := userObj["userid"].(string); ok {
-					userID = id
-				}
-			}
-			
-			if userID == "" {
-				return ctx.WriteError(500, "Invalid session data: missing userId")
-			}
-		}
-	default:
-		return ctx.WriteError(500, "Invalid session data type")
-	}
-	
-	if userID == "" {
-		return ctx.WriteError(500, "Invalid session data: empty userId")
-	}
-	
-	// Get fresh user data from database
-	query := database.NewQueryBuilder().Where("id", "$eq", userID)
-	user, err := uc.store.FindOne(ctx.Context(), query)
-	if err != nil {
-		return ctx.WriteError(500, "Database error")
-	}
-	
-	if user == nil {
-		return ctx.WriteError(404, "User not found")
-	}
-	
-	// Return user data (without password)
-	userResponse := make(map[string]interface{})
-	for k, v := range user {
-		if k != "password" {
-			userResponse[k] = v
-		}
-	}
-	
-	return ctx.WriteJSON(userResponse)
+	ctx.Response.WriteHeader(410)
+	return ctx.WriteJSON(map[string]interface{}{
+		"error":   "Gone", 
+		"message": "This endpoint is deprecated. Please use /auth/me with JWT authentication instead.",
+		"redirect": "/auth/me",
+	})
 }
 
 // handleRegister creates a new user account
@@ -261,6 +143,11 @@ func (uc *UserCollection) handleRegister(ctx *appcontext.Context) error {
 	
 	if !hasEmail && !hasUsername {
 		return ctx.WriteError(400, "Username or email is required")
+	}
+	
+	// Email is required for verification
+	if !hasEmail || email == "" {
+		return ctx.WriteError(400, "Email is required for user registration")
 	}
 	
 	// Check if user already exists
@@ -299,38 +186,58 @@ func (uc *UserCollection) handleRegister(ctx *appcontext.Context) error {
 		userData["role"] = "user"
 	}
 	
-	// Delegate to base collection for validation and creation
-	ctx.Body = userData
-	return uc.Collection.handlePost(ctx)
+	// If email verification is required, set user as inactive and generate verification token
+	if uc.securityConfig.RequireVerification && uc.emailService.IsConfigured() {
+		// Generate verification token
+		verificationToken, err := emailpkg.GenerateVerificationToken()
+		if err != nil {
+			return ctx.WriteError(500, "Failed to generate verification token")
+		}
+		
+		// Set verification fields
+		userData["active"] = false
+		userData["isVerified"] = false
+		userData["verificationToken"] = verificationToken
+		userData["verificationExpires"] = time.Now().Add(24 * time.Hour)
+		
+		// Delegate to base collection for validation and creation
+		ctx.Body = userData
+		if err := uc.Collection.handlePost(ctx); err != nil {
+			return err
+		}
+		
+		// Send verification email (do this after successful user creation)
+		baseURL := "http://localhost:" + ctx.Request.Host // Get base URL from request
+		if err := uc.emailService.SendVerificationEmail(email, username, verificationToken, baseURL); err != nil {
+			// Log the error but don't fail the registration
+			// User can request resend later
+			// TODO: Add proper logging
+		}
+		
+		return nil
+	} else {
+		// No email verification required, set user as active
+		userData["active"] = true
+		userData["isVerified"] = true
+		
+		// Delegate to base collection for validation and creation
+		ctx.Body = userData
+		return uc.Collection.handlePost(ctx)
+	}
 }
 
 // handleGenerateToken generates a static API token for a user
 func (uc *UserCollection) handleGenerateToken(ctx *appcontext.Context) error {
-	userData := ctx.Session.Get("user")
-	if userData == nil {
+	if !ctx.IsAuthenticated {
 		return ctx.WriteError(401, "Not authenticated")
 	}
 	
-	sessionData, ok := userData.(UserSessionData)
-	if !ok {
-		return ctx.WriteError(500, "Invalid session data")
-	}
-	
-	// Generate new static token
-	staticToken := uc.generateStaticToken()
-	
-	// Update user with new token
-	query := database.NewQueryBuilder().Where("id", "$eq", sessionData.UserID)
-	update := database.NewUpdateBuilder().Set("apiToken", staticToken)
-	
-	_, err := uc.store.Update(ctx.Context(), query, update)
-	if err != nil {
-		return ctx.WriteError(500, "Failed to update user")
-	}
-	
+	// DEPRECATED: This endpoint is deprecated. Use JWT-based authentication instead.
+	ctx.Response.WriteHeader(410)
 	return ctx.WriteJSON(map[string]interface{}{
-		"token": staticToken,
-		"message": "Static API token generated successfully",
+		"error":   "Gone",
+		"message": "This endpoint is deprecated. Use JWT authentication for API access.",
+		"info":    "JWT tokens provide secure, stateless authentication without requiring server-side token management.",
 	})
 }
 

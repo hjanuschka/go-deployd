@@ -17,8 +17,10 @@ import (
 )
 
 type CollectionConfig struct {
-	Properties   map[string]Property                        `json:"properties"`
-	EventConfig  map[string]events.EventConfiguration       `json:"eventConfig,omitempty"`
+	Properties                map[string]Property                    `json:"properties"`
+	EventConfig               map[string]events.EventConfiguration   `json:"eventConfig,omitempty"`
+	AllowAdditionalProperties bool                                   `json:"allowAdditionalProperties,omitempty"`
+	IsBuiltin                 bool                                   `json:"isBuiltin,omitempty"`
 }
 
 type Collection struct {
@@ -133,6 +135,11 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 	}
 	
 	if id != "" {
+		logging.Info("🔍 SINGLE DOCUMENT GET REQUEST", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"documentId": id,
+			"query":      ctx.Query,
+		})
+		
 		// Get single document
 		query := database.NewQueryBuilder().Where("id", "$eq", id)
 		doc, err := c.store.FindOne(ctx.Context(), query)
@@ -143,8 +150,18 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 			return ctx.WriteError(404, "Document not found")
 		}
 		
+		logging.Info("📄 DOCUMENT RETRIEVED", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"documentId": id,
+			"dataKeys":   getDataKeys(doc),
+		})
+		
 		// Check for $skipEvents parameter in query to bypass events
 		skipEvents := ctx.Query["$skipEvents"] == "true"
+		
+		logging.Info("🎯 EVENT DECISION", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"skipEvents": skipEvents,
+			"willRunEvent": !skipEvents,
+		})
 		
 		// Run Get event for single document (skip if $skipEvents is true)
 		if !skipEvents {
@@ -155,6 +172,11 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 				return ctx.WriteError(500, err.Error())
 			}
 		}
+		
+		logging.Info("📤 RETURNING DOCUMENT", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"documentId": id,
+			"finalData": doc,
+		})
 		
 		return ctx.WriteJSON(doc)
 	}
@@ -179,14 +201,24 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 	filteredDocs := make([]map[string]interface{}, 0)
 	for _, doc := range docs {
 		if !skipEvents {
-			if err := c.runGetEvent(ctx, doc); err != nil {
-				// Skip documents that fail the Get event
-				if _, ok := err.(*events.ScriptError); ok {
-					continue
-				}
+			// Create a copy of the document for event processing
+			eventDoc := make(map[string]interface{})
+			for k, v := range doc {
+				eventDoc[k] = v
 			}
+			
+			if err := c.runGetEvent(ctx, eventDoc); err != nil {
+				// Skip documents that fail the Get event (any error type)
+				// This includes script errors, cancellations, validation failures, etc.
+				continue
+			}
+			
+			// Use the event-processed document as the result
+			filteredDocs = append(filteredDocs, eventDoc)
+		} else {
+			// No events, use original document
+			filteredDocs = append(filteredDocs, doc)
 		}
-		filteredDocs = append(filteredDocs, doc)
 	}
 	
 	return ctx.WriteJSON(filteredDocs)
@@ -474,7 +506,7 @@ func (c *Collection) handleDelete(ctx *appcontext.Context) error {
 }
 
 func (c *Collection) handleCount(ctx *appcontext.Context) error {
-	if !ctx.Session.IsRoot() {
+	if !ctx.IsRoot {
 		return ctx.WriteError(403, "Must be root to count")
 	}
 	
@@ -704,6 +736,12 @@ func (c *Collection) extractQueryOptions(query map[string]interface{}) (database
 		}
 	}
 	
+	// Apply default pagination if no limit was specified
+	if opts.Limit == nil {
+		defaultLimit := int64(50) // Default to 50 records per page
+		opts.Limit = &defaultLimit
+	}
+	
 	return opts, cleanQuery
 }
 
@@ -799,7 +837,26 @@ func (c *Collection) runValidateEvent(ctx *appcontext.Context, data map[string]i
 }
 
 func (c *Collection) runGetEvent(ctx *appcontext.Context, data map[string]interface{}) error {
-	return c.scriptManager.RunEvent(events.EventGet, ctx, data)
+	logging.Info("🔥 RUNNING GET EVENT", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+		"documentId": data["id"],
+		"email":      data["email"],
+		"hasScript":  c.scriptManager != nil,
+	})
+	
+	err := c.scriptManager.RunEvent(events.EventGet, ctx, data)
+	
+	if err != nil {
+		logging.Error("❌ GET EVENT FAILED", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"error": err.Error(),
+		})
+	} else {
+		logging.Info("✅ GET EVENT COMPLETED", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"documentId":    data["id"],
+			"modifiedData": data,
+		})
+	}
+	
+	return err
 }
 
 func (c *Collection) runPostEvent(ctx *appcontext.Context, data map[string]interface{}) error {
@@ -838,6 +895,14 @@ func (c *Collection) GetHotReloadInfo() map[string]interface{} {
 
 func (c *Collection) GetConfigPath() string {
 	return c.configPath
+}
+
+func (c *Collection) SetConfigPath(path string) {
+	c.configPath = path
+}
+
+func (c *Collection) GetScriptManager() *events.UniversalScriptManager {
+	return c.scriptManager
 }
 
 func (c *Collection) ReloadScripts() error {

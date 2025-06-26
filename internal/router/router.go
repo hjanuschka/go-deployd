@@ -1,6 +1,8 @@
 package router
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,19 +16,17 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/database"
 	"github.com/hjanuschka/go-deployd/internal/resources"
-	"github.com/hjanuschka/go-deployd/internal/sessions"
 )
 
 type Router struct {
 	resources     []resources.Resource
 	db            database.DatabaseInterface
-	sessions      *sessions.SessionStore
 	development   bool
 	configPath    string
 	jwtManager    *auth.JWTManager
 }
 
-func New(db database.DatabaseInterface, sessions *sessions.SessionStore, development bool, configPath string) *Router {
+func New(db database.DatabaseInterface, development bool, configPath string) *Router {
 	// Load security config to set up JWT
 	var jwtManager *auth.JWTManager
 	securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
@@ -40,7 +40,6 @@ func New(db database.DatabaseInterface, sessions *sessions.SessionStore, develop
 
 	r := &Router{
 		db:          db,
-		sessions:    sessions,
 		development: development,
 		configPath:  configPath,
 		jwtManager:  jwtManager,
@@ -55,6 +54,9 @@ func (r *Router) loadResources() {
 	if r.configPath == "" {
 		r.configPath = "./resources"
 	}
+	
+	// Always create built-in users collection first
+	r.createBuiltinUsersCollection()
 	
 	// Create default collection resources if config path exists
 	if _, err := os.Stat(r.configPath); os.IsNotExist(err) {
@@ -244,4 +246,210 @@ func (r *Router) sortResources() {
 	sort.Slice(r.resources, func(i, j int) bool {
 		return len(strings.Split(r.resources[i].GetPath(), "/")) > len(strings.Split(r.resources[j].GetPath(), "/"))
 	})
+}
+
+// createBuiltinUsersCollection creates the built-in users collection with default fields
+func (r *Router) createBuiltinUsersCollection() {
+	// Define the current built-in schema for users collection
+	currentBuiltinSchema := map[string]resources.Property{
+		"username": {
+			Type:     "string",
+			Required: true,
+			Unique:   true,
+			System:   true, // Mark as system field
+		},
+		"email": {
+			Type:     "string", 
+			Required: true,
+			Unique:   true,
+			System:   true, // Mark as system field
+		},
+		"password": {
+			Type:     "string",
+			Required: true,
+			System:   true, // Mark as system field
+		},
+		"role": {
+			Type:    "string",
+			Default: "user",
+			System:  true, // Mark as system field
+		},
+		"active": {
+			Type:    "boolean",
+			Default: false, // Users start inactive until email verification
+			System:  true,  // Mark as system field
+		},
+		"isVerified": {
+			Type:    "boolean",
+			Default: false,
+			System:  true, // Mark as system field
+		},
+		"verificationToken": {
+			Type:   "string",
+			System: true, // Mark as system field
+		},
+		"verificationExpires": {
+			Type:   "date",
+			System: true, // Mark as system field
+		},
+		"createdAt": {
+			Type:    "date",
+			Default: "now",
+			System:  true, // Mark as system field
+		},
+		"updatedAt": {
+			Type:    "date", 
+			Default: "now",
+			System:  true, // Mark as system field
+		},
+	}
+	
+	// Check if users collection config already exists and migrate if needed
+	usersConfigPath := filepath.Join(r.configPath, "users")
+	configFile := filepath.Join(usersConfigPath, "config.json")
+	
+	var finalConfig *resources.CollectionConfig
+	
+	if _, err := os.Stat(configFile); err == nil {
+		// Existing config found - perform migration
+		log.Printf("🔄 Found existing users collection, checking for schema migration...")
+		finalConfig = r.migrateBuiltinCollection(configFile, currentBuiltinSchema)
+	} else {
+		// No existing config - create new one with built-in schema
+		log.Printf("📦 Creating new built-in users collection...")
+		finalConfig = &resources.CollectionConfig{
+			Properties:                currentBuiltinSchema,
+			AllowAdditionalProperties: true,
+			IsBuiltin:                 true,
+		}
+		
+		// Save the initial config file
+		if err := r.saveCollectionConfig(usersConfigPath, finalConfig); err != nil {
+			log.Printf("Warning: Failed to save users collection config: %v", err)
+		}
+	}
+	
+	// Create UserCollection with the final config
+	usersCollection := resources.NewUserCollection("users", finalConfig, r.db)
+	
+	// CRITICAL: Set the configPath and load event scripts for built-in users collection
+	usersCollection.Collection.SetConfigPath(usersConfigPath)
+	
+	// Load event scripts if the users directory exists
+	if _, err := os.Stat(usersConfigPath); err == nil {
+		log.Printf("🔥 LOADING EVENT SCRIPTS FOR BUILT-IN USERS COLLECTION...")
+		if err := usersCollection.Collection.GetScriptManager().LoadScriptsWithConfig(usersConfigPath, finalConfig.EventConfig); err != nil {
+			log.Printf("❌ Failed to load event scripts for users collection: %v", err)
+		} else {
+			log.Printf("✅ Successfully loaded event scripts for built-in users collection")
+		}
+	} else {
+		log.Printf("⚠️ Users config directory not found: %s", usersConfigPath)
+	}
+	
+	r.resources = append(r.resources, usersCollection)
+}
+
+// migrateBuiltinCollection handles schema migration for built-in collections
+func (r *Router) migrateBuiltinCollection(configFile string, currentBuiltinSchema map[string]resources.Property) *resources.CollectionConfig {
+	// Read existing config
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		log.Printf("Warning: Failed to read existing config, creating new one: %v", err)
+		return &resources.CollectionConfig{
+			Properties:                currentBuiltinSchema,
+			AllowAdditionalProperties: true,
+			IsBuiltin:                 true,
+		}
+	}
+	
+	var existingConfig resources.CollectionConfig
+	if err := json.Unmarshal(data, &existingConfig); err != nil {
+		log.Printf("Warning: Failed to parse existing config, creating new one: %v", err)
+		return &resources.CollectionConfig{
+			Properties:                currentBuiltinSchema,
+			AllowAdditionalProperties: true,
+			IsBuiltin:                 true,
+		}
+	}
+	
+	// Ensure properties map exists
+	if existingConfig.Properties == nil {
+		existingConfig.Properties = make(map[string]resources.Property)
+	}
+	
+	// Track if any changes were made
+	migrationNeeded := false
+	
+	// Add or update built-in system properties
+	for fieldName, builtinProperty := range currentBuiltinSchema {
+		if existingProperty, exists := existingConfig.Properties[fieldName]; exists {
+			// Property exists - check if it needs updating
+			if !r.propertiesEqual(existingProperty, builtinProperty) {
+				log.Printf("  📝 Updating system field '%s' in users collection", fieldName)
+				existingConfig.Properties[fieldName] = builtinProperty
+				migrationNeeded = true
+			}
+		} else {
+			// Property doesn't exist - add it
+			log.Printf("  ➕ Adding new system field '%s' to users collection", fieldName)
+			existingConfig.Properties[fieldName] = builtinProperty
+			migrationNeeded = true
+		}
+	}
+	
+	// Ensure collection is marked as built-in and allows additional properties
+	if !existingConfig.IsBuiltin {
+		log.Printf("  🏗️ Marking users collection as built-in")
+		existingConfig.IsBuiltin = true
+		migrationNeeded = true
+	}
+	if !existingConfig.AllowAdditionalProperties {
+		log.Printf("  🔧 Enabling additional properties for users collection")
+		existingConfig.AllowAdditionalProperties = true
+		migrationNeeded = true
+	}
+	
+	// Save updated config if migration was needed
+	if migrationNeeded {
+		if err := r.saveCollectionConfig(filepath.Dir(configFile), &existingConfig); err != nil {
+			log.Printf("Warning: Failed to save migrated config: %v", err)
+		} else {
+			log.Printf("✅ Successfully migrated users collection schema")
+		}
+	} else {
+		log.Printf("✅ Users collection schema is up to date")
+	}
+	
+	return &existingConfig
+}
+
+// propertiesEqual compares two Property structs for equality
+func (r *Router) propertiesEqual(a, b resources.Property) bool {
+	return a.Type == b.Type &&
+		a.Required == b.Required &&
+		a.Unique == b.Unique &&
+		a.System == b.System &&
+		fmt.Sprintf("%v", a.Default) == fmt.Sprintf("%v", b.Default)
+}
+
+// saveCollectionConfig saves a collection configuration to disk
+func (r *Router) saveCollectionConfig(configDir string, config *resources.CollectionConfig) error {
+	// Ensure directory exists
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	
+	// Write config.json
+	configFile := filepath.Join(configDir, "config.json")
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	
+	if err := os.WriteFile(configFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	
+	return nil
 }

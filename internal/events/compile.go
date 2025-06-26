@@ -14,7 +14,6 @@ import (
 	"github.com/dop251/goja"
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/logging"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 // EventContext provides context for event scripts (mirrored from plugin)
@@ -183,7 +182,7 @@ golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632
 // createGoWrapper is defined in compile_wrapper.go
 
 // RunGoPlugin loads and executes a Go plugin
-func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
+func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interface{}) error {
 	startTime := time.Now()
 	
 	// Load the plugin
@@ -202,34 +201,26 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data bson.M) error {
 
 	// Create event context
 	eventCtx := &EventContext{
-		Ctx:      ctx,
-		Data:     data,
-		Errors:   make(map[string]string),
-		Query:    ctx.Query,
-		Internal: false,
-		IsRoot:   ctx.Session != nil && ctx.Session.IsRoot(),
-		Resource: ctx.Resource,
+		Ctx:        ctx,
+		Data:       data,
+		Errors:     make(map[string]string),
+		Query:      ctx.Query,
+		Internal:   false,
+		IsRoot:     ctx.IsRoot,
+		Resource:   ctx.Resource,
+		hideFields: make([]string, 0),
 	}
 
-	if ctx.Session != nil {
-		if user := ctx.Session.Get("user"); user != nil {
-			// Handle both UserSessionData struct and map[string]interface{} formats
-			switch userData := user.(type) {
-			case bson.M:
-				eventCtx.Me = userData
-				// Add compatibility fields for all possible variations
-				addCompatibilityFields(userData)
-			case map[string]interface{}:
-				eventCtx.Me = userData
-				// Add compatibility fields for all possible variations
-				addCompatibilityFields(userData)
-			default:
-				// Try to convert struct to map for compatibility
-				if userMap := convertUserToMap(userData); userMap != nil {
-					eventCtx.Me = userMap
-				}
-			}
+	if ctx.IsAuthenticated {
+		// Create user data from JWT authentication
+		userData := map[string]interface{}{
+			"id":       ctx.UserID,
+			"username": ctx.Username,
+			"isRoot":   ctx.IsRoot,
 		}
+		eventCtx.Me = userData
+		// Add compatibility fields for all possible variations
+		addCompatibilityFields(userData)
 	}
 
 	// Set up cancel function

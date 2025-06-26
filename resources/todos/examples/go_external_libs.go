@@ -1,3 +1,5 @@
+package main
+
 // Example: Go Event Script with External Libraries
 // This demonstrates various external Go libraries that can be used in event scripts
 

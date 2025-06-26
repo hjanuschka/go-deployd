@@ -38,10 +38,33 @@ func CreateGoWrapper(userCode string) string {
 	
 	userImports := strings.Join(imports, "\n")
 	userFunctions := strings.Join(functions, "\n")
+	
+	// Check if fmt is already imported by user OR if user code uses fmt functions
+	hasFmt := false
+	for _, imp := range imports {
+		if strings.Contains(imp, `"fmt"`) {
+			hasFmt = true
+			break
+		}
+	}
+	
+	// Check if user code actually uses fmt functions
+	usesFmt := strings.Contains(userFunctions, "fmt.") || 
+	          strings.Contains(userFunctions, "Printf") ||
+	          strings.Contains(userFunctions, "Sprintf") ||
+	          strings.Contains(userFunctions, "Print")
+	
+	// Build imports section - only import fmt if user code uses it and doesn't already import it
+	wrapperImports := `"reflect"`
+	if usesFmt && !hasFmt {
+		wrapperImports = `"fmt"
+	"reflect"`
+	}
+	
 	template := `package main
 
 import (
-	"reflect"
+	` + wrapperImports + `
 )
 
 %s
@@ -112,9 +135,7 @@ func (ctx *EventContext) GetHiddenFields() []string {
 	return ctx.hideFields
 }
 
-// User code starts here
 %s
-// User code ends here
 
 // EventHandler is the exported plugin handler
 var EventHandler eventHandler
@@ -141,7 +162,29 @@ func (h eventHandler) Run(ctx interface{}) error {
 		Log:      safeGetLogField(v, "Log"),
 	}
 	
-	return Run(localCtx)
+	// Run the user's event handler
+	err := Run(localCtx)
+	
+	// Sync changes back to the original context using reflection
+	// Note: We need to work with the original pointer value, not the dereferenced struct
+	origV := reflect.ValueOf(ctx)
+	if origV.Kind() == reflect.Ptr && origV.Elem().Kind() == reflect.Struct {
+		structV := origV.Elem()
+		
+		// Sync Data changes
+		dataField := structV.FieldByName("Data")
+		if dataField.IsValid() && dataField.CanSet() {
+			dataField.Set(reflect.ValueOf(localCtx.Data))
+		}
+		
+		// Sync hidden fields back
+		hideFieldsField := structV.FieldByName("hideFields")
+		if hideFieldsField.IsValid() && hideFieldsField.CanSet() {
+			hideFieldsField.Set(reflect.ValueOf(localCtx.hideFields))
+		}
+	}
+	
+	return err
 }
 
 // Helper function to get field value by name
@@ -209,5 +252,6 @@ func safeGetLogField(v reflect.Value, fieldName string) func(string, ...map[stri
 	return deployd.Log // fallback to global deployd.Log
 }
 `
+	
 	return fmt.Sprintf(template, userImports, userFunctions)
 }

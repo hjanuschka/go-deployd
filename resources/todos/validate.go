@@ -1,3 +1,5 @@
+package main
+
 // On Validate - Validate data before saving (Go version)
 func Run(ctx *EventContext) error {
     // Validate required fields
