@@ -127,6 +127,18 @@ run-port:
 test:
 	go test ./...
 
+# Run tests with coverage
+test-coverage:
+	@echo "🧪 Running tests with coverage..."
+	@./run_tests.sh
+
+# Run tests with coverage (verbose)
+test-coverage-verbose:
+	@echo "🧪 Running tests with coverage (verbose)..."
+	@go test -v -coverprofile=coverage.out -covermode=atomic ./...
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "📊 Coverage report generated: coverage.html"
+
 # Clean build artifacts
 clean:
 	rm -rf bin/
