@@ -3,8 +3,7 @@ run:
   issues-exit-code: 1
   tests: true
   skip-dirs:
-    - resources
-    - test_plugin
+    - .excluded
   skip-files:
     - "test_event_system.go"
 
@@ -19,29 +18,6 @@ issues:
         - errcheck
         - dupl
         - gosec
-    # Exclude ALL linting of resource files - they are event handlers not part of main package
-    - path: "resources/.*"
-      linters:
-        - typecheck
-        - unused
-        - deadcode
-        - gofmt
-        - goimports
-        - govet
-        - staticcheck
-        - ineffassign
-        - misspell
-    - path: "test_plugin/.*"
-      linters:
-        - typecheck
-        - unused
-        - deadcode
-        - gofmt
-        - goimports
-        - govet
-        - staticcheck
-        - ineffassign
-        - misspell
 
 linters:
   disable-all: true
