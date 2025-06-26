@@ -97,6 +97,12 @@ jobs:
     - name: Download Go dependencies
       run: go mod download
 
+    - name: Clear Go plugin cache to prevent version mismatches
+      run: |
+        find . -name "*.so" -type f -delete
+        find . -name ".plugins" -type d -exec rm -rf {} +
+        echo "Cleared all .so files and .plugins directories to force fresh plugin compilation"
+
     - name: Setup JavaScript sandbox dependencies
       run: |
         cd js-sandbox

@@ -81,6 +81,14 @@ func (gpm *GoPluginManager) compilePlugin(sourcePath, pluginPath string) error {
 		return err
 	}
 
+	// Force recompilation by removing existing plugin
+	// This prevents version mismatch issues in CI/CD
+	if _, err := os.Stat(pluginPath); err == nil {
+		if err := os.Remove(pluginPath); err != nil {
+			return fmt.Errorf("failed to remove existing plugin: %w", err)
+		}
+	}
+
 	// Create a wrapper that implements the EventPlugin interface
 	wrapperPath := strings.TrimSuffix(sourcePath, ".go") + "_wrapper.go"
 	if err := gpm.createWrapper(sourcePath, wrapperPath); err != nil {

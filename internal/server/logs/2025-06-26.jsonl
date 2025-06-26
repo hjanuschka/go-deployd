@@ -58,3 +58,9 @@
 {"timestamp":"2025-06-26T20:12:11.945676+02:00","level":"info","message":"Starting go-deployd server","source":"server","data":{"database":"sqlite","development":true,"port":0}}
 {"timestamp":"2025-06-26T20:12:11.971131+02:00","level":"info","message":"Starting go-deployd server","source":"server","data":{"database":"sqlite","development":true,"port":0}}
 {"timestamp":"2025-06-26T20:12:11.996539+02:00","level":"info","message":"Starting go-deployd server","source":"server","data":{"database":"sqlite","development":true,"port":0}}
+{"timestamp":"2025-06-26T22:16:12.684501+02:00","level":"info","message":"Starting go-deployd server","source":"server","data":{"database":"sqlite","development":true,"port":0}}
+{"timestamp":"2025-06-26T22:16:12.726394+02:00","level":"info","message":"V8 pool initialized successfully","source":"v8-pool","data":{"poolSize":4}}
+{"timestamp":"2025-06-26T22:16:12.755426+02:00","level":"info","message":"Starting go-deployd server","source":"server","data":{"database":"sqlite","development":true,"port":0}}
+{"timestamp":"2025-06-26T22:16:12.794313+02:00","level":"info","message":"Starting go-deployd server","source":"server","data":{"database":"sqlite","development":true,"port":0}}
+{"timestamp":"2025-06-26T22:16:12.828254+02:00","level":"info","message":"Starting go-deployd server","source":"server","data":{"database":"sqlite","development":true,"port":0}}
+{"timestamp":"2025-06-26T22:16:12.861787+02:00","level":"info","message":"Starting go-deployd server","source":"server","data":{"database":"sqlite","development":true,"port":0}}

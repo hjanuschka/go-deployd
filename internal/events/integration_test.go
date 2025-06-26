@@ -16,6 +16,9 @@ func TestGoEventHandlers(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	t.Run("Go handler architecture validation", func(t *testing.T) {
+		// Clean up any existing plugin cache to force recompilation
+		pluginDir := filepath.Join(tmpDir, ".plugins")
+		os.RemoveAll(pluginDir)
 		// Create a Go event handler that modifies data
 		handlerPath := filepath.Join(tmpDir, "post.go")
 		handlerCode := `
