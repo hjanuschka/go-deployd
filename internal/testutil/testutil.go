@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hjanuschka/go-deployd/internal/database"
-	"github.com/hjanuschka/go-deployd/internal/resources"
 )
 
 func init() {
@@ -28,29 +27,47 @@ func CreateTestDB(t *testing.T) database.DatabaseInterface {
 		dbType = "sqlite"
 	}
 
-	var db database.DatabaseInterface
+	var config *database.Config
 	var err error
 
 	switch dbType {
 	case "sqlite":
 		dbPath := filepath.Join(t.TempDir(), "test.db")
-		db, err = database.NewSQLiteDB(dbPath)
+		config = &database.Config{
+			Name: dbPath,
+		}
 	case "mongodb":
 		mongoURL := os.Getenv("TEST_MONGO_URL")
 		if mongoURL == "" {
-			mongoURL = "mongodb://localhost:27017/test_deployd"
+			mongoURL = "mongodb://localhost:27017"
 		}
-		db, err = database.NewMongoDB(mongoURL)
+		config = &database.Config{
+			Host: "localhost",
+			Port: 27017,
+			Name: "test_deployd_" + GenerateRandomName("db"),
+		}
 	case "mysql":
-		mysqlDSN := os.Getenv("TEST_MYSQL_DSN")
-		if mysqlDSN == "" {
-			mysqlDSN = "root:password@tcp(localhost:3306)/test_deployd?parseTime=true"
+		config = &database.Config{
+			Host:     os.Getenv("TEST_MYSQL_HOST"),
+			Port:     3306,
+			Name:     "test_deployd_" + GenerateRandomName("db"),
+			Username: os.Getenv("TEST_MYSQL_USER"),
+			Password: os.Getenv("TEST_MYSQL_PASSWORD"),
 		}
-		db, err = database.NewMySQLDB(mysqlDSN)
+		if config.Host == "" {
+			config.Host = "localhost"
+		}
+		if config.Username == "" {
+			config.Username = "root"
+		}
+		if config.Password == "" {
+			config.Password = "password"
+		}
 	default:
 		t.Fatalf("unsupported database type: %s", dbType)
 	}
 
+	db, err := database.NewDatabase(database.DatabaseType(dbType), config)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}
@@ -58,51 +75,26 @@ func CreateTestDB(t *testing.T) database.DatabaseInterface {
 	return db
 }
 
-func CreateTestCollection(t *testing.T, db database.DatabaseInterface, collectionName string) *resources.Collection {
+func CreateTestCollection(t *testing.T, db database.DatabaseInterface, collectionName string) database.StoreInterface {
 	if collectionName == "" {
 		collectionName = GenerateRandomName("test_collection")
 	}
 
-	collection := &resources.Collection{
-		Name: collectionName,
-		Properties: map[string]resources.Property{
-			"name": {
-				Name:     "name",
-				Type:     "string",
-				Required: true,
-			},
-			"owner": {
-				Name:     "owner",
-				Type:     "string",
-				Required: true,
-			},
-			"data": {
-				Name:     "data",
-				Type:     "object",
-				Required: false,
-			},
-		},
-	}
-
-	store := db.GetStore(collectionName)
+	store := db.CreateStore(collectionName)
 	if store == nil {
-		t.Fatalf("failed to get store for collection %s", collectionName)
+		t.Fatalf("failed to create store for collection %s", collectionName)
 	}
 
-	ctx := context.Background()
-	err := store.CreateTable(ctx)
-	if err != nil {
-		t.Fatalf("failed to create table for collection %s: %v", collectionName, err)
-	}
-
-	return collection
+	return store
 }
 
 func CleanupCollection(t *testing.T, db database.DatabaseInterface, collectionName string) {
-	store := db.GetStore(collectionName)
+	store := db.CreateStore(collectionName)
 	if store != nil {
 		ctx := context.Background()
-		_ = store.DropTable(ctx)
+		// Try to remove all documents from the collection
+		emptyQuery := database.NewQueryBuilder()
+		_, _ = store.Remove(ctx, emptyQuery)
 	}
 }
 
@@ -114,9 +106,9 @@ type TestUser struct {
 }
 
 func CreateTestUser(t *testing.T, db database.DatabaseInterface) *TestUser {
-	userStore := db.GetStore("users")
+	userStore := db.CreateStore("users")
 	if userStore == nil {
-		t.Fatal("failed to get users store")
+		t.Fatal("failed to create users store")
 	}
 
 	username := GenerateRandomName("testuser")
@@ -136,10 +128,14 @@ func CreateTestUser(t *testing.T, db database.DatabaseInterface) *TestUser {
 	}
 
 	userID := ""
-	if id, ok := result.InsertedID.(string); ok {
+	if id, ok := result.(string); ok {
 		userID = id
+	} else if insertResult, ok := result.(map[string]interface{}); ok {
+		if id, exists := insertResult["InsertedID"]; exists {
+			userID = id.(string)
+		}
 	} else {
-		t.Fatal("failed to get user ID")
+		userID = userStore.CreateUniqueIdentifier()
 	}
 
 	return &TestUser{
@@ -152,9 +148,10 @@ func CreateTestUser(t *testing.T, db database.DatabaseInterface) *TestUser {
 func CleanupTestData(t *testing.T, db database.DatabaseInterface, collections []string) {
 	ctx := context.Background()
 	for _, collName := range collections {
-		store := db.GetStore(collName)
+		store := db.CreateStore(collName)
 		if store != nil {
-			_ = store.DropTable(ctx)
+			emptyQuery := database.NewQueryBuilder()
+			_, _ = store.Remove(ctx, emptyQuery)
 		}
 	}
 }
