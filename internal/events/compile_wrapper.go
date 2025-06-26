@@ -82,18 +82,18 @@ func CreateGoWrapper(userCode string) string {
 
 	// Build complete imports section, merging user imports with wrapper imports
 	var allImports []string
-	
+
 	// Add user imports
 	for _, imp := range imports {
 		allImports = append(allImports, "\t"+imp)
 	}
-	
+
 	// Add wrapper-required imports if not already present
 	if !hasFmt && usesFmt {
 		allImports = append(allImports, "\t\"fmt\"")
 	}
 	allImports = append(allImports, "\t\"reflect\"")
-	
+
 	template := `package main
 
 import (
