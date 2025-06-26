@@ -50,7 +50,7 @@ func CreateTestDB(t *testing.T) database.DatabaseInterface {
 		config = &database.Config{
 			Host:     os.Getenv("TEST_MYSQL_HOST"),
 			Port:     3306,
-			Name:     "test_deployd_" + GenerateRandomName("db"),
+			Name:     "deployd_test", // Use the pre-created test database
 			Username: os.Getenv("TEST_MYSQL_USER"),
 			Password: os.Getenv("TEST_MYSQL_PASSWORD"),
 		}
@@ -61,7 +61,7 @@ func CreateTestDB(t *testing.T) database.DatabaseInterface {
 			config.Username = "root"
 		}
 		if config.Password == "" {
-			config.Password = "password"
+			config.Password = "testpass"
 		}
 	default:
 		t.Fatalf("unsupported database type: %s", dbType)
