@@ -59,11 +59,12 @@ func TestUniversalScriptManagerComprehensive(t *testing.T) {
 		goContent := `
 package main
 
-import (
-	"github.com/hjanuschka/go-deployd/internal/context"
-)
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
 
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+func Handle(ctx *Context, data map[string]interface{}) error {
 	data["processed"] = true
 	return nil
 }
@@ -125,11 +126,12 @@ function handle(ctx, data) {
 		goContent := `
 package main
 
-import (
-	"github.com/hjanuschka/go-deployd/internal/context"
-)
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
 
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+func Handle(ctx *Context, data map[string]interface{}) error {
 	data["processed"] = true
 	return nil
 }
@@ -308,8 +310,11 @@ func TestLoadScriptsWithConfigComprehensive(t *testing.T) {
 		jsContent := `function handle(ctx, data) { data.js = true; return data; }`
 		goContent := `
 package main
-import "github.com/hjanuschka/go-deployd/internal/context"
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
+func Handle(ctx *Context, data map[string]interface{}) error {
 	data["go"] = true
 	return nil
 }
@@ -355,8 +360,11 @@ func Handle(ctx *context.Context, data map[string]interface{}) error {
 		// Create Go file without explicit config
 		goContent := `
 package main
-import "github.com/hjanuschka/go-deployd/internal/context"
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
+func Handle(ctx *Context, data map[string]interface{}) error {
 	return nil
 }
 `
@@ -405,11 +413,12 @@ func TestHotReloadFunctionality(t *testing.T) {
 		goSource := `
 package main
 
-import (
-	"github.com/hjanuschka/go-deployd/internal/context"
-)
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
 
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+func Handle(ctx *Context, data map[string]interface{}) error {
 	data["hotReloaded"] = true
 	return nil
 }

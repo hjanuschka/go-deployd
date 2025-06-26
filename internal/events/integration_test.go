@@ -22,13 +22,16 @@ func TestGoEventHandlers(t *testing.T) {
 package main
 
 import (
-	"context"
 	"fmt"
 	"time"
-	"github.com/hjanuschka/go-deployd/internal/context"
 )
 
-func RunEvent(ctx *context.Context, data map[string]interface{}) error {
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
+
+func RunEvent(ctx *Context, data map[string]interface{}) error {
 	// Modify the data passed by reference
 	data["processed"] = true
 	data["processedAt"] = time.Now().Format(time.RFC3339)

@@ -25,12 +25,13 @@ func TestStartupCompiledPlugins(t *testing.T) {
 		pluginSource := `
 package main
 
-import (
-	"github.com/hjanuschka/go-deployd/internal/context"
-)
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
 
 // Handle is the main entry point for the Go plugin
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+func Handle(ctx *Context, data map[string]interface{}) error {
 	// Simulate startup-compiled plugin behavior
 	data["startupCompiled"] = true
 	data["pluginVersion"] = "1.0.0"
@@ -84,8 +85,11 @@ func Handle(ctx *context.Context, data map[string]interface{}) error {
 		plugins := map[string]string{
 			"validate": `
 package main
-import "github.com/hjanuschka/go-deployd/internal/context"
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
+func Handle(ctx *Context, data map[string]interface{}) error {
 	data["validator"] = "startup-compiled"
 	if data["name"] == "" {
 		return errors.New("name required")
@@ -95,8 +99,11 @@ func Handle(ctx *context.Context, data map[string]interface{}) error {
 `,
 			"post": `
 package main
-import "github.com/hjanuschka/go-deployd/internal/context"
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
+func Handle(ctx *Context, data map[string]interface{}) error {
 	data["creator"] = "startup-compiled"
 	data["id"] = "generated-id"
 	return nil
@@ -104,8 +111,11 @@ func Handle(ctx *context.Context, data map[string]interface{}) error {
 `,
 			"put": `
 package main
-import "github.com/hjanuschka/go-deployd/internal/context"
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
+func Handle(ctx *Context, data map[string]interface{}) error {
 	data["updater"] = "startup-compiled"
 	data["lastModified"] = "now"
 	return nil
@@ -164,8 +174,11 @@ function handle(ctx, data) {
 `
 		goSource := `
 package main
-import "github.com/hjanuschka/go-deployd/internal/context"
-func Handle(ctx *context.Context, data map[string]interface{}) error {
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
+func Handle(ctx *Context, data map[string]interface{}) error {
 	data["runtime"] = "go"
 	data["compiled"] = true
 	data["startupCompiled"] = true
@@ -312,8 +325,11 @@ func TestStartupPluginArchitecture(t *testing.T) {
 		pluginSources := []string{"validate.go", "post.go", "put.go", "delete.go"}
 		for _, source := range pluginSources {
 			content := `package main
-import "github.com/hjanuschka/go-deployd/internal/context"
-func Handle(ctx *context.Context, data map[string]interface{}) error { return nil }`
+// Context is a simple context for testing
+type Context struct {
+	Method string
+}
+func Handle(ctx *Context, data map[string]interface{}) error { return nil }`
 
 			path := filepath.Join(tempDir, source)
 			err = os.WriteFile(path, []byte(content), 0644)
