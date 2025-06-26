@@ -25,23 +25,18 @@ func TestStartupCompiledPlugins(t *testing.T) {
 		pluginSource := `
 package main
 
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-
-// Handle is the main entry point for the Go plugin
-func Handle(ctx *Context, data map[string]interface{}) error {
+// Run is the main entry point for the Go plugin
+func Run(ctx *EventContext) error {
 	// Simulate startup-compiled plugin behavior
-	data["startupCompiled"] = true
-	data["pluginVersion"] = "1.0.0"
-	data["compiledAt"] = "startup"
+	ctx.Data["startupCompiled"] = true
+	ctx.Data["pluginVersion"] = "1.0.0"
+	ctx.Data["compiledAt"] = "startup"
 	
 	// Add some business logic
 	if ctx.Method == "POST" {
-		data["action"] = "create"
+		ctx.Data["action"] = "create"
 	} else if ctx.Method == "PUT" {
-		data["action"] = "update"
+		ctx.Data["action"] = "update"
 	}
 	
 	return nil
@@ -85,13 +80,12 @@ func Handle(ctx *Context, data map[string]interface{}) error {
 		plugins := map[string]string{
 			"validate": `
 package main
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-func Handle(ctx *Context, data map[string]interface{}) error {
-	data["validator"] = "startup-compiled"
-	if data["name"] == "" {
+
+import "errors"
+
+func Run(ctx *EventContext) error {
+	ctx.Data["validator"] = "startup-compiled"
+	if ctx.Data["name"] == "" {
 		return errors.New("name required")
 	}
 	return nil
@@ -99,25 +93,19 @@ func Handle(ctx *Context, data map[string]interface{}) error {
 `,
 			"post": `
 package main
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-func Handle(ctx *Context, data map[string]interface{}) error {
-	data["creator"] = "startup-compiled"
-	data["id"] = "generated-id"
+
+func Run(ctx *EventContext) error {
+	ctx.Data["creator"] = "startup-compiled"
+	ctx.Data["id"] = "generated-id"
 	return nil
 }
 `,
 			"put": `
 package main
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-func Handle(ctx *Context, data map[string]interface{}) error {
-	data["updater"] = "startup-compiled"
-	data["lastModified"] = "now"
+
+func Run(ctx *EventContext) error {
+	ctx.Data["updater"] = "startup-compiled"
+	ctx.Data["lastModified"] = "now"
 	return nil
 }
 `,
@@ -174,14 +162,11 @@ function handle(ctx, data) {
 `
 		goSource := `
 package main
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-func Handle(ctx *Context, data map[string]interface{}) error {
-	data["runtime"] = "go"
-	data["compiled"] = true
-	data["startupCompiled"] = true
+
+func Run(ctx *EventContext) error {
+	ctx.Data["runtime"] = "go"
+	ctx.Data["compiled"] = true
+	ctx.Data["startupCompiled"] = true
 	return nil
 }
 `
@@ -325,11 +310,8 @@ func TestStartupPluginArchitecture(t *testing.T) {
 		pluginSources := []string{"validate.go", "post.go", "put.go", "delete.go"}
 		for _, source := range pluginSources {
 			content := `package main
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-func Handle(ctx *Context, data map[string]interface{}) error { return nil }`
+
+func Run(ctx *EventContext) error { return nil }`
 
 			path := filepath.Join(tempDir, source)
 			err = os.WriteFile(path, []byte(content), 0644)

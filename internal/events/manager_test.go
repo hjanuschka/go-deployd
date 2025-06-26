@@ -59,13 +59,8 @@ func TestUniversalScriptManagerComprehensive(t *testing.T) {
 		goContent := `
 package main
 
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-
-func Handle(ctx *Context, data map[string]interface{}) error {
-	data["processed"] = true
+func Run(ctx *EventContext) error {
+	ctx.Data["processed"] = true
 	return nil
 }
 `
@@ -126,13 +121,8 @@ function handle(ctx, data) {
 		goContent := `
 package main
 
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-
-func Handle(ctx *Context, data map[string]interface{}) error {
-	data["processed"] = true
+func Run(ctx *EventContext) error {
+	ctx.Data["processed"] = true
 	return nil
 }
 `
@@ -310,12 +300,9 @@ func TestLoadScriptsWithConfigComprehensive(t *testing.T) {
 		jsContent := `function handle(ctx, data) { data.js = true; return data; }`
 		goContent := `
 package main
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-func Handle(ctx *Context, data map[string]interface{}) error {
-	data["go"] = true
+
+func Run(ctx *EventContext) error {
+	ctx.Data["go"] = true
 	return nil
 }
 `
@@ -360,11 +347,8 @@ func Handle(ctx *Context, data map[string]interface{}) error {
 		// Create Go file without explicit config
 		goContent := `
 package main
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-func Handle(ctx *Context, data map[string]interface{}) error {
+
+func Run(ctx *EventContext) error {
 	return nil
 }
 `
@@ -413,13 +397,8 @@ func TestHotReloadFunctionality(t *testing.T) {
 		goSource := `
 package main
 
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-
-func Handle(ctx *Context, data map[string]interface{}) error {
-	data["hotReloaded"] = true
+func Run(ctx *EventContext) error {
+	ctx.Data["hotReloaded"] = true
 	return nil
 }
 `

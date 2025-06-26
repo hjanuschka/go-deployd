@@ -26,20 +26,15 @@ import (
 	"time"
 )
 
-// Context is a simple context for testing
-type Context struct {
-	Method string
-}
-
-func RunEvent(ctx *Context, data map[string]interface{}) error {
+func Run(ctx *EventContext) error {
 	// Modify the data passed by reference
-	data["processed"] = true
-	data["processedAt"] = time.Now().Format(time.RFC3339)
-	if name, ok := data["name"].(string); ok {
-		data["name"] = "Modified: " + name
+	ctx.Data["processed"] = true
+	ctx.Data["processedAt"] = time.Now().Format(time.RFC3339)
+	if name, ok := ctx.Data["name"].(string); ok {
+		ctx.Data["name"] = "Modified: " + name
 	}
 	
-	fmt.Printf("Go handler modified data: %+v\n", data)
+	fmt.Printf("Go handler modified data: %+v\n", ctx.Data)
 	return nil
 }
 `
