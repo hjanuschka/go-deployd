@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"github.com/hjanuschka/go-deployd/internal/config"
-	"github.com/hjanuschka/go-deployd/internal/database"
 )
 
 // TestServer represents a test server instance

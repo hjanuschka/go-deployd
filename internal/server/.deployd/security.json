@@ -1,0 +1,24 @@
+{
+  "masterKey": "mk_a66e7641ca8973f461778cec50875bc7af0de9f446eab2fa7e4820ee47e6dacc7e756283ae37882d18705bc8d105feb6",
+  "allowRegistration": true,
+  "jwtSecret": "678bf5c340fe8b80fda4ade00ff2c8b43294c8b1bc51213cf828088bbc01f787",
+  "jwtExpiration": "24h",
+  "requireVerification": true,
+  "email": {
+    "provider": "smtp",
+    "smtp": {
+      "host": "smtp.gmail.com",
+      "port": 587,
+      "username": "",
+      "password": "",
+      "tls": true
+    },
+    "ses": {
+      "region": "us-east-1",
+      "accessKeyId": "",
+      "secretAccessKey": ""
+    },
+    "from": "noreply@example.com",
+    "fromName": "Go-Deployd"
+  }
+}
