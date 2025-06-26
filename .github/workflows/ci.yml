@@ -71,7 +71,14 @@ jobs:
           build-essential \
           pkg-config \
           libssl-dev \
-          ca-certificates
+          ca-certificates \
+          mysql-client
+        
+        # Install MongoDB shell (mongosh)
+        wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | sudo apt-key add -
+        echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+        sudo apt-get update
+        sudo apt-get install -y mongodb-mongosh
 
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -138,9 +145,13 @@ jobs:
 
     - name: Run Core Unit Tests with Coverage
       env:
-        TEST_DATABASE: ${{ matrix.database }}
-        MYSQL_DSN: "testuser:testpass@tcp(127.0.0.1:3306)/deployd_test"
-        MONGODB_URI: "mongodb://testuser:testpass@127.0.0.1:27017/deployd_test"
+        TEST_DB: ${{ matrix.database }}
+        # MySQL configuration
+        TEST_MYSQL_HOST: "127.0.0.1"
+        TEST_MYSQL_USER: "root"
+        TEST_MYSQL_PASSWORD: "testpass"
+        # MongoDB configuration  
+        TEST_MONGO_URL: "mongodb://testuser:testpass@127.0.0.1:27017"
       run: |
         mkdir -p coverage
         
@@ -165,9 +176,13 @@ jobs:
 
     - name: Run Event System Integration Tests
       env:
-        TEST_DATABASE: ${{ matrix.database }}
-        MYSQL_DSN: "testuser:testpass@tcp(127.0.0.1:3306)/deployd_test"
-        MONGODB_URI: "mongodb://testuser:testpass@127.0.0.1:27017/deployd_test"
+        TEST_DB: ${{ matrix.database }}
+        # MySQL configuration
+        TEST_MYSQL_HOST: "127.0.0.1"
+        TEST_MYSQL_USER: "root"
+        TEST_MYSQL_PASSWORD: "testpass"
+        # MongoDB configuration  
+        TEST_MONGO_URL: "mongodb://testuser:testpass@127.0.0.1:27017"
       run: |
         echo "🔧 Running Event System Integration Tests..."
         
@@ -178,9 +193,13 @@ jobs:
 
     - name: Run Authentication Integration Tests
       env:
-        TEST_DATABASE: ${{ matrix.database }}
-        MYSQL_DSN: "testuser:testpass@tcp(127.0.0.1:3306)/deployd_test"
-        MONGODB_URI: "mongodb://testuser:testpass@127.0.0.1:27017/deployd_test"
+        TEST_DB: ${{ matrix.database }}
+        # MySQL configuration
+        TEST_MYSQL_HOST: "127.0.0.1"
+        TEST_MYSQL_USER: "root"
+        TEST_MYSQL_PASSWORD: "testpass"
+        # MongoDB configuration  
+        TEST_MONGO_URL: "mongodb://testuser:testpass@127.0.0.1:27017"
       run: |
         echo "🔐 Running Authentication Integration Tests..."
         go test -v ./internal/auth/
@@ -188,9 +207,13 @@ jobs:
 
     - name: Run CRUD Operations Tests
       env:
-        TEST_DATABASE: ${{ matrix.database }}
-        MYSQL_DSN: "testuser:testpass@tcp(127.0.0.1:3306)/deployd_test"
-        MONGODB_URI: "mongodb://testuser:testpass@127.0.0.1:27017/deployd_test"
+        TEST_DB: ${{ matrix.database }}
+        # MySQL configuration
+        TEST_MYSQL_HOST: "127.0.0.1"
+        TEST_MYSQL_USER: "root"
+        TEST_MYSQL_PASSWORD: "testpass"
+        # MongoDB configuration  
+        TEST_MONGO_URL: "mongodb://testuser:testpass@127.0.0.1:27017"
       run: |
         echo "📊 Running CRUD Operations Tests..."
         go test -v ./internal/resources/
