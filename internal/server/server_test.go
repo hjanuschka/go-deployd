@@ -16,7 +16,7 @@ func TestServer(t *testing.T) {
 			DatabaseName: ":memory:",
 			Development:  true,
 		}
-		
+
 		require.NotNil(t, config)
 		assert.Equal(t, 8080, config.Port)
 		assert.Equal(t, "sqlite", config.DatabaseType)

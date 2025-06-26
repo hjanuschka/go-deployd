@@ -48,7 +48,7 @@ type SESConfig struct {
 func DefaultSecurityConfig() *SecurityConfig {
 	return &SecurityConfig{
 		MasterKey:           "",
-		AllowRegistration:   true,  // allow registration by default
+		AllowRegistration:   true, // allow registration by default
 		JWTSecret:           "",
 		JWTExpiration:       "24h", // 24 hours default
 		RequireVerification: true,  // require email verification by default
@@ -78,37 +78,37 @@ func LoadSecurityConfig(configDir string) (*SecurityConfig, error) {
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	configFile := filepath.Join(configDir, "security.json")
-	
+
 	// Check if config file exists
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		// Create default config with generated master key
 		config := DefaultSecurityConfig()
 		config.MasterKey = generateMasterKey()
-		
+
 		if err := SaveSecurityConfig(config, configDir); err != nil {
 			return nil, fmt.Errorf("failed to save default security config: %w", err)
 		}
-		
+
 		fmt.Printf("🔐 Generated new master key and saved to %s\n", configFile)
 		fmt.Printf("   Master Key: %s\n", config.MasterKey)
 		fmt.Printf("   Keep this key secure! It provides administrative access.\n")
-		
+
 		return config, nil
 	}
-	
+
 	// Load existing config
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read security config: %w", err)
 	}
-	
+
 	var config SecurityConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse security config: %w", err)
 	}
-	
+
 	// Generate master key if it's missing
 	if config.MasterKey == "" {
 		config.MasterKey = generateMasterKey()
@@ -117,7 +117,7 @@ func LoadSecurityConfig(configDir string) (*SecurityConfig, error) {
 		}
 		fmt.Printf("🔐 Generated missing master key: %s\n", config.MasterKey)
 	}
-	
+
 	// Generate JWT secret if it's missing
 	if config.JWTSecret == "" {
 		config.JWTSecret = generateJWTSecret()
@@ -126,7 +126,7 @@ func LoadSecurityConfig(configDir string) (*SecurityConfig, error) {
 		}
 		fmt.Printf("🔑 Generated JWT secret\n")
 	}
-	
+
 	// Set default JWT expiration if missing
 	if config.JWTExpiration == "" {
 		config.JWTExpiration = "24h"
@@ -134,24 +134,24 @@ func LoadSecurityConfig(configDir string) (*SecurityConfig, error) {
 			return nil, fmt.Errorf("failed to save updated security config: %w", err)
 		}
 	}
-	
+
 	return &config, nil
 }
 
 // SaveSecurityConfig saves security configuration to file
 func SaveSecurityConfig(config *SecurityConfig, configDir string) error {
 	configFile := filepath.Join(configDir, "security.json")
-	
+
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal security config: %w", err)
 	}
-	
+
 	// Write with restricted permissions (600 = owner read/write only)
 	if err := os.WriteFile(configFile, data, 0600); err != nil {
 		return fmt.Errorf("failed to write security config: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -163,7 +163,7 @@ func generateMasterKey() string {
 		// Fallback to a deterministic but still reasonably secure method
 		panic(fmt.Sprintf("failed to generate secure random key: %v", err))
 	}
-	
+
 	return "mk_" + hex.EncodeToString(bytes)
 }
 
@@ -174,7 +174,7 @@ func generateJWTSecret() string {
 	if _, err := rand.Read(bytes); err != nil {
 		panic(fmt.Sprintf("failed to generate secure JWT secret: %v", err))
 	}
-	
+
 	return hex.EncodeToString(bytes)
 }
 

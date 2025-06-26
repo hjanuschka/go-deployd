@@ -98,7 +98,7 @@ func (sm *SchemaManager) GetSchema(collectionName string) (*CollectionSchema, er
 // loadSchemaFromConfig loads schema definition from config.json
 func (sm *SchemaManager) loadSchemaFromConfig(collectionName string) (*CollectionSchema, error) {
 	configPath := sm.getConfigPath(collectionName)
-	
+
 	// Check if config file exists
 	stat, err := os.Stat(configPath)
 	if os.IsNotExist(err) {
@@ -134,7 +134,7 @@ func (sm *SchemaManager) loadSchemaFromConfig(collectionName string) (*Collectio
 
 	// Convert field definitions to column definitions
 	columns := sm.getDefaultColumns() // Always include id, created_at, updated_at
-	
+
 	for fieldName, fieldDef := range config.Properties {
 		// Skip system fields that are already included
 		if fieldName == "id" || fieldName == "createdAt" || fieldName == "updatedAt" {
@@ -174,30 +174,30 @@ func (sm *SchemaManager) getConfigPath(collectionName string) string {
 func (sm *SchemaManager) getDefaultColumns() []ColumnDefinition {
 	return []ColumnDefinition{
 		{
-			Name:        "id",
-			Type:        ColumnTypeText,
-			Required:    true,
-			IsPrimary:   true,
+			Name:         "id",
+			Type:         ColumnTypeText,
+			Required:     true,
+			IsPrimary:    true,
 			OriginalType: "string",
 		},
 		{
-			Name:        "created_at",
-			Type:        ColumnTypeDate,
-			Required:    true,
-			IsTimestamp: true,
+			Name:         "created_at",
+			Type:         ColumnTypeDate,
+			Required:     true,
+			IsTimestamp:  true,
 			OriginalType: "date",
 		},
 		{
-			Name:        "updated_at",
-			Type:        ColumnTypeDate,
-			Required:    true,
-			IsTimestamp: true,
+			Name:         "updated_at",
+			Type:         ColumnTypeDate,
+			Required:     true,
+			IsTimestamp:  true,
 			OriginalType: "date",
 		},
 		{
-			Name:        "data",
-			Type:        ColumnTypeJSON,
-			Required:    false,
+			Name:         "data",
+			Type:         ColumnTypeJSON,
+			Required:     false,
 			OriginalType: "object",
 		},
 	}
@@ -278,7 +278,7 @@ func (sm *SchemaManager) tableExists(tableName string) (bool, error) {
 func (sm *SchemaManager) createTable(schema *CollectionSchema) error {
 	var sql strings.Builder
 	quotedTable := sm.quoteIdentifier(schema.Name)
-	
+
 	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (", quotedTable))
 
 	for i, column := range schema.Columns {
@@ -311,7 +311,7 @@ func (sm *SchemaManager) createTable(schema *CollectionSchema) error {
 // buildColumnDefinition builds the SQL column definition
 func (sm *SchemaManager) buildColumnDefinition(column ColumnDefinition) string {
 	var def strings.Builder
-	
+
 	def.WriteString(sm.quoteIdentifier(column.Name))
 	def.WriteString(" ")
 	def.WriteString(sm.getColumnTypeSQL(column.Type))
@@ -396,7 +396,7 @@ func (sm *SchemaManager) createIndex(tableName, columnName string) error {
 	quotedIndex := sm.quoteIdentifier(indexName)
 
 	query := fmt.Sprintf("CREATE INDEX %s ON %s (%s)", quotedIndex, quotedTable, quotedColumn)
-	
+
 	_, err := sm.db.Exec(query)
 	return err
 }
@@ -416,7 +416,7 @@ func (sm *SchemaManager) dropIndex(tableName, columnName string) error {
 	default:
 		query = fmt.Sprintf("DROP INDEX %s", quotedIndex)
 	}
-	
+
 	_, err := sm.db.Exec(query)
 	return err
 }
@@ -444,8 +444,8 @@ func (sm *SchemaManager) migrateSchema(schema *CollectionSchema) error {
 
 // Migration represents a schema migration operation
 type Migration struct {
-	Type   string // ADD_COLUMN, DROP_COLUMN, MODIFY_COLUMN
-	Column ColumnDefinition
+	Type      string // ADD_COLUMN, DROP_COLUMN, MODIFY_COLUMN
+	Column    ColumnDefinition
 	OldColumn *ColumnDefinition // For modify operations
 }
 
@@ -630,8 +630,8 @@ func (sm *SchemaManager) isSystemColumn(columnName string) bool {
 // columnNeedsModification checks if a column definition needs to be modified
 func (sm *SchemaManager) columnNeedsModification(current, desired ColumnDefinition) bool {
 	return current.Type != desired.Type ||
-		   current.Required != desired.Required ||
-		   !sm.defaultsEqual(current.Default, desired.Default)
+		current.Required != desired.Required ||
+		!sm.defaultsEqual(current.Default, desired.Default)
 }
 
 // defaultsEqual compares two default values
@@ -657,7 +657,7 @@ func (sm *SchemaManager) executeMigration(tableName string, migration Migration)
 		if err != nil {
 			return err
 		}
-		
+
 		// Create index if requested
 		if migration.Column.Index && !migration.Column.IsPrimary {
 			if err := sm.createIndex(tableName, migration.Column.Name); err != nil {
@@ -686,7 +686,7 @@ func (sm *SchemaManager) executeMigration(tableName string, migration Migration)
 		if err != nil {
 			return err
 		}
-		
+
 		// Handle index changes for modified columns
 		if migration.Column.Index && !migration.Column.IsPrimary {
 			// Check if index exists, if not create it

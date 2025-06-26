@@ -30,7 +30,7 @@ func TestUserRegistration(t *testing.T) {
 	t.Run("successful registration", func(t *testing.T) {
 		username := testutil.GenerateRandomName("user")
 		email := fmt.Sprintf("%s@test.com", username)
-		
+
 		userData := map[string]interface{}{
 			"username": username,
 			"email":    email,
@@ -58,7 +58,7 @@ func TestUserRegistration(t *testing.T) {
 
 	t.Run("duplicate username", func(t *testing.T) {
 		username := testutil.GenerateRandomName("user")
-		
+
 		// Create first user
 		userData1 := map[string]interface{}{
 			"username": username,
@@ -84,7 +84,7 @@ func TestUserRegistration(t *testing.T) {
 
 	t.Run("duplicate email", func(t *testing.T) {
 		email := fmt.Sprintf("%s@test.com", testutil.GenerateRandomName("email"))
-		
+
 		// Create first user
 		userData1 := map[string]interface{}{
 			"username": testutil.GenerateRandomName("user1"),
@@ -113,14 +113,14 @@ func TestUserLogin(t *testing.T) {
 	username := testutil.GenerateRandomName("loginuser")
 	password := "testPassword123"
 	hashedPassword := hashPassword(password)
-	
+
 	userData := map[string]interface{}{
 		"username": username,
 		"email":    fmt.Sprintf("%s@test.com", username),
 		"password": hashedPassword,
 		"verified": true,
 	}
-	
+
 	_, err := userStore.Insert(ctx, userData)
 	require.NoError(t, err)
 	userID := userStore.CreateUniqueIdentifier()
@@ -187,11 +187,11 @@ func TestUserLogin(t *testing.T) {
 func TestJWTAuthentication(t *testing.T) {
 	secret := "test-jwt-secret"
 	jwtManager := auth.NewJWTManager(secret, 24*time.Hour)
-	
+
 	t.Run("generate and validate JWT", func(t *testing.T) {
 		userID := "123456"
 		username := "testuser"
-		
+
 		// Generate token
 		token, err := jwtManager.GenerateToken(userID, username, false)
 		require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestJWTAuthentication(t *testing.T) {
 		wrongManager := auth.NewJWTManager("wrong-secret", 24*time.Hour)
 		token, err := wrongManager.GenerateToken("123", "user", false)
 		require.NoError(t, err)
-		
+
 		_, err = jwtManager.ValidateToken(token)
 		assert.Error(t, err)
 	})
@@ -223,10 +223,10 @@ func TestJWTAuthentication(t *testing.T) {
 		shortManager := auth.NewJWTManager(secret, 1*time.Millisecond)
 		token, err := shortManager.GenerateToken("123", "user", false)
 		require.NoError(t, err)
-		
+
 		// Wait for expiry
 		time.Sleep(10 * time.Millisecond)
-		
+
 		_, err = shortManager.ValidateToken(token)
 		assert.Error(t, err)
 		assert.Equal(t, auth.ErrTokenExpired, err)
@@ -243,7 +243,7 @@ func TestSessionManagement(t *testing.T) {
 	t.Run("create session", func(t *testing.T) {
 		userID := "user123"
 		sessionToken := testutil.GenerateRandomName("session")
-		
+
 		sessionData := map[string]interface{}{
 			"token":     sessionToken,
 			"userId":    userID,
@@ -260,7 +260,7 @@ func TestSessionManagement(t *testing.T) {
 	t.Run("validate session", func(t *testing.T) {
 		sessionToken := testutil.GenerateRandomName("session")
 		userID := "user456"
-		
+
 		// Create valid session
 		sessionData := map[string]interface{}{
 			"token":     sessionToken,
@@ -277,7 +277,7 @@ func TestSessionManagement(t *testing.T) {
 			Where("token", "=", sessionToken).
 			Where("active", "=", true).
 			Where("expiresAt", ">", time.Now())
-		
+
 		sessions, err := sessionStore.Find(ctx, query, database.QueryOptions{})
 		require.NoError(t, err)
 		assert.Len(t, sessions, 1)
@@ -286,7 +286,7 @@ func TestSessionManagement(t *testing.T) {
 
 	t.Run("invalidate session", func(t *testing.T) {
 		sessionToken := testutil.GenerateRandomName("session")
-		
+
 		// Create session
 		sessionData := map[string]interface{}{
 			"token":     sessionToken,
@@ -329,10 +329,10 @@ func TestSessionManagement(t *testing.T) {
 		query := database.NewQueryBuilder().
 			Where("active", "=", true).
 			Where("expiresAt", ">", time.Now())
-		
+
 		sessions, err := sessionStore.Find(ctx, query, database.QueryOptions{})
 		require.NoError(t, err)
-		
+
 		// Should not include the expired session
 		for _, session := range sessions {
 			if expiresAtStr, ok := session["expiresAt"].(string); ok {
@@ -365,7 +365,7 @@ func TestPasswordReset(t *testing.T) {
 		update := database.NewUpdateBuilder().
 			Set("resetToken", resetToken).
 			Set("resetTokenExpiry", resetExpiry)
-		
+
 		updateResult, err := userStore.Update(ctx, query, update)
 		require.NoError(t, err)
 		_ = updateResult
@@ -387,7 +387,7 @@ func TestPasswordReset(t *testing.T) {
 		query = database.NewQueryBuilder().
 			Where("username", "=", user.Username).
 			Where("resetToken", "=", resetToken)
-		
+
 		users, err := userStore.Find(ctx, query, database.QueryOptions{})
 		require.NoError(t, err)
 		assert.Len(t, users, 1)
@@ -398,7 +398,7 @@ func TestPasswordReset(t *testing.T) {
 			Set("password", newPassword).
 			Set("resetToken", nil).
 			Set("resetTokenExpiry", nil)
-		
+
 		updateResult, err := userStore.Update(ctx, query, update)
 		require.NoError(t, err)
 		_ = updateResult
@@ -418,11 +418,11 @@ func TestPasswordReset(t *testing.T) {
 		query = database.NewQueryBuilder().
 			Where("username", "=", user.Username).
 			Where("resetToken", "=", "expiredtoken")
-		
+
 		users, err := userStore.Find(ctx, query, database.QueryOptions{})
 		require.NoError(t, err)
 		assert.Len(t, users, 1)
-		
+
 		// In a real implementation, we would check if expiry is in the past
 		// For this test, we just verify the token was set
 		assert.Equal(t, "expiredtoken", users[0]["resetToken"])

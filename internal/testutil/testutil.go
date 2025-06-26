@@ -113,7 +113,7 @@ func CreateTestUser(t *testing.T, db database.DatabaseInterface) *TestUser {
 
 	username := GenerateRandomName("testuser")
 	email := fmt.Sprintf("%s@test.com", username)
-	
+
 	ctx := context.Background()
 	userData := map[string]interface{}{
 		"username": username,

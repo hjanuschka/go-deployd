@@ -160,7 +160,7 @@ func (s *Store) PopFirst(ctx context.Context, query bson.M, fields []string) (*m
 	return s.Update(ctx, query, update)
 }
 
-// PopLast removes the last item from arrays  
+// PopLast removes the last item from arrays
 func (s *Store) PopLast(ctx context.Context, query bson.M, fields []string) (*mongo.UpdateResult, error) {
 	popOps := bson.M{}
 	for _, field := range fields {

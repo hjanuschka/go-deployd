@@ -164,7 +164,7 @@ func (hrm *HotReloadGoManager) compilePlugin(sourcePath, pluginPath string) erro
 	// Create go.mod for the plugin
 	dir := filepath.Dir(sourcePath)
 	modPath := filepath.Join(dir, "go.mod")
-	
+
 	modContent := fmt.Sprintf(`module hotreload
 
 go 1.21

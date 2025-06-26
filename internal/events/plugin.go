@@ -91,7 +91,7 @@ func (gpm *GoPluginManager) compilePlugin(sourcePath, pluginPath string) error {
 	// Compile the plugin
 	cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", pluginPath, wrapperPath)
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
-	
+
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("compilation failed: %w\n%s", err, output)
 	}
@@ -135,7 +135,7 @@ func (p eventPlugin) Run(ctx *events.EventContext) error {
 func (gpm *GoPluginManager) GetPlugin(eventType EventType) (*plugin.Plugin, error) {
 	gpm.mu.RLock()
 	defer gpm.mu.RUnlock()
-	
+
 	p, exists := gpm.plugins[eventType]
 	if !exists {
 		return nil, nil
@@ -218,4 +218,3 @@ func (gpm *GoPluginManager) RunPlugin(eventType EventType, ctx *context.Context,
 
 	return nil
 }
-

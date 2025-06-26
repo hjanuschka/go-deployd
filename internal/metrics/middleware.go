@@ -37,7 +37,7 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 func HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		
+
 		rw := &responseWriter{
 			ResponseWriter: w,
 			statusCode:     200,
@@ -46,7 +46,7 @@ func HTTPMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(rw, r)
 
 		duration := time.Since(start)
-		
+
 		metric := Metric{
 			Type:     RequestMetric,
 			Duration: duration,

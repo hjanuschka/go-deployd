@@ -126,7 +126,7 @@ func TestJWTManager_ValidateToken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			claims, err := manager.ValidateToken(tt.token)
-			
+
 			if tt.wantError {
 				if err == nil {
 					t.Errorf("ValidateToken() expected error but got none")
@@ -227,9 +227,9 @@ func TestJWTClaims_Validation(t *testing.T) {
 		username string
 		isRoot   bool
 	}{
-		{"", "", false},                    // Empty values
-		{"user123", "normaluser", false},   // Normal user
-		{"admin", "administrator", true},   // Admin user
+		{"", "", false},                             // Empty values
+		{"user123", "normaluser", false},            // Normal user
+		{"admin", "administrator", true},            // Admin user
 		{"special-chars", "user@domain.com", false}, // Special characters
 	}
 

@@ -6,25 +6,24 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-
 )
 
 type Context struct {
-	Request      *http.Request
-	Response     http.ResponseWriter
-	Resource     Resource
-	Router       Router
-	URL          string
-	Query        map[string]interface{}
-	Body         map[string]interface{}
-	Method       string
-	Development  bool
+	Request     *http.Request
+	Response    http.ResponseWriter
+	Resource    Resource
+	Router      Router
+	URL         string
+	Query       map[string]interface{}
+	Body        map[string]interface{}
+	Method      string
+	Development bool
 	// JWT Authentication data
-	UserID       string
-	Username     string
-	IsRoot       bool
+	UserID          string
+	Username        string
+	IsRoot          bool
 	IsAuthenticated bool
-	ctx          context.Context
+	ctx             context.Context
 }
 
 type Resource interface {
@@ -32,27 +31,26 @@ type Resource interface {
 	GetPath() string
 }
 
-
 type Router interface {
 	Route(ctx *Context) error
 }
 
 // AuthData contains authentication information
 type AuthData struct {
-	UserID       string
-	Username     string
-	IsRoot       bool
+	UserID          string
+	Username        string
+	IsRoot          bool
 	IsAuthenticated bool
 }
 
 func New(req *http.Request, res http.ResponseWriter, resource Resource, auth *AuthData, development bool) *Context {
 	ctx := &Context{
-		Request:      req,
-		Response:     res,
-		Resource:     resource,
-		Method:       req.Method,
-		Development:  development,
-		ctx:          req.Context(),
+		Request:     req,
+		Response:    res,
+		Resource:    resource,
+		Method:      req.Method,
+		Development: development,
+		ctx:         req.Context(),
 	}
 
 	// Set authentication data
@@ -70,7 +68,6 @@ func New(req *http.Request, res http.ResponseWriter, resource Resource, auth *Au
 	return ctx
 }
 
-
 func (c *Context) parseURL() {
 	c.URL = c.Request.URL.Path
 	if c.Resource != nil {
@@ -86,12 +83,12 @@ func (c *Context) parseURL() {
 
 func (c *Context) parseQuery() {
 	c.Query = make(map[string]interface{})
-	
+
 	for key, values := range c.Request.URL.Query() {
 		if len(values) == 1 {
 			// Try to parse as different types
 			value := values[0]
-			
+
 			// Try to parse as JSON
 			if strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}") {
 				var jsonValue interface{}
@@ -100,13 +97,13 @@ func (c *Context) parseQuery() {
 					continue
 				}
 			}
-			
+
 			// Try to parse as number
 			if num, err := strconv.ParseFloat(value, 64); err == nil {
 				c.Query[key] = num
 				continue
 			}
-			
+
 			// Try to parse as boolean
 			if value == "true" {
 				c.Query[key] = true
@@ -116,7 +113,7 @@ func (c *Context) parseQuery() {
 				c.Query[key] = false
 				continue
 			}
-			
+
 			// Default to string
 			c.Query[key] = value
 		} else {
@@ -132,13 +129,13 @@ func (c *Context) parseQuery() {
 
 func (c *Context) parseBody() {
 	c.Body = make(map[string]interface{})
-	
+
 	if c.Request.Body == nil {
 		return
 	}
-	
+
 	contentType := c.Request.Header.Get("Content-Type")
-	
+
 	if strings.Contains(contentType, "application/json") {
 		var jsonBody map[string]interface{}
 		err := json.NewDecoder(c.Request.Body).Decode(&jsonBody)
@@ -187,21 +184,21 @@ func (c *Context) GetID() string {
 			return parts[0]
 		}
 	}
-	
+
 	// Try to get ID from query
 	if id, exists := c.Query["id"]; exists {
 		if idStr, ok := id.(string); ok {
 			return idStr
 		}
 	}
-	
+
 	// Try to get ID from body
 	if id, exists := c.Body["id"]; exists {
 		if idStr, ok := id.(string); ok {
 			return idStr
 		}
 	}
-	
+
 	return ""
 }
 
@@ -214,7 +211,7 @@ func (c *Context) Done(err error, result interface{}) {
 		c.WriteError(500, err.Error())
 		return
 	}
-	
+
 	if result != nil {
 		c.WriteJSON(result)
 	} else {

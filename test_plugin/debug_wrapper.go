@@ -102,7 +102,7 @@ func main() {
 	for i, line := range lines {
 		fmt.Printf("%4d: %s\n", i+1, line)
 	}
-	
+
 	// Also print line 61 specifically
 	fmt.Println("\n--- Line 61 specifically ---")
 	if len(lines) >= 61 {

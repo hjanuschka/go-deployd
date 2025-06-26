@@ -197,24 +197,24 @@ func TestSQLiteStore_ComprehensiveOperations(t *testing.T) {
 
 		store := db.CreateStore("find_test")
 		ctx := context.Background()
-		
+
 		// Insert test data
 		testDocs := []map[string]interface{}{
 			{"name": "Alice", "age": 25, "role": "admin"},
 			{"name": "Bob", "age": 30, "role": "user"},
 			{"name": "Charlie", "age": 35, "role": "user"},
 		}
-		
+
 		for _, doc := range testDocs {
 			_, err := store.Insert(ctx, doc)
 			require.NoError(t, err)
 		}
-		
+
 		// Test Find operation
 		query := &SimpleQueryBuilder{conditions: make(map[string]interface{})}
 		opts := QueryOptions{} // Empty options
 		results, err := store.Find(ctx, query, opts)
-		
+
 		// Even if this returns an error due to unimplemented features,
 		// we're testing the code path
 		if err != nil {
@@ -222,111 +222,111 @@ func TestSQLiteStore_ComprehensiveOperations(t *testing.T) {
 		} else {
 			t.Logf("Find returned %d results", len(results))
 		}
-		
+
 		t.Log("✅ Find operation tested")
 	})
-	
+
 	t.Run("FindOne operations", func(t *testing.T) {
 		db := createTestSQLiteDB(t)
 		defer cleanupTestDB(db)
 
 		store := db.CreateStore("findone_test")
 		ctx := context.Background()
-		
+
 		// Insert test data
 		doc := map[string]interface{}{
-			"name": "TestUser",
+			"name":  "TestUser",
 			"email": "test@example.com",
 		}
-		
+
 		_, err := store.Insert(ctx, doc)
 		require.NoError(t, err)
-		
+
 		// Test FindOne operation
 		query := &SimpleQueryBuilder{conditions: make(map[string]interface{})}
 		result, err := store.FindOne(ctx, query)
-		
+
 		if err != nil {
 			t.Logf("FindOne operation error (expected for incomplete implementation): %v", err)
 		} else if result != nil {
 			t.Logf("FindOne returned result: %+v", result)
 		}
-		
+
 		t.Log("✅ FindOne operation tested")
 	})
-	
+
 	t.Run("Update operations", func(t *testing.T) {
 		db := createTestSQLiteDB(t)
 		defer cleanupTestDB(db)
 
 		store := db.CreateStore("update_test")
 		ctx := context.Background()
-		
+
 		// Insert test data
 		doc := map[string]interface{}{
-			"name": "UpdateTest",
+			"name":  "UpdateTest",
 			"value": 100,
 		}
-		
+
 		_, err := store.Insert(ctx, doc)
 		require.NoError(t, err)
-		
+
 		// Test Update operation
 		query := &SimpleQueryBuilder{conditions: make(map[string]interface{})}
 		update := &SimpleUpdateBuilder{updates: map[string]interface{}{
 			"value": 200,
 		}}
-		
+
 		result, err := store.Update(ctx, query, update)
 		if err != nil {
 			t.Logf("Update operation error (expected for incomplete implementation): %v", err)
 		} else {
 			t.Logf("Update result: %+v", result)
 		}
-		
+
 		t.Log("✅ Update operation tested")
 	})
-	
+
 	t.Run("Remove operations", func(t *testing.T) {
 		db := createTestSQLiteDB(t)
 		defer cleanupTestDB(db)
 
 		store := db.CreateStore("remove_test")
 		ctx := context.Background()
-		
+
 		// Insert test data
 		doc := map[string]interface{}{
-			"name": "RemoveTest",
+			"name":  "RemoveTest",
 			"value": 123,
 		}
-		
+
 		_, err := store.Insert(ctx, doc)
 		require.NoError(t, err)
-		
+
 		// Test Remove operation
 		query := &SimpleQueryBuilder{conditions: make(map[string]interface{})}
 		result, err := store.Remove(ctx, query)
-		
+
 		if err != nil {
 			t.Logf("Remove operation error (expected for incomplete implementation): %v", err)
 		} else {
 			t.Logf("Remove result: %+v", result)
 		}
-		
+
 		t.Log("✅ Remove operation tested")
 	})
-	
+
 	t.Run("Database info operations", func(t *testing.T) {
 		db := createTestSQLiteDB(t)
 		defer cleanupTestDB(db)
 
 		_ = db.CreateStore("info_test")
-		
+
 		// Test GetType
 		dbType := db.GetType()
 		assert.NotEmpty(t, dbType)
 		t.Logf("Database type: %s", dbType)
-		
+
 		// Test other operations that might exist
 		t.Log("✅ Database info operations tested")
 	})

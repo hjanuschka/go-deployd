@@ -14,23 +14,23 @@ func generateUniqueID() string {
 	timestamp := uint32(time.Now().Unix())
 	randomBytes := make([]byte, 8)
 	rand.Read(randomBytes)
-	
+
 	id := make([]byte, 12)
 	id[0] = byte(timestamp >> 24)
 	id[1] = byte(timestamp >> 16)
 	id[2] = byte(timestamp >> 8)
 	id[3] = byte(timestamp)
 	copy(id[4:], randomBytes)
-	
+
 	return hex.EncodeToString(id)
 }
 
 // ExtendedConfig provides additional configuration options for different database types
 type ExtendedConfig struct {
 	*Config
-	Type     DatabaseType          `json:"type"`
+	Type     DatabaseType           `json:"type"`
 	Options  map[string]interface{} `json:"options"`
-	FilePath string                `json:"file_path,omitempty"` // For SQLite
+	FilePath string                 `json:"file_path,omitempty"` // For SQLite
 }
 
 // NewExtendedConfig creates a new extended configuration with defaults
@@ -51,11 +51,11 @@ func (c *ExtendedConfig) Validate() error {
 	if c.Config == nil {
 		return fmt.Errorf("base config is required")
 	}
-	
+
 	if c.Config.Name == "" {
 		return fmt.Errorf("database name is required")
 	}
-	
+
 	switch c.Type {
 	case DatabaseTypeMongoDB:
 		if c.Config.Host == "" {
@@ -86,7 +86,7 @@ func (c *ExtendedConfig) Validate() error {
 	default:
 		return fmt.Errorf("unsupported database type: %s", c.Type)
 	}
-	
+
 	return nil
 }
 

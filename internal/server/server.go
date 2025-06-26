@@ -23,22 +23,22 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/metrics"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 	"github.com/hjanuschka/go-deployd/internal/router"
-	"golang.org/x/crypto/bcrypt"
 	"github.com/hjanuschka/go-deployd/internal/swagger"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Config struct {
-	Port               int
-	DatabaseType       string
-	DatabaseHost       string
-	DatabasePort       int
-	DatabaseName       string
-	DatabaseUsername   string
-	DatabasePassword   string
-	DatabaseSSL        bool
-	ConfigPath         string
-	Development        bool
+	Port             int
+	DatabaseType     string
+	DatabaseHost     string
+	DatabasePort     int
+	DatabaseName     string
+	DatabaseUsername string
+	DatabasePassword string
+	DatabaseSSL      bool
+	ConfigPath       string
+	Development      bool
 }
 
 type Server struct {
@@ -82,7 +82,6 @@ func New(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-
 	// Initialize logging system
 	if err := logging.InitializeLogger("./logs"); err != nil {
 		return nil, fmt.Errorf("failed to initialize logging: %w", err)
@@ -109,14 +108,14 @@ func New(config *Config) (*Server, error) {
 
 	// Log server startup
 	logging.Info("Starting go-deployd server", "server", map[string]interface{}{
-		"port":         config.Port,
-		"database":     config.DatabaseType,
-		"development":  config.Development,
+		"port":        config.Port,
+		"database":    config.DatabaseType,
+		"development": config.Development,
 	})
 
 	s := &Server{
-		config:         config,
-		db:             db,
+		config: config,
+		db:     db,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // TODO: Implement proper origin checking
@@ -131,11 +130,11 @@ func New(config *Config) (*Server, error) {
 
 	// Create admin handler
 	adminConfig := &admin.Config{
-		Port:           config.Port,
-		DatabaseHost:   config.DatabaseHost,
-		DatabasePort:   config.DatabasePort,
-		DatabaseName:   config.DatabaseName,
-		Development:    config.Development,
+		Port:         config.Port,
+		DatabaseHost: config.DatabaseHost,
+		DatabasePort: config.DatabasePort,
+		DatabaseName: config.DatabaseName,
+		Development:  config.Development,
 	}
 	s.adminHandler = admin.NewAdminHandler(s.db, s.router, adminConfig)
 
@@ -204,7 +203,7 @@ func (s *Server) handleCollections(w http.ResponseWriter, r *http.Request) {
 	// Get collections from router
 	resources := s.router.GetResources()
 	collections := make([]string, 0)
-	
+
 	for _, resource := range resources {
 		// Only include actual collections, not internal resources
 		name := resource.GetName()
@@ -212,14 +211,13 @@ func (s *Server) handleCollections(w http.ResponseWriter, r *http.Request) {
 			collections = append(collections, name)
 		}
 	}
-	
+
 	// Return collection names as a simple array (like original Deployd)
 	if err := json.NewEncoder(w).Encode(collections); err != nil {
 		http.Error(w, "Failed to encode collections", http.StatusInternalServerError)
 		return
 	}
 }
-
 
 func (s *Server) setupRootRoute() {
 	s.httpMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +226,7 @@ func (s *Server) setupRootRoute() {
 			s.router.ServeHTTP(w, r)
 			return
 		}
-		
+
 		if s.config.Development {
 			// Redirect to dashboard in development
 			http.Redirect(w, r, "/_dashboard/", http.StatusTemporaryRedirect)
@@ -281,7 +279,7 @@ func (s *Server) Close() error {
 		v8Pool.Shutdown()
 		logging.Info("V8 pool shut down", "server", nil)
 	}
-	
+
 	if s.db != nil {
 		return s.db.Close()
 	}
@@ -297,13 +295,13 @@ func (s *Server) serveDashboardWithAuth(dashboardPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract path
 		path := strings.TrimPrefix(r.URL.Path, "/_dashboard/")
-		
+
 		// Allow login page without authentication
 		if path == "login" || path == "login/" || strings.HasPrefix(path, "assets/") {
 			s.serveDashboardFile(w, r, dashboardPath, path)
 			return
 		}
-		
+
 		// Check for master key authentication
 		masterKey := r.Header.Get("X-Master-Key")
 		if masterKey == "" {
@@ -312,7 +310,7 @@ func (s *Server) serveDashboardWithAuth(dashboardPath string) http.HandlerFunc {
 				masterKey = cookie.Value
 			}
 		}
-		
+
 		// Validate master key
 		if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
 			// Redirect to login page for dashboard requests
@@ -320,22 +318,22 @@ func (s *Server) serveDashboardWithAuth(dashboardPath string) http.HandlerFunc {
 				http.Redirect(w, r, "/_dashboard/login", http.StatusTemporaryRedirect)
 				return
 			}
-			
+
 			// For API requests, return 401
 			if strings.HasPrefix(path, "api/") {
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "Authentication required",
+					"error":   "Authentication required",
 					"message": "Master key required for dashboard access",
 				})
 				return
 			}
-			
+
 			// For other requests, serve login page
 			path = "login"
 		}
-		
+
 		s.serveDashboardFile(w, r, dashboardPath, path)
 	}
 }
@@ -346,9 +344,9 @@ func (s *Server) serveDashboardFile(w http.ResponseWriter, r *http.Request, dash
 		// Serve index.html for dashboard root
 		path = "index.html"
 	}
-	
+
 	fullPath := filepath.Join(dashboardPath, path)
-	
+
 	// Check if file exists
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		// If file doesn't exist and it's not an asset, serve index.html (SPA routing)
@@ -359,7 +357,7 @@ func (s *Server) serveDashboardFile(w http.ResponseWriter, r *http.Request, dash
 			return
 		}
 	}
-	
+
 	http.ServeFile(w, r, fullPath)
 }
 
@@ -371,7 +369,7 @@ func (s *Server) handleDetailedMetrics(w http.ResponseWriter, r *http.Request) {
 			masterKey = cookie.Value
 		}
 	}
-	
+
 	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -412,7 +410,7 @@ func (s *Server) handleAggregatedMetrics(w http.ResponseWriter, r *http.Request)
 			masterKey = cookie.Value
 		}
 	}
-	
+
 	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -448,7 +446,7 @@ func (s *Server) handleSystemStats(w http.ResponseWriter, r *http.Request) {
 			masterKey = cookie.Value
 		}
 	}
-	
+
 	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -472,7 +470,7 @@ func (s *Server) handleCollectionsList(w http.ResponseWriter, r *http.Request) {
 			masterKey = cookie.Value
 		}
 	}
-	
+
 	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -498,7 +496,7 @@ func (s *Server) handleEventMetrics(w http.ResponseWriter, r *http.Request) {
 			masterKey = cookie.Value
 		}
 	}
-	
+
 	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -551,7 +549,7 @@ func (s *Server) handlePeriodsMetrics(w http.ResponseWriter, r *http.Request) {
 			masterKey = cookie.Value
 		}
 	}
-	
+
 	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -660,12 +658,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error": "Invalid credentials"}`, http.StatusUnauthorized)
 			return
 		}
-		
+
 		userID = getStringFromMap(user, "id")
 		username = getStringFromMap(user, "username")
 		role := getStringFromMap(user, "role")
 		isRoot = (role == "admin")
-		
+
 		// Remove password and other sensitive fields from user data
 		userData = make(map[string]interface{})
 		for k, v := range user {
@@ -700,7 +698,6 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		IsRoot:    isRoot,
 		User:      userData,
 	}
-
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -794,11 +791,11 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	// For regular users, fetch user data from users collection
 	// Fetch user data by ID
 	store := s.db.CreateStore("users")
-	
+
 	// Create query to find user by ID
 	query := database.NewQueryBuilder()
 	query.Where("id", "=", claims.UserID)
-	
+
 	userData, err := store.FindOne(r.Context(), query)
 	if err != nil {
 		http.Error(w, `{"error": "User not found"}`, http.StatusNotFound)
@@ -811,13 +808,13 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleEmailVerification(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method == "OPTIONS" {
 		return
 	}
 
 	var token string
-	
+
 	if r.Method == "GET" {
 		// GET request with token as query parameter (for email links)
 		token = r.URL.Query().Get("token")
@@ -832,23 +829,23 @@ func (s *Server) handleEmailVerification(w http.ResponseWriter, r *http.Request)
 		}
 		token = req.Token
 	}
-	
+
 	if token == "" {
 		http.Error(w, `{"error": "Verification token required"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	// Find user by verification token
 	store := s.db.CreateStore("users")
 	query := database.NewQueryBuilder()
 	query.Where("verificationToken", "=", token)
-	
+
 	userData, err := store.FindOne(r.Context(), query)
 	if err != nil {
 		http.Error(w, `{"error": "Invalid or expired verification token"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	// Check if token has expired
 	if expiresStr, ok := userData["verificationExpires"].(string); ok {
 		if expires, err := time.Parse(time.RFC3339, expiresStr); err == nil {
@@ -858,25 +855,25 @@ func (s *Server) handleEmailVerification(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
-	
+
 	// Update user to verified and active
 	userID := userData["id"].(string)
 	updateQuery := database.NewQueryBuilder()
 	updateQuery.Where("id", "=", userID)
-	
+
 	updateBuilder := database.NewUpdateBuilder().
 		Set("isVerified", true).
 		Set("active", true).
 		Unset("verificationToken").
 		Unset("verificationExpires").
 		Set("updatedAt", time.Now().Format(time.RFC3339))
-	
+
 	_, err = store.UpdateOne(r.Context(), updateQuery, updateBuilder)
 	if err != nil {
 		http.Error(w, `{"error": "Failed to verify user"}`, http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Return success response
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
@@ -892,30 +889,30 @@ func (s *Server) handleEmailVerification(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleResendVerification(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method == "OPTIONS" {
 		return
 	}
-	
+
 	var req struct {
 		Email string `json:"email"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error": "Invalid JSON body"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	if req.Email == "" {
 		http.Error(w, `{"error": "Email address required"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	// Find user by email
 	store := s.db.CreateStore("users")
 	query := database.NewQueryBuilder()
 	query.Where("email", "=", req.Email)
-	
+
 	userData, err := store.FindOne(r.Context(), query)
 	if err != nil {
 		// Don't reveal if email exists for security
@@ -925,7 +922,7 @@ func (s *Server) handleResendVerification(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
-	
+
 	// Check if already verified
 	if verified, ok := userData["isVerified"].(bool); ok && verified {
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -934,36 +931,36 @@ func (s *Server) handleResendVerification(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
-	
+
 	// Generate new verification token and update user
 	verificationToken, err := email.GenerateVerificationToken()
 	if err != nil {
 		http.Error(w, `{"error": "Failed to generate verification token"}`, http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Update user with new verification token
 	updateQuery := database.NewQueryBuilder().Where("email", "=", req.Email)
 	updateBuilder := database.NewUpdateBuilder()
 	updateBuilder.Set("verificationToken", verificationToken)
-	updateBuilder.Set("verificationExpires", time.Now().Add(24 * time.Hour))
-	
+	updateBuilder.Set("verificationExpires", time.Now().Add(24*time.Hour))
+
 	_, err = store.Update(r.Context(), updateQuery, updateBuilder)
 	if err != nil {
 		http.Error(w, `{"error": "Failed to update verification token"}`, http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Send verification email
 	baseURL := fmt.Sprintf("http://%s", r.Host)
 	emailService := email.NewEmailService(&s.securityConfig.Email)
-	
+
 	username := getStringFromMap(userData, "username")
 	if err := emailService.SendVerificationEmail(req.Email, username, verificationToken, baseURL); err != nil {
 		// Log the error but still return success to avoid revealing email existence
 		// TODO: Add proper logging
 	}
-	
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "If the email exists and is unverified, a verification email has been sent",
@@ -977,10 +974,10 @@ func (s *Server) setupSwaggerRoutes() {
 
 	// Overall API documentation
 	s.httpMux.HandleFunc("/api/docs/openapi.json", s.handleOverallSwagger(generator)).Methods("GET")
-	
+
 	// Collection-specific API documentation
 	s.httpMux.HandleFunc("/api/docs/{collection}/openapi.json", s.handleCollectionSwagger(generator)).Methods("GET")
-	
+
 	// Swagger UI for overall API
 	s.httpMux.PathPrefix("/api/docs/").Handler(httpSwagger.Handler(
 		httpSwagger.URL("/api/docs/openapi.json"),
@@ -1047,7 +1044,7 @@ func (s *Server) handleCollectionSwaggerUI() http.HandlerFunc {
 
 		// Redirect to Swagger UI with collection-specific spec
 		swaggerURL := fmt.Sprintf("/api/docs/%s/openapi.json", collectionName)
-		
+
 		// Serve custom Swagger UI HTML
 		html := fmt.Sprintf(`
 <!DOCTYPE html>
@@ -1103,7 +1100,7 @@ func (s *Server) handleCollectionSwaggerUI() http.HandlerFunc {
 // authenticateUser validates username/password and returns user data
 func (s *Server) authenticateUser(username, password string) (map[string]interface{}, error) {
 	store := s.db.CreateStore("users")
-	
+
 	// Find user by username or email
 	var query database.QueryBuilder
 	if strings.Contains(username, "@") {
@@ -1111,23 +1108,23 @@ func (s *Server) authenticateUser(username, password string) (map[string]interfa
 	} else {
 		query = database.NewQueryBuilder().Where("username", "$eq", username)
 	}
-	
+
 	user, err := store.FindOne(context.Background(), query)
 	if err != nil || user == nil {
 		return nil, fmt.Errorf("user not found")
 	}
-	
+
 	// Verify password
 	hashedPassword, ok := user["password"].(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid user data")
 	}
-	
+
 	// Verify password using bcrypt
 	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)); err != nil {
 		return nil, fmt.Errorf("invalid password")
 	}
-	
+
 	return user, nil
 }
 
@@ -1141,16 +1138,15 @@ func getStringFromMap(m map[string]interface{}, key string) string {
 	return ""
 }
 
-
 // startUserCleanupJob runs a background job to remove unverified users after 24 hours
 func (s *Server) startUserCleanupJob() {
 	// Run cleanup every hour
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
-	
+
 	// Also run immediately on startup
 	s.cleanupUnverifiedUsers()
-	
+
 	for range ticker.C {
 		s.cleanupUnverifiedUsers()
 	}
@@ -1162,21 +1158,21 @@ func (s *Server) cleanupUnverifiedUsers() {
 		// Email verification not required, no cleanup needed
 		return
 	}
-	
+
 	store := s.db.CreateStore("users")
-	
+
 	// Find unverified users where verification token expired
 	query := database.NewQueryBuilder()
 	query.Where("isVerified", "=", false)
 	query.Where("verificationExpires", "<", time.Now())
-	
+
 	// Find expired unverified users
 	users, err := store.Find(context.Background(), query, database.QueryOptions{})
 	if err != nil {
 		log.Printf("Error finding unverified users for cleanup: %v", err)
 		return
 	}
-	
+
 	// Delete each expired unverified user
 	deletedCount := 0
 	for _, user := range users {
@@ -1192,7 +1188,7 @@ func (s *Server) cleanupUnverifiedUsers() {
 			}
 		}
 	}
-	
+
 	if deletedCount > 0 {
 		log.Printf("🧹 Cleaned up %d unverified users", deletedCount)
 	}

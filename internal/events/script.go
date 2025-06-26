@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	v8 "rogchap.com/v8go"
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 	"go.mongodb.org/mongo-driver/bson"
+	v8 "rogchap.com/v8go"
 )
 
 // Script represents a JavaScript event script using V8 (compatible with goja interface)
@@ -72,7 +72,7 @@ func (sm *ScriptManager) LoadScripts(configPath string) error {
 				source: string(content),
 				path:   filePath,
 			}
-			
+
 			// Pre-compilation is handled during execution for better error handling
 			sm.scripts[eventType] = script
 		}
@@ -146,7 +146,7 @@ func (s *Script) runWithPool(scriptCtx *ScriptContext) (*ScriptContext, error) {
 	executeStart := time.Now()
 	poolErr := pool.ExecuteScript(eventCtx, s.path, scriptCtx)
 	executeTime := time.Since(executeStart)
-	
+
 	// Log detailed timing
 	logging.Info("JavaScript execution timing", "js-timing", map[string]interface{}{
 		"script":        filepath.Base(s.path),
@@ -157,7 +157,7 @@ func (s *Script) runWithPool(scriptCtx *ScriptContext) (*ScriptContext, error) {
 		"hasErrors":     len(scriptCtx.errors) > 0,
 		"errorCount":    len(scriptCtx.errors),
 	})
-	
+
 	if poolErr != nil {
 		// Check if it's a cancellation (our custom exception)
 		if strings.Contains(poolErr.Error(), "CANCEL") {
@@ -184,14 +184,14 @@ func (s *Script) runWithPool(scriptCtx *ScriptContext) (*ScriptContext, error) {
 // runTraditional executes the script using traditional V8 method (fallback)
 func (s *Script) runTraditional(scriptCtx *ScriptContext) (*ScriptContext, error) {
 	startTime := time.Now()
-	
+
 	// Create a new isolate for each script execution to avoid conflicts
 	isolate := v8.NewIsolate()
 	defer isolate.Dispose()
-	
+
 	v8ctx := v8.NewContext(isolate)
 	defer v8ctx.Close()
-	
+
 	setupTime := time.Since(startTime)
 
 	// Set up the script environment
@@ -238,13 +238,13 @@ func (s *Script) runTraditional(scriptCtx *ScriptContext) (*ScriptContext, error
 
 	// Log detailed timing for traditional execution
 	logging.Info("JavaScript execution timing", "js-timing", map[string]interface{}{
-		"script":        filepath.Base(s.path),
-		"pooled":        false,
-		"setupTimeMs":   setupTime.Milliseconds(),
-		"execTimeMs":    executeTime.Milliseconds(),
-		"totalTimeMs":   time.Since(startTime).Milliseconds(),
-		"hasErrors":     len(scriptCtx.errors) > 0,
-		"errorCount":    len(scriptCtx.errors),
+		"script":      filepath.Base(s.path),
+		"pooled":      false,
+		"setupTimeMs": setupTime.Milliseconds(),
+		"execTimeMs":  executeTime.Milliseconds(),
+		"totalTimeMs": time.Since(startTime).Milliseconds(),
+		"hasErrors":   len(scriptCtx.errors) > 0,
+		"errorCount":  len(scriptCtx.errors),
 	})
 
 	logging.Debug("JavaScript execution completed (V8 traditional)", "js-execution", map[string]interface{}{
@@ -300,19 +300,19 @@ func setupV8Environment(v8ctx *v8.Context, sc *ScriptContext) error {
 	if err := setupCancelFunctions(v8ctx, sc); err != nil {
 		return err
 	}
-	
+
 	if err := setupValidationFunctions(v8ctx, sc); err != nil {
 		return err
 	}
-	
+
 	if err := setupUserFunctions(v8ctx, sc); err != nil {
 		return err
 	}
-	
+
 	if err := setupUtilityFunctions(v8ctx, sc); err != nil {
 		return err
 	}
-	
+
 	if err := setupRequireFunction(v8ctx, sc); err != nil {
 		return err
 	}
@@ -335,24 +335,24 @@ func setDataObject(v8ctx *v8.Context, data bson.M) error {
 // setupCancelFunctions sets up cancel(), cancelIf(), cancelUnless()
 func setupCancelFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 	isolate := v8ctx.Isolate()
-	
+
 	// cancel() function
 	cancelFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
 		msg := "Request cancelled"
 		statusCode := 400
-		
+
 		if len(args) > 0 {
 			msg = args[0].String()
 		}
 		if len(args) > 1 && args[1].IsNumber() {
 			statusCode = int(args[1].Integer())
 		}
-		
+
 		sc.cancelled = true
 		sc.cancelMsg = msg
 		sc.statusCode = statusCode
-		
+
 		// Throw an exception to stop execution
 		exception, _ := v8.NewValue(isolate, "CANCEL")
 		isolate.ThrowException(exception)
@@ -366,23 +366,23 @@ func setupCancelFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 		if len(args) == 0 {
 			return v8.Undefined(isolate)
 		}
-		
+
 		condition := args[0].Boolean()
 		if condition {
 			msg := "Request cancelled"
 			statusCode := 400
-			
+
 			if len(args) > 1 {
 				msg = args[1].String()
 			}
 			if len(args) > 2 && args[2].IsNumber() {
 				statusCode = int(args[2].Integer())
 			}
-			
+
 			sc.cancelled = true
 			sc.cancelMsg = msg
 			sc.statusCode = statusCode
-			
+
 			exception, _ := v8.NewValue(isolate, "CANCEL")
 			isolate.ThrowException(exception)
 		}
@@ -396,23 +396,23 @@ func setupCancelFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 		if len(args) == 0 {
 			return v8.Undefined(isolate)
 		}
-		
+
 		condition := args[0].Boolean()
 		if !condition {
 			msg := "Request cancelled"
 			statusCode := 400
-			
+
 			if len(args) > 1 {
 				msg = args[1].String()
 			}
 			if len(args) > 2 && args[2].IsNumber() {
 				statusCode = int(args[2].Integer())
 			}
-			
+
 			sc.cancelled = true
 			sc.cancelMsg = msg
 			sc.statusCode = statusCode
-			
+
 			exception, _ := v8.NewValue(isolate, "CANCEL")
 			isolate.ThrowException(exception)
 		}
@@ -426,7 +426,7 @@ func setupCancelFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 // setupValidationFunctions sets up error(), hasErrors()
 func setupValidationFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 	isolate := v8ctx.Isolate()
-	
+
 	// error() function
 	errorFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
@@ -452,7 +452,7 @@ func setupValidationFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 // setupUserFunctions sets up me, isMe(), query, isRoot
 func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 	isolate := v8ctx.Isolate()
-	
+
 	// me - current user
 	var meValue *v8.Value
 	if sc.ctx.IsAuthenticated {
@@ -477,7 +477,7 @@ func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 			result, _ := v8.NewValue(isolate, false)
 			return result
 		}
-		
+
 		id := args[0].String()
 		if sc.ctx.IsAuthenticated {
 			result, _ := v8.NewValue(isolate, sc.ctx.UserID == id)
@@ -499,7 +499,7 @@ func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 	// internal and isRoot
 	internalValue, _ := v8.NewValue(isolate, false)
 	v8ctx.Global().Set("internal", internalValue)
-	
+
 	isRootValue, _ := v8.NewValue(isolate, sc.ctx.IsRoot)
 	v8ctx.Global().Set("isRoot", isRootValue)
 
@@ -509,7 +509,7 @@ func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 // setupUtilityFunctions sets up emit(), dpd, console, protect(), hide(), changed(), previous
 func setupUtilityFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 	isolate := v8ctx.Isolate()
-	
+
 	// emit() function
 	emitFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
@@ -534,22 +534,22 @@ func setupUtilityFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 		if len(args) == 0 {
 			return v8.Undefined(isolate)
 		}
-		
+
 		message := args[0].String()
 		var data map[string]interface{}
-		
+
 		if len(args) >= 2 && args[1].IsObject() {
 			dataJSON, err := v8.JSONStringify(v8ctx, args[1])
 			if err == nil {
 				json.Unmarshal([]byte(dataJSON), &data)
 			}
 		}
-		
+
 		source := "javascript"
 		if sc.ctx != nil && sc.ctx.Resource != nil {
 			source = fmt.Sprintf("js:%s", sc.ctx.Resource.GetName())
 		}
-		
+
 		logging.Info(message, source, data)
 		return v8.Undefined(isolate)
 	})
@@ -604,15 +604,15 @@ func setupUtilityFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 // setupRequireFunction sets up require() with built-in modules and npm support
 func setupRequireFunction(v8ctx *v8.Context, sc *ScriptContext) error {
 	isolate := v8ctx.Isolate()
-	
+
 	requireFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
 		if len(args) == 0 {
 			return v8.Undefined(isolate)
 		}
-		
+
 		module := args[0].String()
-		
+
 		switch module {
 		case "crypto":
 			return createCryptoModule(v8ctx)
@@ -634,17 +634,17 @@ func setupRequireFunction(v8ctx *v8.Context, sc *ScriptContext) error {
 func createCryptoModule(v8ctx *v8.Context) *v8.Value {
 	isolate := v8ctx.Isolate()
 	cryptoTemplate := v8.NewObjectTemplate(isolate)
-	
+
 	// randomUUID function - simplified UUID-like generation
 	randomUUIDFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		// Create a simple UUID-like string
-		uuid := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", 
+		uuid := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 			0x12345678, 0x1234, 0x5678, 0x9abc, 0x123456789012)
 		result, _ := v8.NewValue(isolate, uuid)
 		return result
 	})
 	cryptoTemplate.Set("randomUUID", randomUUIDFunc)
-	
+
 	// randomBytes function
 	randomBytesFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
@@ -652,7 +652,7 @@ func createCryptoModule(v8ctx *v8.Context) *v8.Value {
 		if len(args) > 0 && args[0].IsNumber() {
 			size = int(args[0].Integer())
 		}
-		
+
 		// Create a hex string representing random bytes
 		hexString := fmt.Sprintf("%0*x", size*2, 0x123456789abcdef0)
 		if len(hexString) > size*2 {
@@ -662,7 +662,7 @@ func createCryptoModule(v8ctx *v8.Context) *v8.Value {
 		return result
 	})
 	cryptoTemplate.Set("randomBytes", randomBytesFunc)
-	
+
 	cryptoObj, _ := cryptoTemplate.NewInstance(v8ctx)
 	return cryptoObj.Value
 }
@@ -671,7 +671,7 @@ func createCryptoModule(v8ctx *v8.Context) *v8.Value {
 func createUtilModule(v8ctx *v8.Context) *v8.Value {
 	isolate := v8ctx.Isolate()
 	utilTemplate := v8.NewObjectTemplate(isolate)
-	
+
 	// isArray function
 	isArrayFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
@@ -683,7 +683,7 @@ func createUtilModule(v8ctx *v8.Context) *v8.Value {
 		return result
 	})
 	utilTemplate.Set("isArray", isArrayFunc)
-	
+
 	// isObject function
 	isObjectFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
@@ -695,7 +695,7 @@ func createUtilModule(v8ctx *v8.Context) *v8.Value {
 		return result
 	})
 	utilTemplate.Set("isObject", isObjectFunc)
-	
+
 	utilObj, _ := utilTemplate.NewInstance(v8ctx)
 	return utilObj.Value
 }
@@ -704,7 +704,7 @@ func createUtilModule(v8ctx *v8.Context) *v8.Value {
 func createPathModule(v8ctx *v8.Context) *v8.Value {
 	isolate := v8ctx.Isolate()
 	pathTemplate := v8.NewObjectTemplate(isolate)
-	
+
 	// extname function
 	extnameFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
@@ -720,7 +720,7 @@ func createPathModule(v8ctx *v8.Context) *v8.Value {
 		return result
 	})
 	pathTemplate.Set("extname", extnameFunc)
-	
+
 	// basename function
 	basenameFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
@@ -734,7 +734,7 @@ func createPathModule(v8ctx *v8.Context) *v8.Value {
 		return result
 	})
 	pathTemplate.Set("basename", basenameFunc)
-	
+
 	pathObj, _ := pathTemplate.NewInstance(v8ctx)
 	return pathObj.Value
 }
@@ -742,11 +742,11 @@ func createPathModule(v8ctx *v8.Context) *v8.Value {
 // loadNodeModule loads npm modules from js-sandbox/node_modules
 func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 	isolate := v8ctx.Isolate()
-	
+
 	// Check for package.json in js-sandbox/node_modules/MODULE
 	moduleDir := filepath.Join("js-sandbox", "node_modules", module)
 	packageJSONPath := filepath.Join(moduleDir, "package.json")
-	
+
 	if _, err := os.Stat(packageJSONPath); err != nil {
 		// Module not found
 		logging.Debug("npm module not found", "js-require", map[string]interface{}{
@@ -755,7 +755,7 @@ func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 		})
 		return v8.Undefined(isolate)
 	}
-	
+
 	// Read package.json to find main file
 	packageJSON, err := os.ReadFile(packageJSONPath)
 	if err != nil {
@@ -765,7 +765,7 @@ func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 		})
 		return v8.Undefined(isolate)
 	}
-	
+
 	var pkg struct {
 		Main string `json:"main"`
 	}
@@ -776,12 +776,12 @@ func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 		})
 		return v8.Undefined(isolate)
 	}
-	
+
 	mainFile := pkg.Main
 	if mainFile == "" {
 		mainFile = "index.js"
 	}
-	
+
 	// Load the main file
 	mainPath := filepath.Join(moduleDir, mainFile)
 	moduleCode, err := os.ReadFile(mainPath)
@@ -793,29 +793,29 @@ func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 		})
 		return v8.Undefined(isolate)
 	}
-	
+
 	// Create a new context for the module execution
 	moduleCtx := v8.NewContext(isolate)
 	defer moduleCtx.Close()
-	
+
 	// Set up minimal Node.js environment for the module
 	exportsObj := v8.NewObjectTemplate(isolate)
 	exports, _ := exportsObj.NewInstance(moduleCtx)
 	moduleCtx.Global().Set("exports", exports)
-	
+
 	// Set up module object
 	moduleObjTemplate := v8.NewObjectTemplate(isolate)
 	moduleObjInstance, _ := moduleObjTemplate.NewInstance(moduleCtx)
 	moduleObjInstance.Set("exports", exports)
 	moduleCtx.Global().Set("module", moduleObjInstance)
-	
+
 	// Set up require function for nested dependencies
 	requireFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
 		if len(args) == 0 {
 			return v8.Undefined(isolate)
 		}
-		
+
 		depModule := args[0].String()
 		// For now, only support direct dependencies, not nested requires
 		logging.Debug("Nested require not fully supported", "js-require", map[string]interface{}{
@@ -825,7 +825,7 @@ func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 		return v8.Undefined(isolate)
 	})
 	moduleCtx.Global().Set("require", requireFunc.GetFunction(moduleCtx))
-	
+
 	// Execute the module code
 	_, err = moduleCtx.RunScript(string(moduleCode), mainPath)
 	if err != nil {
@@ -835,7 +835,7 @@ func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 		})
 		return v8.Undefined(isolate)
 	}
-	
+
 	// Get the exports from the module
 	exportsValue, err := moduleCtx.Global().Get("exports")
 	if err != nil {
@@ -845,7 +845,7 @@ func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 		})
 		return v8.Undefined(isolate)
 	}
-	
+
 	// Convert exports to JSON and back to ensure it works in the main context
 	exportsJSON, err := v8.JSONStringify(moduleCtx, exportsValue)
 	if err != nil {
@@ -855,7 +855,7 @@ func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 		})
 		return v8.Undefined(isolate)
 	}
-	
+
 	// Parse back in the main context
 	result, err := v8.JSONParse(v8ctx, exportsJSON)
 	if err != nil {
@@ -865,11 +865,11 @@ func loadNodeModule(v8ctx *v8.Context, module string) *v8.Value {
 		})
 		return v8.Undefined(isolate)
 	}
-	
+
 	logging.Debug("Successfully loaded npm module", "js-require", map[string]interface{}{
 		"module": module,
 	})
-	
+
 	return result
 }
 

@@ -16,16 +16,16 @@ import (
 
 func main() {
 	var (
-		port     = flag.Int("port", 2403, "server port")
-		dbType   = flag.String("db-type", "mongodb", "database type (mongodb, sqlite, mysql, postgres)")
-		dbHost   = flag.String("db-host", "localhost", "database host")
-		dbPort   = flag.Int("db-port", 0, "database port (0 = use default for db-type)")
-		dbName   = flag.String("db-name", "deployd", "database name")
-		dbUser   = flag.String("db-user", "", "database username")
-		dbPass   = flag.String("db-pass", "", "database password")
-		dbSSL    = flag.Bool("db-ssl", false, "enable SSL for database connection")
-		config   = flag.String("config", "", "configuration file path")
-		dev      = flag.Bool("dev", false, "development mode")
+		port   = flag.Int("port", 2403, "server port")
+		dbType = flag.String("db-type", "mongodb", "database type (mongodb, sqlite, mysql, postgres)")
+		dbHost = flag.String("db-host", "localhost", "database host")
+		dbPort = flag.Int("db-port", 0, "database port (0 = use default for db-type)")
+		dbName = flag.String("db-name", "deployd", "database name")
+		dbUser = flag.String("db-user", "", "database username")
+		dbPass = flag.String("db-pass", "", "database password")
+		dbSSL  = flag.Bool("db-ssl", false, "enable SSL for database connection")
+		config = flag.String("config", "", "configuration file path")
+		dev    = flag.Bool("dev", false, "development mode")
 	)
 	flag.Parse()
 

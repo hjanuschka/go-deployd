@@ -59,7 +59,7 @@ func TestCollectionCreation(t *testing.T) {
 
 	t.Run("validate property types", func(t *testing.T) {
 		validTypes := []string{"string", "number", "boolean", "date", "array", "object"}
-		
+
 		for _, validType := range validTypes {
 			prop := resources.Property{
 				Type: validType,

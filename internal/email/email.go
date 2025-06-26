@@ -30,7 +30,7 @@ func NewEmailService(emailConfig *config.EmailConfig) *EmailService {
 // SendVerificationEmail sends an email verification message
 func (e *EmailService) SendVerificationEmail(to, username, verificationToken, baseURL string) error {
 	verificationURL := fmt.Sprintf("%s/_dashboard/verify?token=%s", baseURL, verificationToken)
-	
+
 	subject := "Verify your email address"
 	htmlBody := fmt.Sprintf(`
 		<html>
@@ -48,7 +48,7 @@ func (e *EmailService) SendVerificationEmail(to, username, verificationToken, ba
 		</body>
 		</html>
 	`, username, verificationURL, verificationURL)
-	
+
 	textBody := fmt.Sprintf(`
 Welcome to Go-Deployd!
 
@@ -64,7 +64,7 @@ If you didn't create an account, please ignore this email.
 Best regards,
 Go-Deployd Team
 	`, username, verificationURL)
-	
+
 	return e.SendEmail(to, subject, textBody, htmlBody)
 }
 
@@ -85,16 +85,16 @@ func (e *EmailService) sendViaSMTP(to, subject, textBody, htmlBody string) error
 	if e.config.SMTP.Username == "" || e.config.SMTP.Password == "" {
 		return fmt.Errorf("SMTP credentials not configured")
 	}
-	
+
 	auth := smtp.PlainAuth("", e.config.SMTP.Username, e.config.SMTP.Password, e.config.SMTP.Host)
-	
+
 	// Prepare message
 	headers := fmt.Sprintf("From: %s <%s>\r\n", e.config.FromName, e.config.From)
 	headers += fmt.Sprintf("To: %s\r\n", to)
 	headers += fmt.Sprintf("Subject: %s\r\n", subject)
 	headers += "MIME-Version: 1.0\r\n"
 	headers += "Content-Type: multipart/alternative; boundary=boundary\r\n\r\n"
-	
+
 	body := "--boundary\r\n"
 	body += "Content-Type: text/plain; charset=UTF-8\r\n\r\n"
 	body += textBody + "\r\n\r\n"
@@ -102,51 +102,51 @@ func (e *EmailService) sendViaSMTP(to, subject, textBody, htmlBody string) error
 	body += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
 	body += htmlBody + "\r\n\r\n"
 	body += "--boundary--\r\n"
-	
+
 	message := headers + body
-	
+
 	serverAddr := fmt.Sprintf("%s:%d", e.config.SMTP.Host, e.config.SMTP.Port)
-	
+
 	if e.config.SMTP.TLS {
 		// Use TLS connection
 		tlsConfig := &tls.Config{
 			ServerName: e.config.SMTP.Host,
 		}
-		
+
 		conn, err := tls.Dial("tcp", serverAddr, tlsConfig)
 		if err != nil {
 			return fmt.Errorf("failed to connect to SMTP server with TLS: %w", err)
 		}
 		defer conn.Close()
-		
+
 		client, err := smtp.NewClient(conn, e.config.SMTP.Host)
 		if err != nil {
 			return fmt.Errorf("failed to create SMTP client: %w", err)
 		}
 		defer client.Close()
-		
+
 		if err := client.Auth(auth); err != nil {
 			return fmt.Errorf("SMTP authentication failed: %w", err)
 		}
-		
+
 		if err := client.Mail(e.config.From); err != nil {
 			return fmt.Errorf("failed to set sender: %w", err)
 		}
-		
+
 		if err := client.Rcpt(to); err != nil {
 			return fmt.Errorf("failed to set recipient: %w", err)
 		}
-		
+
 		writer, err := client.Data()
 		if err != nil {
 			return fmt.Errorf("failed to start data transfer: %w", err)
 		}
-		
+
 		_, err = writer.Write([]byte(message))
 		if err != nil {
 			return fmt.Errorf("failed to write message: %w", err)
 		}
-		
+
 		return writer.Close()
 	} else {
 		// Use plain SMTP
@@ -158,55 +158,55 @@ func (e *EmailService) sendViaSMTP(to, subject, textBody, htmlBody string) error
 func (e *EmailService) sendViaSES(to, subject, textBody, htmlBody string) error {
 	// TODO: Implement SES after installing AWS SDK
 	return fmt.Errorf("SES support temporarily disabled - please use SMTP provider")
-	
+
 	/*
-	if e.config.SES.AccessKeyID == "" || e.config.SES.SecretAccessKey == "" {
-		return fmt.Errorf("AWS SES credentials not configured")
-	}
-	
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(e.config.SES.Region),
-		Credentials: credentials.NewStaticCredentials(
-			e.config.SES.AccessKeyID,
-			e.config.SES.SecretAccessKey,
-			"",
-		),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create AWS session: %w", err)
-	}
-	
-	svc := ses.New(sess)
-	
-	input := &ses.SendEmailInput{
-		Destination: &ses.Destination{
-			ToAddresses: []*string{aws.String(to)},
-		},
-		Message: &ses.Message{
-			Body: &ses.Body{
-				Html: &ses.Content{
-					Charset: aws.String("UTF-8"),
-					Data:    aws.String(htmlBody),
+		if e.config.SES.AccessKeyID == "" || e.config.SES.SecretAccessKey == "" {
+			return fmt.Errorf("AWS SES credentials not configured")
+		}
+
+		sess, err := session.NewSession(&aws.Config{
+			Region: aws.String(e.config.SES.Region),
+			Credentials: credentials.NewStaticCredentials(
+				e.config.SES.AccessKeyID,
+				e.config.SES.SecretAccessKey,
+				"",
+			),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create AWS session: %w", err)
+		}
+
+		svc := ses.New(sess)
+
+		input := &ses.SendEmailInput{
+			Destination: &ses.Destination{
+				ToAddresses: []*string{aws.String(to)},
+			},
+			Message: &ses.Message{
+				Body: &ses.Body{
+					Html: &ses.Content{
+						Charset: aws.String("UTF-8"),
+						Data:    aws.String(htmlBody),
+					},
+					Text: &ses.Content{
+						Charset: aws.String("UTF-8"),
+						Data:    aws.String(textBody),
+					},
 				},
-				Text: &ses.Content{
+				Subject: &ses.Content{
 					Charset: aws.String("UTF-8"),
-					Data:    aws.String(textBody),
+					Data:    aws.String(subject),
 				},
 			},
-			Subject: &ses.Content{
-				Charset: aws.String("UTF-8"),
-				Data:    aws.String(subject),
-			},
-		},
-		Source: aws.String(fmt.Sprintf("%s <%s>", e.config.FromName, e.config.From)),
-	}
-	
-	_, err = svc.SendEmail(input)
-	if err != nil {
-		return fmt.Errorf("failed to send email via SES: %w", err)
-	}
-	
-	return nil
+			Source: aws.String(fmt.Sprintf("%s <%s>", e.config.FromName, e.config.From)),
+		}
+
+		_, err = svc.SendEmail(input)
+		if err != nil {
+			return fmt.Errorf("failed to send email via SES: %w", err)
+		}
+
+		return nil
 	*/
 }
 
@@ -225,7 +225,7 @@ func (e *EmailService) TestEmail(to string) error {
 		</body>
 		</html>
 	`
-	
+
 	return e.SendEmail(to, subject, textBody, htmlBody)
 }
 

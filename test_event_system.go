@@ -35,13 +35,13 @@ func main() {
 	fmt.Println("\n📝 Test 1: Creating test user with sensitive data...")
 	userData := map[string]interface{}{
 		"username":          "testuser",
-		"email":            "test@example.com", 
-		"password":         "secret123",
+		"email":             "test@example.com",
+		"password":          "secret123",
 		"verificationToken": "super-secret-token",
-		"role":             "user",
-		"active":           true,
+		"role":              "user",
+		"active":            true,
 	}
-	
+
 	userID, success := createUser(baseURL, masterKey, userData)
 	results = append(results, TestResult{
 		Name:    "Create test user",
@@ -60,7 +60,7 @@ func main() {
 	results = append(results, TestResult{
 		Name:    "Get single user with GET event",
 		Success: success && singleUser["password"] == nil && singleUser["verificationToken"] == nil,
-		Message: fmt.Sprintf("Password hidden: %v, Token hidden: %v", 
+		Message: fmt.Sprintf("Password hidden: %v, Token hidden: %v",
 			singleUser["password"] == nil, singleUser["verificationToken"] == nil),
 		Data: singleUser,
 	})
@@ -100,7 +100,7 @@ func main() {
 			}
 		}
 	}
-	
+
 	results = append(results, TestResult{
 		Name:    "Verify GET event execution",
 		Success: eventRanCount >= 2, // Should run for single user + collection query
@@ -108,10 +108,10 @@ func main() {
 	})
 
 	// Print results summary
-	fmt.Println("\n" + "=" * 50)
+	fmt.Println("\n" + "="*50)
 	fmt.Println("📊 TEST RESULTS SUMMARY")
 	fmt.Println(strings.Repeat("=", 50))
-	
+
 	passedTests := 0
 	for _, result := range results {
 		status := "❌ FAIL"
@@ -121,9 +121,9 @@ func main() {
 		}
 		fmt.Printf("%s %s: %s\n", status, result.Name, result.Message)
 	}
-	
+
 	fmt.Printf("\n🎯 Overall: %d/%d tests passed\n", passedTests, len(results))
-	
+
 	if passedTests == len(results) {
 		fmt.Println("🎉 All tests passed! Event system is working correctly.")
 		os.Exit(0)
@@ -138,7 +138,7 @@ func createUser(baseURL, masterKey string, userData map[string]interface{}) (str
 	req, _ := http.NewRequest("POST", baseURL+"/users", bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+masterKey)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -146,28 +146,28 @@ func createUser(baseURL, masterKey string, userData map[string]interface{}) (str
 		return "", false
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Printf("❌ Create user failed with status %d: %s\n", resp.StatusCode, string(body))
 		return "", false
 	}
-	
+
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
-	
+
 	if id, ok := result["id"].(string); ok {
 		fmt.Printf("✅ Created user with ID: %s\n", id)
 		return id, true
 	}
-	
+
 	return "", false
 }
 
 func getUser(baseURL, masterKey, userID string) (map[string]interface{}, bool) {
 	req, _ := http.NewRequest("GET", baseURL+"/users/"+userID, nil)
 	req.Header.Set("Authorization", "Bearer "+masterKey)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -175,16 +175,16 @@ func getUser(baseURL, masterKey, userID string) (map[string]interface{}, bool) {
 		return nil, false
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Printf("❌ Get user failed with status %d: %s\n", resp.StatusCode, string(body))
 		return nil, false
 	}
-	
+
 	var user map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&user)
-	
+
 	fmt.Printf("✅ Retrieved user: %s\n", user["email"])
 	return user, true
 }
@@ -192,7 +192,7 @@ func getUser(baseURL, masterKey, userID string) (map[string]interface{}, bool) {
 func getAllUsers(baseURL, masterKey string) ([]interface{}, bool) {
 	req, _ := http.NewRequest("GET", baseURL+"/users", nil)
 	req.Header.Set("Authorization", "Bearer "+masterKey)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -200,16 +200,16 @@ func getAllUsers(baseURL, masterKey string) ([]interface{}, bool) {
 		return nil, false
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Printf("❌ Get users failed with status %d: %s\n", resp.StatusCode, string(body))
 		return nil, false
 	}
-	
+
 	var users []interface{}
 	json.NewDecoder(resp.Body).Decode(&users)
-	
+
 	fmt.Printf("✅ Retrieved %d users\n", len(users))
 	return users, true
 }
@@ -217,7 +217,7 @@ func getAllUsers(baseURL, masterKey string) ([]interface{}, bool) {
 func getAllUsersRaw(baseURL, masterKey string) ([]interface{}, bool) {
 	req, _ := http.NewRequest("GET", baseURL+"/users?$skipEvents=true", nil)
 	req.Header.Set("Authorization", "Bearer "+masterKey)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -225,16 +225,16 @@ func getAllUsersRaw(baseURL, masterKey string) ([]interface{}, bool) {
 		return nil, false
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Printf("❌ Get raw users failed with status %d: %s\n", resp.StatusCode, string(body))
 		return nil, false
 	}
-	
+
 	var users []interface{}
 	json.NewDecoder(resp.Body).Decode(&users)
-	
+
 	fmt.Printf("✅ Retrieved %d raw users\n", len(users))
 	return users, true
 }
@@ -243,7 +243,7 @@ func checkAllUsersHiddenFields(users []interface{}) bool {
 	if len(users) == 0 {
 		return false
 	}
-	
+
 	for _, user := range users {
 		if userMap, ok := user.(map[string]interface{}); ok {
 			if userMap["password"] != nil || userMap["verificationToken"] != nil {
@@ -252,7 +252,7 @@ func checkAllUsersHiddenFields(users []interface{}) bool {
 			}
 		}
 	}
-	
+
 	fmt.Println("✅ All users have hidden sensitive fields")
 	return true
 }
@@ -261,7 +261,7 @@ func checkRawUsersHaveAllFields(users []interface{}) bool {
 	if len(users) == 0 {
 		return false
 	}
-	
+
 	hasPasswordData := false
 	for _, user := range users {
 		if userMap, ok := user.(map[string]interface{}); ok {
@@ -271,7 +271,7 @@ func checkRawUsersHaveAllFields(users []interface{}) bool {
 			}
 		}
 	}
-	
+
 	if hasPasswordData {
 		fmt.Println("✅ Raw users contain all fields including sensitive data")
 		return true

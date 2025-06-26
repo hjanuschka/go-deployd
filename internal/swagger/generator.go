@@ -10,11 +10,11 @@ import (
 
 // OpenAPISpec represents the OpenAPI 3.0 specification
 type OpenAPISpec struct {
-	OpenAPI string                 `json:"openapi"`
-	Info    OpenAPIInfo            `json:"info"`
-	Servers []OpenAPIServer        `json:"servers"`
-	Paths   map[string]interface{} `json:"paths"`
-	Components OpenAPIComponents   `json:"components"`
+	OpenAPI    string                 `json:"openapi"`
+	Info       OpenAPIInfo            `json:"info"`
+	Servers    []OpenAPIServer        `json:"servers"`
+	Paths      map[string]interface{} `json:"paths"`
+	Components OpenAPIComponents      `json:"components"`
 }
 
 type OpenAPIInfo struct {
@@ -297,7 +297,7 @@ func (g *Generator) addAuthPaths(spec *OpenAPISpec) {
 func (g *Generator) addCollectionPaths(spec *OpenAPISpec, collection resources.Resource) {
 	collectionName := collection.GetName()
 	path := collection.GetPath()
-	
+
 	// Ensure path starts with /
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path

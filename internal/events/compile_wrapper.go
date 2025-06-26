@@ -11,16 +11,16 @@ func CreateGoWrapper(userCode string) string {
 	lines := strings.Split(userCode, "\n")
 	var imports []string
 	var functions []string
-	
+
 	inImportBlock := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip package declaration
 		if strings.HasPrefix(trimmed, "package ") {
 			continue
 		}
-		
+
 		// Handle import statements
 		if strings.HasPrefix(trimmed, "import ") {
 			inImportBlock = true
@@ -35,10 +35,10 @@ func CreateGoWrapper(userCode string) string {
 			functions = append(functions, line)
 		}
 	}
-	
+
 	userImports := strings.Join(imports, "\n")
 	userFunctions := strings.Join(functions, "\n")
-	
+
 	// Check if fmt is already imported by user OR if user code uses fmt functions
 	hasFmt := false
 	for _, imp := range imports {
@@ -47,20 +47,20 @@ func CreateGoWrapper(userCode string) string {
 			break
 		}
 	}
-	
+
 	// Check if user code actually uses fmt functions
-	usesFmt := strings.Contains(userFunctions, "fmt.") || 
-	          strings.Contains(userFunctions, "Printf") ||
-	          strings.Contains(userFunctions, "Sprintf") ||
-	          strings.Contains(userFunctions, "Print")
-	
+	usesFmt := strings.Contains(userFunctions, "fmt.") ||
+		strings.Contains(userFunctions, "Printf") ||
+		strings.Contains(userFunctions, "Sprintf") ||
+		strings.Contains(userFunctions, "Print")
+
 	// Build imports section - only import fmt if user code uses it and doesn't already import it
 	wrapperImports := `"reflect"`
 	if usesFmt && !hasFmt {
 		wrapperImports = `"fmt"
 	"reflect"`
 	}
-	
+
 	template := `package main
 
 import (
@@ -252,6 +252,6 @@ func safeGetLogField(v reflect.Value, fieldName string) func(string, ...map[stri
 	return deployd.Log // fallback to global deployd.Log
 }
 `
-	
+
 	return fmt.Sprintf(template, userImports, userFunctions)
 }

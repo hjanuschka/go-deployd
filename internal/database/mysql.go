@@ -32,8 +32,8 @@ type MySQLUpdateResult struct {
 	upsertedID    interface{}
 }
 
-func (r *MySQLUpdateResult) ModifiedCount() int64   { return r.modifiedCount }
-func (r *MySQLUpdateResult) UpsertedCount() int64   { return r.upsertedCount }
+func (r *MySQLUpdateResult) ModifiedCount() int64    { return r.modifiedCount }
+func (r *MySQLUpdateResult) UpsertedCount() int64    { return r.upsertedCount }
 func (r *MySQLUpdateResult) UpsertedID() interface{} { return r.upsertedID }
 
 // MySQLDeleteResult implements DeleteResult interface
@@ -64,10 +64,10 @@ func NewMySQLDatabase(config *Config) (DatabaseInterface, error) {
 	}
 
 	// Configure connection pool
-	db.SetMaxOpenConns(50)          // Increased from 25
-	db.SetMaxIdleConns(10)          // Increased from 5
+	db.SetMaxOpenConns(50) // Increased from 25
+	db.SetMaxIdleConns(10) // Increased from 5
 	db.SetConnMaxLifetime(30 * time.Minute)
-	db.SetConnMaxIdleTime(5 * time.Minute)  // Add idle timeout
+	db.SetConnMaxIdleTime(5 * time.Minute) // Add idle timeout
 
 	// Test connection
 	if err := db.Ping(); err != nil {
@@ -468,7 +468,7 @@ func (s *MySQLStore) Upsert(ctx context.Context, query QueryBuilder, update Upda
 
 	// Merge query and update into a new document
 	newDoc := make(map[string]interface{})
-	
+
 	// Add query fields
 	for field, value := range queryMap {
 		if !strings.HasPrefix(field, "$") {

@@ -10,17 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hjanuschka/go-deployd/internal/database"
 	appcontext "github.com/hjanuschka/go-deployd/internal/context"
+	"github.com/hjanuschka/go-deployd/internal/database"
 	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 )
 
 type CollectionConfig struct {
-	Properties                map[string]Property                    `json:"properties"`
-	EventConfig               map[string]events.EventConfiguration   `json:"eventConfig,omitempty"`
-	AllowAdditionalProperties bool                                   `json:"allowAdditionalProperties,omitempty"`
-	IsBuiltin                 bool                                   `json:"isBuiltin,omitempty"`
+	Properties                map[string]Property                  `json:"properties"`
+	EventConfig               map[string]events.EventConfiguration `json:"eventConfig,omitempty"`
+	AllowAdditionalProperties bool                                 `json:"allowAdditionalProperties,omitempty"`
+	IsBuiltin                 bool                                 `json:"isBuiltin,omitempty"`
 }
 
 type Collection struct {
@@ -41,7 +41,7 @@ func NewCollection(name string, config *CollectionConfig, db database.DatabaseIn
 	if config.Properties == nil {
 		config.Properties = make(map[string]Property)
 	}
-	
+
 	// Add required timestamp fields if not present
 	config.Properties["createdAt"] = Property{
 		Type:     "date",
@@ -49,11 +49,11 @@ func NewCollection(name string, config *CollectionConfig, db database.DatabaseIn
 		Default:  "now",
 	}
 	config.Properties["updatedAt"] = Property{
-		Type:     "date", 
+		Type:     "date",
 		Required: false,
 		Default:  "now",
 	}
-	
+
 	return &Collection{
 		BaseResource:     NewBaseResource(name),
 		config:           config,
@@ -70,36 +70,36 @@ func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInter
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	var config CollectionConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
-	
+
 	// Check if this is a user collection (special case)
 	if name == "users" || name == "user" {
 		userCollection := NewUserCollection(name, &config, db)
 		userCollection.configPath = configPath
-		
+
 		// Load event scripts with configuration
 		if err := userCollection.scriptManager.LoadScriptsWithConfig(configPath, config.EventConfig); err != nil {
 			// Scripts are optional, so don't fail if they don't exist
 			fmt.Printf("Warning: Failed to load scripts for %s: %v\n", name, err)
 		}
-		
+
 		return userCollection, nil
 	}
-	
+
 	// Regular collection
 	collection := NewCollection(name, &config, db)
 	collection.configPath = configPath
-	
+
 	// Load event scripts with configuration
 	if err := collection.scriptManager.LoadScriptsWithConfig(configPath, config.EventConfig); err != nil {
 		// Scripts are optional, so don't fail if they don't exist
 		fmt.Printf("Warning: Failed to load scripts for %s: %v\n", name, err)
 	}
-	
+
 	return collection, nil
 }
 
@@ -120,12 +120,12 @@ func (c *Collection) Handle(ctx *appcontext.Context) error {
 
 func (c *Collection) handleGet(ctx *appcontext.Context) error {
 	id := ctx.GetID()
-	
+
 	// Special endpoints
 	if id == "count" {
 		return c.handleCount(ctx)
 	}
-	
+
 	// Run BeforeRequest event
 	if err := c.runBeforeRequestEvent(ctx, "GET"); err != nil {
 		if scriptErr, ok := err.(*events.ScriptError); ok {
@@ -133,13 +133,13 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 		}
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	if id != "" {
 		logging.Info("🔍 SINGLE DOCUMENT GET REQUEST", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 			"documentId": id,
 			"query":      ctx.Query,
 		})
-		
+
 		// Get single document
 		query := database.NewQueryBuilder().Where("id", "$eq", id)
 		doc, err := c.store.FindOne(ctx.Context(), query)
@@ -149,20 +149,20 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 		if doc == nil {
 			return ctx.WriteError(404, "Document not found")
 		}
-		
+
 		logging.Info("📄 DOCUMENT RETRIEVED", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 			"documentId": id,
 			"dataKeys":   getDataKeys(doc),
 		})
-		
+
 		// Check for $skipEvents parameter in query to bypass events
 		skipEvents := ctx.Query["$skipEvents"] == "true"
-		
+
 		logging.Info("🎯 EVENT DECISION", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
-			"skipEvents": skipEvents,
+			"skipEvents":   skipEvents,
 			"willRunEvent": !skipEvents,
 		})
-		
+
 		// Run Get event for single document (skip if $skipEvents is true)
 		if !skipEvents {
 			if err := c.runGetEvent(ctx, doc); err != nil {
@@ -172,31 +172,31 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 				return ctx.WriteError(500, err.Error())
 			}
 		}
-		
+
 		logging.Info("📤 RETURNING DOCUMENT", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 			"documentId": id,
-			"finalData": doc,
+			"finalData":  doc,
 		})
-		
+
 		return ctx.WriteJSON(doc)
 	}
-	
+
 	// Get multiple documents
 	// Check for $skipEvents parameter in query to bypass events
 	skipEvents := ctx.Query["$skipEvents"] == "true"
-	
+
 	// First extract query options like $sort, $limit, $skip
 	opts, cleanQuery := c.extractQueryOptions(ctx.Query)
-	
+
 	// Then sanitize the remaining query and convert to QueryBuilder
 	sanitizedQuery := c.sanitizeQuery(cleanQuery)
 	query := c.mapToQueryBuilder(sanitizedQuery)
-	
+
 	docs, err := c.store.Find(ctx.Context(), query, opts)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	// Run Get event for each document (skip if $skipEvents is true)
 	filteredDocs := make([]map[string]interface{}, 0)
 	for _, doc := range docs {
@@ -206,13 +206,13 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 			for k, v := range doc {
 				eventDoc[k] = v
 			}
-			
+
 			if err := c.runGetEvent(ctx, eventDoc); err != nil {
 				// Skip documents that fail the Get event (any error type)
 				// This includes script errors, cancellations, validation failures, etc.
 				continue
 			}
-			
+
 			// Use the event-processed document as the result
 			filteredDocs = append(filteredDocs, eventDoc)
 		} else {
@@ -220,7 +220,7 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 			filteredDocs = append(filteredDocs, doc)
 		}
 	}
-	
+
 	return ctx.WriteJSON(filteredDocs)
 }
 
@@ -250,12 +250,12 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 		})
 		return ctx.WriteError(400, err.Error())
 	}
-	
+
 	logging.Debug("Go validation passed, starting sanitization", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 		"bodyKeys": getDataKeys(ctx.Body),
 		"body":     ctx.Body,
 	})
-	
+
 	// Check for $skipEvents parameter to bypass all events (before sanitization)
 	skipEvents := false
 	if val, exists := ctx.Body["$skipEvents"]; exists {
@@ -265,17 +265,17 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 		// Remove $skipEvents from body so it doesn't interfere with validation/sanitization
 		delete(ctx.Body, "$skipEvents")
 	}
-	
+
 	sanitized := c.sanitize(ctx.Body)
-	
+
 	logging.Debug("Sanitization complete", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 		"sanitizedKeys": getDataKeys(sanitized),
 		"sanitized":     sanitized,
 	})
-	
+
 	// Set default values
 	c.setDefaults(sanitized)
-	
+
 	// Run Validate event (skip if $skipEvents is true)
 	if !skipEvents {
 		if err := c.runValidateEvent(ctx, sanitized); err != nil {
@@ -288,7 +288,7 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 			return ctx.WriteError(500, err.Error())
 		}
 	}
-	
+
 	// Run Post event (skip if $skipEvents is true)
 	if !skipEvents {
 		if err := c.runPostEvent(ctx, sanitized); err != nil {
@@ -298,10 +298,10 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 			return ctx.WriteError(500, err.Error())
 		}
 	}
-	
+
 	// Set timestamps after events (cannot be overridden by events)
 	c.setTimestamps(sanitized, true)
-	
+
 	// Insert document
 	result, err := c.store.Insert(ctx.Context(), sanitized)
 	if err != nil {
@@ -317,12 +317,12 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 		"documentId": result,
 		"fields":     len(sanitized),
 	})
-	
+
 	// Run AfterCommit event
 	if resultDoc, ok := result.(map[string]interface{}); ok {
 		go c.runAfterCommitEvent(ctx, resultDoc, "POST")
 	}
-	
+
 	return ctx.WriteJSON(result)
 }
 
@@ -331,7 +331,7 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 	if id == "" {
 		return ctx.WriteError(400, "ID is required for PUT requests")
 	}
-	
+
 	// Run BeforeRequest event
 	if err := c.runBeforeRequestEvent(ctx, "PUT"); err != nil {
 		if scriptErr, ok := err.(*events.ScriptError); ok {
@@ -339,12 +339,12 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 		}
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	// Check if this is a MongoDB command operation
 	if c.isMongoCommand(ctx.Body) {
 		return c.handleMongoCommand(ctx, id)
 	}
-	
+
 	// Get the existing document for the 'previous' object
 	query := database.NewQueryBuilder().Where("id", "$eq", id)
 	previous, err := c.store.FindOne(ctx.Context(), query)
@@ -354,7 +354,7 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 	if previous == nil {
 		return ctx.WriteError(404, "Document not found")
 	}
-	
+
 	// Check for $skipEvents parameter to bypass all events (before sanitization)
 	skipEvents := false
 	if val, exists := ctx.Body["$skipEvents"]; exists {
@@ -364,14 +364,14 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 		// Remove $skipEvents from body so it doesn't interfere with validation/sanitization
 		delete(ctx.Body, "$skipEvents")
 	}
-	
+
 	// Validate and sanitize body
 	if err := c.validate(ctx.Body, false); err != nil {
 		return ctx.WriteError(400, err.Error())
 	}
-	
+
 	sanitized := c.sanitize(ctx.Body)
-	
+
 	// Check if there are any fields to update after sanitization
 	if len(sanitized) == 0 {
 		// If skipEvents was specified but no actual fields to update, return the existing document
@@ -380,7 +380,7 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 		}
 		return ctx.WriteError(400, "No fields to update")
 	}
-	
+
 	// Merge with existing document
 	merged := make(map[string]interface{})
 	for k, v := range previous {
@@ -389,7 +389,7 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 	for k, v := range sanitized {
 		merged[k] = v
 	}
-	
+
 	// Run Validate event (skip if $skipEvents is true)
 	if !skipEvents {
 		if err := c.runValidateEvent(ctx, merged); err != nil {
@@ -402,7 +402,7 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 			return ctx.WriteError(500, err.Error())
 		}
 	}
-	
+
 	// Run Put event (skip if $skipEvents is true)
 	if !skipEvents {
 		if err := c.runPutEvent(ctx, merged); err != nil {
@@ -412,10 +412,10 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 			return ctx.WriteError(500, err.Error())
 		}
 	}
-	
+
 	// Set timestamps after events (cannot be overridden by events)
 	c.setTimestamps(sanitized, false)
-	
+
 	// Update document - for SQLite we need to update individual fields, not set the entire data
 	updateQuery := database.NewQueryBuilder().Where("id", "$eq", id)
 	updateBuilder := database.NewUpdateBuilder()
@@ -427,30 +427,30 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 			updateCount++
 		}
 	}
-	
+
 	// Check if we have any fields to update
 	if updateCount == 0 {
 		return ctx.WriteError(400, "No valid fields to update")
 	}
-	
+
 	_, err = c.store.Update(ctx.Context(), updateQuery, updateBuilder)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	// Note: We don't check ModifiedCount() because it can be 0 if the document
 	// already has the same values, which is a successful operation
-	
+
 	// Return updated document
 	findQuery := database.NewQueryBuilder().Where("id", "$eq", id)
 	doc, err := c.store.FindOne(ctx.Context(), findQuery)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	// Run AfterCommit event
 	go c.runAfterCommitEvent(ctx, doc, "PUT")
-	
+
 	return ctx.WriteJSON(doc)
 }
 
@@ -459,7 +459,7 @@ func (c *Collection) handleDelete(ctx *appcontext.Context) error {
 	if id == "" {
 		return ctx.WriteError(400, "ID is required for DELETE requests")
 	}
-	
+
 	// Run BeforeRequest event
 	if err := c.runBeforeRequestEvent(ctx, "DELETE"); err != nil {
 		if scriptErr, ok := err.(*events.ScriptError); ok {
@@ -467,7 +467,7 @@ func (c *Collection) handleDelete(ctx *appcontext.Context) error {
 		}
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	// Get the document to delete
 	query := database.NewQueryBuilder().Where("id", "$eq", id)
 	doc, err := c.store.FindOne(ctx.Context(), query)
@@ -477,7 +477,7 @@ func (c *Collection) handleDelete(ctx *appcontext.Context) error {
 	if doc == nil {
 		return ctx.WriteError(404, "Document not found")
 	}
-	
+
 	// Run Delete event
 	if err := c.runDeleteEvent(ctx, doc); err != nil {
 		if scriptErr, ok := err.(*events.ScriptError); ok {
@@ -485,21 +485,21 @@ func (c *Collection) handleDelete(ctx *appcontext.Context) error {
 		}
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	// Delete the document
 	deleteQuery := database.NewQueryBuilder().Where("id", "$eq", id)
 	result, err := c.store.Remove(ctx.Context(), deleteQuery)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	if result.DeletedCount() == 0 {
 		return ctx.WriteError(404, "Document not found")
 	}
-	
+
 	// Run AfterCommit event
 	go c.runAfterCommitEvent(ctx, doc, "DELETE")
-	
+
 	return ctx.WriteJSON(map[string]interface{}{
 		"deleted": result.DeletedCount(),
 	})
@@ -509,16 +509,16 @@ func (c *Collection) handleCount(ctx *appcontext.Context) error {
 	if !ctx.IsRoot {
 		return ctx.WriteError(403, "Must be root to count")
 	}
-	
+
 	sanitizedQuery := c.sanitizeQuery(ctx.Query)
 	delete(sanitizedQuery, "id") // Remove id from query for count
 	countQuery := c.mapToQueryBuilder(sanitizedQuery)
-	
+
 	count, err := c.store.Count(ctx.Context(), countQuery)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	return ctx.WriteJSON(map[string]interface{}{
 		"count": count,
 	})
@@ -528,24 +528,24 @@ func (c *Collection) validate(data map[string]interface{}, isCreate bool) error 
 	if c.config == nil || c.config.Properties == nil {
 		return nil
 	}
-	
+
 	errors := make(map[string]string)
-	
+
 	for name, prop := range c.config.Properties {
 		value, exists := data[name]
-		
+
 		if !exists || value == nil {
 			if prop.Required && (isCreate || data[name] != nil) {
 				errors[name] = "is required"
 			}
 			continue
 		}
-		
+
 		if !c.validateType(value, prop.Type) {
 			errors[name] = fmt.Sprintf("must be a %s", prop.Type)
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		// Format errors as field: message pairs
 		var errorStrings []string
@@ -554,7 +554,7 @@ func (c *Collection) validate(data map[string]interface{}, isCreate bool) error 
 		}
 		return fmt.Errorf("validation errors: %s", strings.Join(errorStrings, ", "))
 	}
-	
+
 	return nil
 }
 
@@ -594,15 +594,15 @@ func (c *Collection) sanitize(data map[string]interface{}) map[string]interface{
 	if c.config == nil || c.config.Properties == nil {
 		return data
 	}
-	
+
 	sanitized := make(map[string]interface{})
-	
+
 	for name, prop := range c.config.Properties {
 		if value, exists := data[name]; exists {
 			sanitized[name] = c.coerceType(value, prop.Type)
 		}
 	}
-	
+
 	return sanitized
 }
 
@@ -650,22 +650,22 @@ func (c *Collection) sanitizeQuery(query map[string]interface{}) map[string]inte
 	if c.config == nil || c.config.Properties == nil {
 		return query
 	}
-	
+
 	sanitized := make(map[string]interface{})
-	
+
 	for key, value := range query {
 		// Allow MongoDB operators and id field
 		if strings.HasPrefix(key, "$") || key == "id" {
 			sanitized[key] = value
 			continue
 		}
-		
+
 		// Only allow defined properties
 		if prop, exists := c.config.Properties[key]; exists {
 			sanitized[key] = c.coerceType(value, prop.Type)
 		}
 	}
-	
+
 	return sanitized
 }
 
@@ -675,7 +675,7 @@ func (c *Collection) extractQueryOptions(query map[string]interface{}) (database
 		Fields: make(map[string]int),
 	}
 	cleanQuery := make(map[string]interface{})
-	
+
 	for key, value := range query {
 		switch key {
 		case "$sort", "$orderby":
@@ -735,25 +735,25 @@ func (c *Collection) extractQueryOptions(query map[string]interface{}) (database
 			cleanQuery[key] = value
 		}
 	}
-	
+
 	// Apply default pagination if no limit was specified
 	if opts.Limit == nil {
 		defaultLimit := int64(50) // Default to 50 records per page
 		opts.Limit = &defaultLimit
 	}
-	
+
 	return opts, cleanQuery
 }
 
 func (c *Collection) mapToQueryBuilder(query map[string]interface{}) database.QueryBuilder {
 	builder := database.NewQueryBuilder()
-	
+
 	for field, value := range query {
 		if strings.HasPrefix(field, "$") {
 			// Handle special MongoDB operators at root level
 			continue
 		}
-		
+
 		if valueMap, ok := value.(map[string]interface{}); ok {
 			// Field has operators like {"age": {"$gt": 18}}
 			for op, opValue := range valueMap {
@@ -775,7 +775,7 @@ func (c *Collection) mapToQueryBuilder(query map[string]interface{}) database.Qu
 			builder.Where(field, "$eq", value)
 		}
 	}
-	
+
 	return builder
 }
 
@@ -783,7 +783,7 @@ func (c *Collection) setDefaults(data map[string]interface{}) {
 	if c.config == nil || c.config.Properties == nil {
 		return
 	}
-	
+
 	for name, prop := range c.config.Properties {
 		if _, exists := data[name]; !exists && prop.Default != nil {
 			if prop.Default == "now" && prop.Type == "date" {
@@ -798,12 +798,12 @@ func (c *Collection) setDefaults(data map[string]interface{}) {
 // setTimestamps sets createdAt and updatedAt fields, ensuring they cannot be overridden
 func (c *Collection) setTimestamps(data map[string]interface{}, isCreate bool) {
 	now := time.Now()
-	
+
 	if isCreate {
 		// On creation, always set createdAt to now (cannot be overridden)
 		data["createdAt"] = now
 	}
-	
+
 	// Always set updatedAt to now (cannot be overridden)
 	data["updatedAt"] = now
 }
@@ -821,9 +821,9 @@ func (c *Collection) runValidateEvent(ctx *appcontext.Context, data map[string]i
 		"hasData":    data != nil,
 		"dataLen":    len(data),
 	})
-	
+
 	err := c.scriptManager.RunEvent(events.EventValidate, ctx, data)
-	
+
 	if err != nil {
 		logging.Debug("Validate event returned error", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 			"error":     err.Error(),
@@ -832,7 +832,7 @@ func (c *Collection) runValidateEvent(ctx *appcontext.Context, data map[string]i
 	} else {
 		logging.Debug("Validate event completed successfully", fmt.Sprintf("collection:%s", c.name), nil)
 	}
-	
+
 	return err
 }
 
@@ -842,20 +842,20 @@ func (c *Collection) runGetEvent(ctx *appcontext.Context, data map[string]interf
 		"email":      data["email"],
 		"hasScript":  c.scriptManager != nil,
 	})
-	
+
 	err := c.scriptManager.RunEvent(events.EventGet, ctx, data)
-	
+
 	if err != nil {
 		logging.Error("❌ GET EVENT FAILED", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 			"error": err.Error(),
 		})
 	} else {
 		logging.Info("✅ GET EVENT COMPLETED", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
-			"documentId":    data["id"],
+			"documentId":   data["id"],
 			"modifiedData": data,
 		})
 	}
-	
+
 	return err
 }
 
@@ -922,7 +922,7 @@ func (c *Collection) isMongoCommand(body map[string]interface{}) bool {
 // handleMongoCommand processes MongoDB command operations
 func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) error {
 	query := database.NewQueryBuilder().Where("id", "$eq", id)
-	
+
 	// Get the existing document for events
 	previous, err := c.store.FindOne(ctx.Context(), query)
 	if err != nil {
@@ -931,16 +931,16 @@ func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) erro
 	if previous == nil {
 		return ctx.WriteError(404, "Document not found")
 	}
-	
+
 	// Create a copy for the Put event (with anticipated changes)
 	merged := make(map[string]interface{})
 	for k, v := range previous {
 		merged[k] = v
 	}
-	
+
 	// Apply command operations for validation (simulate the changes)
 	c.simulateMongoOperations(merged, ctx.Body)
-	
+
 	// Run Validate event with simulated changes
 	if err := c.runValidateEvent(ctx, merged); err != nil {
 		if scriptErr, ok := err.(*events.ScriptError); ok {
@@ -951,7 +951,7 @@ func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) erro
 		}
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	// Run Put event with simulated changes
 	if err := c.runPutEvent(ctx, merged); err != nil {
 		if scriptErr, ok := err.(*events.ScriptError); ok {
@@ -959,7 +959,7 @@ func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) erro
 		}
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	// Execute the actual MongoDB operation - convert body to UpdateBuilder
 	updateBuilder := database.NewUpdateBuilder()
 	for op, value := range ctx.Body {
@@ -980,21 +980,21 @@ func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) erro
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	if result.ModifiedCount() == 0 {
 		return ctx.WriteError(404, "Document not found")
 	}
-	
+
 	// Return updated document
 	query = database.NewQueryBuilder().Where("id", "$eq", id)
 	doc, err := c.store.FindOne(ctx.Context(), query)
 	if err != nil {
 		return ctx.WriteError(500, err.Error())
 	}
-	
+
 	// Run AfterCommit event
 	go c.runAfterCommitEvent(ctx, doc, "PUT")
-	
+
 	return ctx.WriteJSON(doc)
 }
 
