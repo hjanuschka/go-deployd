@@ -213,7 +213,7 @@ func TestCollectionCRUD(t *testing.T) {
 
 	// CARMACK FIX: Create a new router AND update httpMux to pick up the new collection
 	ts.router = router.New(ts.db, ts.config.Development, ts.config.ConfigPath)
-	
+
 	// Rebuild the HTTP mux with the new router - using gorilla/mux
 	ts.httpMux = mux.NewRouter()
 	ts.Server.setupRoutes() // This should register the new router with the mux

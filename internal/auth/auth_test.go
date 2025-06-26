@@ -283,11 +283,11 @@ func TestSessionManagement(t *testing.T) {
 		for i := 0; i < maxRetries; i++ {
 			sessions, err = sessionStore.Find(ctx, query, database.QueryOptions{})
 			require.NoError(t, err)
-			
+
 			if len(sessions) == 1 {
 				break // Found the session
 			}
-			
+
 			if i < maxRetries-1 {
 				time.Sleep(10 * time.Millisecond) // Small delay between retries
 			}
