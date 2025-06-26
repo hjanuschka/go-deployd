@@ -75,7 +75,7 @@ function Login({ onLogin }) {
         <VStack spacing={4}>
           <Box boxSize="80px">
             <img 
-              src="/_dashboard/deployd-logo.png" 
+              src="/deployd-logo.png" 
               alt="Go-Deployd logo" 
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
