@@ -58,6 +58,13 @@ jobs:
         go test -v -run "TestJavaScriptEventHandlers|TestEventHandlerExecution" ./internal/events/
         
         echo ""
+        echo "🚀 Running Built-in Event Handler Tests..."
+        echo "=========================================="
+        
+        # Run built-in handler tests that prove event system works without compilation
+        go test -v -run "TestBuiltin" ./internal/events/
+        
+        echo ""
         echo "✅ All tests completed successfully!"
 
     - name: Upload Coverage Report
@@ -118,6 +125,13 @@ jobs:
         go test -v -run "TestGoEventHandlers|TestJavaScriptEventHandlers|TestEventHandlerExecution" ./internal/events/
         
         echo ""
+        echo "🚀 Testing Built-in Event Handlers (No Compilation Required)..."
+        echo "=============================================================="
+        
+        # Run built-in handler tests that definitively prove the event system works
+        go test -v -run "TestBuiltin" ./internal/events/
+        
+        echo ""
         echo "✅ Event handler verification completed!"
         echo ""
         echo "Key features tested:"
@@ -125,7 +139,8 @@ jobs:
         echo "- ✅ JavaScript validation handlers reject invalid data (errors thrown)"  
         echo "- ✅ Event manager correctly loads and executes different event types"
         echo "- ✅ Data modifications from JavaScript persist back to Go"
-        echo "- ⚠️  Go plugin handlers tested (may skip in CI due to compilation requirements)"
+        echo "- ✅ Built-in Go handlers prove event system works (no compilation needed)"
+        echo "- ⚠️  Dynamic Go plugin handlers tested (may skip in CI due to compilation requirements)"
 
   build-test:
     name: Build Verification
