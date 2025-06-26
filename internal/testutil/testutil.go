@@ -42,7 +42,7 @@ func CreateTestDB(t *testing.T) database.DatabaseInterface {
 			mongoURL = "mongodb://localhost:27017"
 		}
 		config = &database.Config{
-			Host: "localhost",
+			Host: "127.0.0.1",
 			Port: 27017,
 			Name: "test_deployd_" + GenerateRandomName("db"),
 		}

@@ -33,14 +33,10 @@ jobs:
 
       mongodb:
         image: mongo:7.0
-        env:
-          MONGO_INITDB_ROOT_USERNAME: testuser
-          MONGO_INITDB_ROOT_PASSWORD: testpass
-          MONGO_INITDB_DATABASE: deployd_test
         ports:
           - 27017:27017
         options: >-
-          --health-cmd="echo 'db.stats().ok' | mongosh localhost:27017/test --quiet"
+          --health-cmd="mongosh --eval 'db.stats().ok' || exit 1"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
@@ -140,8 +136,8 @@ jobs:
       run: |
         # Wait for MySQL
         timeout 60s bash -c 'until mysqladmin ping -h 127.0.0.1 -P 3306 -u root -ptestpass --silent; do sleep 1; done'
-        # Wait for MongoDB  
-        timeout 60s bash -c 'until echo "db.stats().ok" | mongosh mongodb://testuser:testpass@127.0.0.1:27017/deployd_test --quiet; do sleep 1; done'
+        # Wait for MongoDB (no auth required in test mode)
+        timeout 60s bash -c 'until mongosh --eval "db.stats().ok" --quiet; do sleep 1; done'
 
     - name: Run Core Unit Tests with Coverage
       env:
@@ -151,7 +147,7 @@ jobs:
         TEST_MYSQL_USER: "root"
         TEST_MYSQL_PASSWORD: "testpass"
         # MongoDB configuration  
-        TEST_MONGO_URL: "mongodb://testuser:testpass@127.0.0.1:27017"
+        TEST_MONGO_URL: "mongodb://127.0.0.1:27017"
       run: |
         mkdir -p coverage
         
@@ -182,7 +178,7 @@ jobs:
         TEST_MYSQL_USER: "root"
         TEST_MYSQL_PASSWORD: "testpass"
         # MongoDB configuration  
-        TEST_MONGO_URL: "mongodb://testuser:testpass@127.0.0.1:27017"
+        TEST_MONGO_URL: "mongodb://127.0.0.1:27017"
       run: |
         echo "🔧 Running Event System Integration Tests..."
         
@@ -199,7 +195,7 @@ jobs:
         TEST_MYSQL_USER: "root"
         TEST_MYSQL_PASSWORD: "testpass"
         # MongoDB configuration  
-        TEST_MONGO_URL: "mongodb://testuser:testpass@127.0.0.1:27017"
+        TEST_MONGO_URL: "mongodb://127.0.0.1:27017"
       run: |
         echo "🔐 Running Authentication Integration Tests..."
         go test -v ./internal/auth/
@@ -213,7 +209,7 @@ jobs:
         TEST_MYSQL_USER: "root"
         TEST_MYSQL_PASSWORD: "testpass"
         # MongoDB configuration  
-        TEST_MONGO_URL: "mongodb://testuser:testpass@127.0.0.1:27017"
+        TEST_MONGO_URL: "mongodb://127.0.0.1:27017"
       run: |
         echo "📊 Running CRUD Operations Tests..."
         go test -v ./internal/resources/
