@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hjanuschka/go-deployd/internal/config"
+	"github.com/hjanuschka/go-deployd/internal/router"
 )
 
 // TestServer represents a test server instance
@@ -208,8 +209,8 @@ func TestCollectionCRUD(t *testing.T) {
 		t.Fatalf("Failed to create config.json: %v", err)
 	}
 
-	// Reload resources to pick up the new collection
-	ts.router.LoadResources()
+	// Create a new router to pick up the new collection
+	ts.router = router.New(ts.db, ts.config.Development, ts.config.ConfigPath)
 
 	// Test data
 	testUser := map[string]interface{}{
