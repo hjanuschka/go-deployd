@@ -7,15 +7,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hjanuschka/go-deployd/internal/sessions"
 )
 
 type Context struct {
 	Request      *http.Request
 	Response     http.ResponseWriter
 	Resource     Resource
-	Session      *sessions.Session  // Deprecated: kept for backward compatibility
-	SessionStore *sessions.SessionStore // Deprecated: kept for backward compatibility
 	Router       Router
 	URL          string
 	Query        map[string]interface{}
@@ -35,7 +32,6 @@ type Resource interface {
 	GetPath() string
 }
 
-// Remove old Session interface since we're using the sessions package directly
 
 type Router interface {
 	Route(ctx *Context) error
@@ -73,24 +69,6 @@ func New(req *http.Request, res http.ResponseWriter, resource Resource, auth *Au
 	return ctx
 }
 
-// NewWithSession creates a context with session support (deprecated)
-func NewWithSession(req *http.Request, res http.ResponseWriter, resource Resource, session *sessions.Session, sessionStore *sessions.SessionStore) *Context {
-	ctx := &Context{
-		Request:      req,
-		Response:     res,
-		Resource:     resource,
-		Session:      session,
-		SessionStore: sessionStore,
-		Method:       req.Method,
-		ctx:          req.Context(),
-	}
-
-	ctx.parseURL()
-	ctx.parseQuery()
-	ctx.parseBody()
-
-	return ctx
-}
 
 func (c *Context) parseURL() {
 	c.URL = c.Request.URL.Path

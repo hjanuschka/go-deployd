@@ -527,8 +527,34 @@ function CollectionDetail() {
               <PropertiesEditor
                 collection={collection}
                 onUpdate={async (updatedCollection) => {
-                  // TODO: Implement collection update API
-                  setCollection(updatedCollection)
+                  try {
+                    console.log('CollectionDetail onUpdate called with:', updatedCollection)
+                    console.log('Collection name:', name)
+                    console.log('Properties to update:', updatedCollection.properties)
+                    
+                    // Update the collection via API
+                    const result = await apiService.updateCollection(name, updatedCollection.properties)
+                    console.log('API result:', result)
+                    
+                    setCollection(updatedCollection)
+                    toast({
+                      title: 'Collection updated',
+                      description: 'Collection properties have been saved successfully.',
+                      status: 'success',
+                      duration: 3000,
+                      isClosable: true,
+                    })
+                  } catch (error) {
+                    console.error('Collection update error:', error)
+                    toast({
+                      title: 'Error updating collection',
+                      description: error.response?.data?.message || error.message,
+                      status: 'error',
+                      duration: 5000,
+                      isClosable: true,
+                    })
+                    throw error // Re-throw so PropertiesEditor can handle it
+                  }
                 }}
               />
             </TabPanel>

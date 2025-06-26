@@ -15,11 +15,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/database"
+	"github.com/hjanuschka/go-deployd/internal/email"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 	"github.com/hjanuschka/go-deployd/internal/router"
 	"github.com/hjanuschka/go-deployd/internal/events"
-	"github.com/hjanuschka/go-deployd/internal/sessions"
 )
 
 type AdminHandler struct {
@@ -54,7 +54,7 @@ type CollectionInfo struct {
 	LastModified  time.Time              `json:"lastModified"`
 }
 
-func NewAdminHandler(db database.DatabaseInterface, router *router.Router, adminConfig *Config, sessions *sessions.SessionStore) *AdminHandler {
+func NewAdminHandler(db database.DatabaseInterface, router *router.Router, adminConfig *Config) *AdminHandler {
 	// Load security configuration
 	securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
 	if err != nil {
@@ -65,7 +65,7 @@ func NewAdminHandler(db database.DatabaseInterface, router *router.Router, admin
 	// Log master key on startup
 	fmt.Printf("🔐 Master Key: %s\n", securityConfig.MasterKey)
 	
-	authHandler := NewAuthHandler(db, sessions, securityConfig)
+	authHandler := NewAuthHandler(db, securityConfig)
 	
 	return &AdminHandler{
 		db:           db,
@@ -105,6 +105,13 @@ func (h *AdminHandler) RegisterRoutes(r *mux.Router) {
 	// Security settings management (master key required)
 	admin.HandleFunc("/settings/security", h.AuthHandler.RequireMasterKey(h.getSecuritySettings)).Methods("GET")
 	admin.HandleFunc("/settings/security", h.AuthHandler.RequireMasterKey(h.updateSecuritySettings)).Methods("PUT")
+	
+	// Email settings management (master key required)
+	admin.HandleFunc("/settings/email", h.AuthHandler.RequireMasterKey(h.getEmailSettings)).Methods("GET")
+	admin.HandleFunc("/settings/email", h.AuthHandler.RequireMasterKey(h.updateEmailSettings)).Methods("PUT")
+	admin.HandleFunc("/settings/email/test", h.AuthHandler.RequireMasterKey(h.testEmailSettings)).Methods("POST")
+	admin.HandleFunc("/settings/email/templates", h.AuthHandler.RequireMasterKey(h.getEmailTemplates)).Methods("GET")
+	admin.HandleFunc("/settings/email/templates", h.AuthHandler.RequireMasterKey(h.updateEmailTemplates)).Methods("PUT")
 	
 	// Logging endpoints (master key required)
 	admin.HandleFunc("/logs", h.AuthHandler.RequireMasterKey(h.getLogs)).Methods("GET")
@@ -247,7 +254,7 @@ func getString(m map[string]interface{}, key string) string {
 	return ""
 }
 
-// buildPropertiesMap converts collection properties to interface map and adds hardcoded timestamp fields
+// buildPropertiesMap converts collection properties to interface map 
 func (h *AdminHandler) buildPropertiesMap(configProperties map[string]resources.Property) map[string]interface{} {
 	props := make(map[string]interface{})
 	
@@ -265,26 +272,17 @@ func (h *AdminHandler) buildPropertiesMap(configProperties map[string]resources.
 		if prop.Order != 0 {
 			propMap["order"] = prop.Order
 		}
+		if prop.Unique {
+			propMap["unique"] = true
+		}
+		if prop.System {
+			propMap["system"] = true
+			// Only set readonly for specific system fields that should never be edited
+			if name == "createdAt" || name == "updatedAt" || name == "id" || name == "verificationToken" || name == "verificationExpires" {
+				propMap["readonly"] = true
+			}
+		}
 		props[name] = propMap
-	}
-	
-	// Add hardcoded timestamp fields (these are always present and non-editable)
-	// Give them high order values so they appear last
-	props["createdAt"] = map[string]interface{}{
-		"type":     "date",
-		"required": false,
-		"default":  "now",
-		"readonly": true,
-		"system":   true,
-		"order":    9998,
-	}
-	props["updatedAt"] = map[string]interface{}{
-		"type":     "date", 
-		"required": false,
-		"default":  "now",
-		"readonly": true,
-		"system":   true,
-		"order":    9999,
 	}
 	
 	return props
@@ -327,6 +325,16 @@ func (h *AdminHandler) createCollection(w http.ResponseWriter, r *http.Request) 
 			if order, exists := propMap["order"]; exists {
 				if orderInt, ok := order.(float64); ok {
 					prop.Order = int(orderInt)
+				}
+			}
+			if unique, exists := propMap["unique"]; exists {
+				if uniqueBool, ok := unique.(bool); ok {
+					prop.Unique = uniqueBool
+				}
+			}
+			if system, exists := propMap["system"]; exists {
+				if systemBool, ok := system.(bool); ok {
+					prop.System = systemBool
 				}
 			}
 			configProps[propName] = prop
@@ -413,6 +421,16 @@ func (h *AdminHandler) updateCollection(w http.ResponseWriter, r *http.Request) 
 			if order, exists := propMap["order"]; exists {
 				if orderInt, ok := order.(float64); ok {
 					prop.Order = int(orderInt)
+				}
+			}
+			if unique, exists := propMap["unique"]; exists {
+				if uniqueBool, ok := unique.(bool); ok {
+					prop.Unique = uniqueBool
+				}
+			}
+			if system, exists := propMap["system"]; exists {
+				if systemBool, ok := system.(bool); ok {
+					prop.System = systemBool
 				}
 			}
 			configProps[propName] = prop
@@ -710,8 +728,7 @@ func (h *AdminHandler) getSecuritySettings(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	
 	response := map[string]interface{}{
-		"sessionTTL":        h.AuthHandler.Security.SessionTTL,
-		"tokenTTL":          h.AuthHandler.Security.TokenTTL,
+		"jwtExpiration":     h.AuthHandler.Security.JWTExpiration,
 		"allowRegistration": h.AuthHandler.Security.AllowRegistration,
 		"hasMasterKey":      h.AuthHandler.Security.MasterKey != "",
 	}
@@ -724,9 +741,8 @@ func (h *AdminHandler) updateSecuritySettings(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "application/json")
 	
 	var req struct {
-		SessionTTL        int  `json:"sessionTTL"`
-		TokenTTL          int  `json:"tokenTTL"`
-		AllowRegistration bool `json:"allowRegistration"`
+		JWTExpiration     string `json:"jwtExpiration"`
+		AllowRegistration bool   `json:"allowRegistration"`
 	}
 	
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -739,8 +755,7 @@ func (h *AdminHandler) updateSecuritySettings(w http.ResponseWriter, r *http.Req
 	}
 	
 	// Update security config
-	h.AuthHandler.Security.SessionTTL = req.SessionTTL
-	h.AuthHandler.Security.TokenTTL = req.TokenTTL
+	h.AuthHandler.Security.JWTExpiration = req.JWTExpiration
 	h.AuthHandler.Security.AllowRegistration = req.AllowRegistration
 	
 	// Save updated configuration
@@ -869,4 +884,265 @@ func (h *AdminHandler) downloadLogs(w http.ResponseWriter, r *http.Request) {
 	
 	// Otherwise, serve the raw file
 	http.ServeFile(w, r, logPath)
+}
+
+// getEmailSettings returns the current email settings
+func (h *AdminHandler) getEmailSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	response := map[string]interface{}{
+		"provider": h.AuthHandler.Security.Email.Provider,
+		"smtp": map[string]interface{}{
+			"host":     h.AuthHandler.Security.Email.SMTP.Host,
+			"port":     h.AuthHandler.Security.Email.SMTP.Port,
+			"username": h.AuthHandler.Security.Email.SMTP.Username,
+			"tls":      h.AuthHandler.Security.Email.SMTP.TLS,
+			// Don't expose password
+			"hasPassword": h.AuthHandler.Security.Email.SMTP.Password != "",
+		},
+		"ses": map[string]interface{}{
+			"region": h.AuthHandler.Security.Email.SES.Region,
+			// Don't expose credentials
+			"hasAccessKeyId":     h.AuthHandler.Security.Email.SES.AccessKeyID != "",
+			"hasSecretAccessKey": h.AuthHandler.Security.Email.SES.SecretAccessKey != "",
+		},
+		"from":                h.AuthHandler.Security.Email.From,
+		"fromName":            h.AuthHandler.Security.Email.FromName,
+		"requireVerification": h.AuthHandler.Security.RequireVerification,
+	}
+	
+	json.NewEncoder(w).Encode(response)
+}
+
+// updateEmailSettings updates the email settings
+func (h *AdminHandler) updateEmailSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	var req struct {
+		Provider string `json:"provider"`
+		SMTP     struct {
+			Host     string `json:"host"`
+			Port     int    `json:"port"`
+			Username string `json:"username"`
+			Password string `json:"password"`
+			TLS      bool   `json:"tls"`
+		} `json:"smtp"`
+		SES struct {
+			Region          string `json:"region"`
+			AccessKeyID     string `json:"accessKeyId"`
+			SecretAccessKey string `json:"secretAccessKey"`
+		} `json:"ses"`
+		From                string `json:"from"`
+		FromName            string `json:"fromName"`
+		RequireVerification bool   `json:"requireVerification"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid JSON body",
+		})
+		return
+	}
+	
+	// Update email config
+	h.AuthHandler.Security.Email.Provider = req.Provider
+	h.AuthHandler.Security.Email.From = req.From
+	h.AuthHandler.Security.Email.FromName = req.FromName
+	h.AuthHandler.Security.RequireVerification = req.RequireVerification
+	
+	// Update SMTP settings
+	h.AuthHandler.Security.Email.SMTP.Host = req.SMTP.Host
+	h.AuthHandler.Security.Email.SMTP.Port = req.SMTP.Port
+	h.AuthHandler.Security.Email.SMTP.Username = req.SMTP.Username
+	h.AuthHandler.Security.Email.SMTP.TLS = req.SMTP.TLS
+	// Only update password if provided
+	if req.SMTP.Password != "" {
+		h.AuthHandler.Security.Email.SMTP.Password = req.SMTP.Password
+	}
+	
+	// Update SES settings
+	h.AuthHandler.Security.Email.SES.Region = req.SES.Region
+	// Only update credentials if provided
+	if req.SES.AccessKeyID != "" {
+		h.AuthHandler.Security.Email.SES.AccessKeyID = req.SES.AccessKeyID
+	}
+	if req.SES.SecretAccessKey != "" {
+		h.AuthHandler.Security.Email.SES.SecretAccessKey = req.SES.SecretAccessKey
+	}
+	
+	// Save updated configuration
+	if err := config.SaveSecurityConfig(h.AuthHandler.Security, config.GetConfigDir()); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to save email settings",
+		})
+		return
+	}
+	
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Email settings updated successfully",
+	})
+}
+
+// testEmailSettings sends a test email
+func (h *AdminHandler) testEmailSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	var req struct {
+		To string `json:"to"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid JSON body",
+		})
+		return
+	}
+	
+	if req.To == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Recipient email address is required",
+		})
+		return
+	}
+	
+	// Create email service and send test email
+	emailService := email.NewEmailService(&h.AuthHandler.Security.Email)
+	if err := emailService.TestEmail(req.To); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("Failed to send test email: %v", err),
+		})
+		return
+	}
+	
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Test email sent successfully",
+	})
+}
+
+// EmailTemplate represents a customizable email template
+type EmailTemplate struct {
+	Name      string `json:"name"`
+	Subject   string `json:"subject"`
+	HTMLBody  string `json:"htmlBody"`
+	TextBody  string `json:"textBody"`
+	Variables []string `json:"variables"`
+}
+
+// getEmailTemplates returns available email templates
+func (h *AdminHandler) getEmailTemplates(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	// Define available templates with their default content
+	templates := []EmailTemplate{
+		{
+			Name:    "verification",
+			Subject: "Verify your email address",
+			HTMLBody: `<html>
+<body>
+	<h2>Welcome to Go-Deployd!</h2>
+	<p>Hi {{.Username}},</p>
+	<p>Please verify your email address by clicking the link below:</p>
+	<p><a href="{{.VerificationURL}}" style="background-color: #4CAF50; color: white; padding: 14px 25px; text-decoration: none; display: inline-block;">Verify Email</a></p>
+	<p>Or copy and paste this URL into your browser:</p>
+	<p>{{.VerificationURL}}</p>
+	<p>This link will expire in 24 hours.</p>
+	<p>If you didn't create an account, please ignore this email.</p>
+	<br>
+	<p>Best regards,<br>Go-Deployd Team</p>
+</body>
+</html>`,
+			TextBody: `Welcome to Go-Deployd!
+
+Hi {{.Username}},
+
+Please verify your email address by visiting this URL:
+{{.VerificationURL}}
+
+This link will expire in 24 hours.
+
+If you didn't create an account, please ignore this email.
+
+Best regards,
+Go-Deployd Team`,
+			Variables: []string{"Username", "VerificationURL"},
+		},
+		{
+			Name:    "passwordReset",
+			Subject: "Reset your password",
+			HTMLBody: `<html>
+<body>
+	<h2>Password Reset Request</h2>
+	<p>Hi {{.Username}},</p>
+	<p>We received a request to reset your password. Click the link below to create a new password:</p>
+	<p><a href="{{.ResetURL}}" style="background-color: #2196F3; color: white; padding: 14px 25px; text-decoration: none; display: inline-block;">Reset Password</a></p>
+	<p>Or copy and paste this URL into your browser:</p>
+	<p>{{.ResetURL}}</p>
+	<p>This link will expire in 1 hour.</p>
+	<p>If you didn't request a password reset, please ignore this email.</p>
+	<br>
+	<p>Best regards,<br>Go-Deployd Team</p>
+</body>
+</html>`,
+			TextBody: `Password Reset Request
+
+Hi {{.Username}},
+
+We received a request to reset your password. Visit this URL to create a new password:
+{{.ResetURL}}
+
+This link will expire in 1 hour.
+
+If you didn't request a password reset, please ignore this email.
+
+Best regards,
+Go-Deployd Team`,
+			Variables: []string{"Username", "ResetURL"},
+		},
+	}
+	
+	// TODO: Load custom templates from storage if they exist
+	
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"templates": templates,
+	})
+}
+
+// updateEmailTemplates updates email templates
+func (h *AdminHandler) updateEmailTemplates(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	var req struct {
+		Templates []EmailTemplate `json:"templates"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid JSON body",
+		})
+		return
+	}
+	
+	// TODO: Save custom templates to storage
+	
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Email templates updated successfully",
+	})
 }

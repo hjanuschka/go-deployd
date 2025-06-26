@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,12 +17,13 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/auth"
 	appconfig "github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/database"
+	"github.com/hjanuschka/go-deployd/internal/email"
 	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/metrics"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 	"github.com/hjanuschka/go-deployd/internal/router"
-	"github.com/hjanuschka/go-deployd/internal/sessions"
+	"golang.org/x/crypto/bcrypt"
 	"github.com/hjanuschka/go-deployd/internal/swagger"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
@@ -40,14 +42,13 @@ type Config struct {
 }
 
 type Server struct {
-	config       *Config
-	db           database.DatabaseInterface
-	sessions     *sessions.SessionStore
-	router       *router.Router
-	adminHandler *admin.AdminHandler
-	upgrader     websocket.Upgrader
-	httpMux      *mux.Router
-	jwtManager   *auth.JWTManager
+	config         *Config
+	db             database.DatabaseInterface
+	router         *router.Router
+	adminHandler   *admin.AdminHandler
+	upgrader       websocket.Upgrader
+	httpMux        *mux.Router
+	jwtManager     *auth.JWTManager
 	securityConfig *appconfig.SecurityConfig
 }
 
@@ -81,7 +82,6 @@ func New(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	sessionStore := sessions.New(db, config.Development)
 
 	// Initialize logging system
 	if err := logging.InitializeLogger("./logs"); err != nil {
@@ -115,20 +115,19 @@ func New(config *Config) (*Server, error) {
 	})
 
 	s := &Server{
-		config:   config,
-		db:       db,
-		sessions: sessionStore,
+		config:         config,
+		db:             db,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // TODO: Implement proper origin checking
 			},
 		},
-		httpMux: mux.NewRouter(),
-		jwtManager: jwtManager,
+		httpMux:        mux.NewRouter(),
+		jwtManager:     jwtManager,
 		securityConfig: securityConfig,
 	}
 
-	s.router = router.New(s.db, s.sessions, config.Development, config.ConfigPath)
+	s.router = router.New(s.db, config.Development, config.ConfigPath)
 
 	// Create admin handler
 	adminConfig := &admin.Config{
@@ -138,9 +137,12 @@ func New(config *Config) (*Server, error) {
 		DatabaseName:   config.DatabaseName,
 		Development:    config.Development,
 	}
-	s.adminHandler = admin.NewAdminHandler(s.db, s.router, adminConfig, s.sessions)
+	s.adminHandler = admin.NewAdminHandler(s.db, s.router, adminConfig)
 
 	s.setupRoutes()
+
+	// Start background jobs
+	go s.startUserCleanupJob()
 
 	return s, nil
 }
@@ -599,6 +601,10 @@ func (s *Server) setupAuthRoutes() {
 	s.httpMux.HandleFunc("/auth/validate", s.handleTokenValidation).Methods("GET", "OPTIONS")
 	// User info endpoint
 	s.httpMux.HandleFunc("/auth/me", s.handleMe).Methods("GET", "OPTIONS")
+	// Email verification endpoint
+	s.httpMux.HandleFunc("/auth/verify", s.handleEmailVerification).Methods("POST", "GET", "OPTIONS")
+	// Resend verification email endpoint
+	s.httpMux.HandleFunc("/auth/resend-verification", s.handleResendVerification).Methods("POST", "OPTIONS")
 }
 
 // LoginRequest represents the login request payload
@@ -648,10 +654,26 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if req.Username != "" && req.Password != "" {
-		// For now, user authentication is not fully implemented
-		// This would require proper context setup and user collection handling
-		http.Error(w, `{"error": "User authentication not available"}`, http.StatusNotImplemented)
-		return
+		// Authenticate user with username/password
+		user, err := s.authenticateUser(req.Username, req.Password)
+		if err != nil {
+			http.Error(w, `{"error": "Invalid credentials"}`, http.StatusUnauthorized)
+			return
+		}
+		
+		userID = getStringFromMap(user, "id")
+		username = getStringFromMap(user, "username")
+		role := getStringFromMap(user, "role")
+		isRoot = (role == "admin")
+		
+		// Remove password and other sensitive fields from user data
+		userData = make(map[string]interface{})
+		for k, v := range user {
+			if k != "password" && k != "salt" {
+				userData[k] = v
+			}
+		}
+		userData["role"] = role
 	} else {
 		http.Error(w, `{"error": "Username/password or masterKey required"}`, http.StatusBadRequest)
 		return
@@ -770,12 +792,6 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For regular users, fetch user data from users collection
-	usersCollection := s.router.GetCollection("users")
-	if usersCollection == nil {
-		http.Error(w, `{"error": "Users collection not found"}`, http.StatusInternalServerError)
-		return
-	}
-
 	// Fetch user data by ID
 	store := s.db.CreateStore("users")
 	
@@ -791,6 +807,167 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(userData)
+}
+
+func (s *Server) handleEmailVerification(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	var token string
+	
+	if r.Method == "GET" {
+		// GET request with token as query parameter (for email links)
+		token = r.URL.Query().Get("token")
+	} else if r.Method == "POST" {
+		// POST request with token in JSON body
+		var req struct {
+			Token string `json:"token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "Invalid JSON body"}`, http.StatusBadRequest)
+			return
+		}
+		token = req.Token
+	}
+	
+	if token == "" {
+		http.Error(w, `{"error": "Verification token required"}`, http.StatusBadRequest)
+		return
+	}
+	
+	// Find user by verification token
+	store := s.db.CreateStore("users")
+	query := database.NewQueryBuilder()
+	query.Where("verificationToken", "=", token)
+	
+	userData, err := store.FindOne(r.Context(), query)
+	if err != nil {
+		http.Error(w, `{"error": "Invalid or expired verification token"}`, http.StatusBadRequest)
+		return
+	}
+	
+	// Check if token has expired
+	if expiresStr, ok := userData["verificationExpires"].(string); ok {
+		if expires, err := time.Parse(time.RFC3339, expiresStr); err == nil {
+			if time.Now().After(expires) {
+				http.Error(w, `{"error": "Verification token has expired"}`, http.StatusBadRequest)
+				return
+			}
+		}
+	}
+	
+	// Update user to verified and active
+	userID := userData["id"].(string)
+	updateQuery := database.NewQueryBuilder()
+	updateQuery.Where("id", "=", userID)
+	
+	updateBuilder := database.NewUpdateBuilder().
+		Set("isVerified", true).
+		Set("active", true).
+		Unset("verificationToken").
+		Unset("verificationExpires").
+		Set("updatedAt", time.Now().Format(time.RFC3339))
+	
+	_, err = store.UpdateOne(r.Context(), updateQuery, updateBuilder)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to verify user"}`, http.StatusInternalServerError)
+		return
+	}
+	
+	// Return success response
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Email verified successfully",
+		"user": map[string]interface{}{
+			"id":       userData["id"],
+			"username": userData["username"],
+			"email":    userData["email"],
+			"verified": true,
+		},
+	})
+}
+
+func (s *Server) handleResendVerification(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	if r.Method == "OPTIONS" {
+		return
+	}
+	
+	var req struct {
+		Email string `json:"email"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "Invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+	
+	if req.Email == "" {
+		http.Error(w, `{"error": "Email address required"}`, http.StatusBadRequest)
+		return
+	}
+	
+	// Find user by email
+	store := s.db.CreateStore("users")
+	query := database.NewQueryBuilder()
+	query.Where("email", "=", req.Email)
+	
+	userData, err := store.FindOne(r.Context(), query)
+	if err != nil {
+		// Don't reveal if email exists for security
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "If the email exists and is unverified, a verification email has been sent",
+		})
+		return
+	}
+	
+	// Check if already verified
+	if verified, ok := userData["isVerified"].(bool); ok && verified {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Email is already verified",
+		})
+		return
+	}
+	
+	// Generate new verification token and update user
+	verificationToken, err := email.GenerateVerificationToken()
+	if err != nil {
+		http.Error(w, `{"error": "Failed to generate verification token"}`, http.StatusInternalServerError)
+		return
+	}
+	
+	// Update user with new verification token
+	updateQuery := database.NewQueryBuilder().Where("email", "=", req.Email)
+	updateBuilder := database.NewUpdateBuilder()
+	updateBuilder.Set("verificationToken", verificationToken)
+	updateBuilder.Set("verificationExpires", time.Now().Add(24 * time.Hour))
+	
+	_, err = store.Update(r.Context(), updateQuery, updateBuilder)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to update verification token"}`, http.StatusInternalServerError)
+		return
+	}
+	
+	// Send verification email
+	baseURL := fmt.Sprintf("http://%s", r.Host)
+	emailService := email.NewEmailService(&s.securityConfig.Email)
+	
+	username := getStringFromMap(userData, "username")
+	if err := emailService.SendVerificationEmail(req.Email, username, verificationToken, baseURL); err != nil {
+		// Log the error but still return success to avoid revealing email existence
+		// TODO: Add proper logging
+	}
+	
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "If the email exists and is unverified, a verification email has been sent",
+	})
 }
 
 func (s *Server) setupSwaggerRoutes() {
@@ -920,5 +1097,103 @@ func (s *Server) handleCollectionSwaggerUI() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(html))
+	}
+}
+
+// authenticateUser validates username/password and returns user data
+func (s *Server) authenticateUser(username, password string) (map[string]interface{}, error) {
+	store := s.db.CreateStore("users")
+	
+	// Find user by username or email
+	var query database.QueryBuilder
+	if strings.Contains(username, "@") {
+		query = database.NewQueryBuilder().Where("email", "$eq", username)
+	} else {
+		query = database.NewQueryBuilder().Where("username", "$eq", username)
+	}
+	
+	user, err := store.FindOne(context.Background(), query)
+	if err != nil || user == nil {
+		return nil, fmt.Errorf("user not found")
+	}
+	
+	// Verify password
+	hashedPassword, ok := user["password"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid user data")
+	}
+	
+	// Verify password using bcrypt
+	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)); err != nil {
+		return nil, fmt.Errorf("invalid password")
+	}
+	
+	return user, nil
+}
+
+// getStringFromMap safely extracts a string value from a map
+func getStringFromMap(m map[string]interface{}, key string) string {
+	if val, exists := m[key]; exists {
+		if str, ok := val.(string); ok {
+			return str
+		}
+	}
+	return ""
+}
+
+
+// startUserCleanupJob runs a background job to remove unverified users after 24 hours
+func (s *Server) startUserCleanupJob() {
+	// Run cleanup every hour
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+	
+	// Also run immediately on startup
+	s.cleanupUnverifiedUsers()
+	
+	for range ticker.C {
+		s.cleanupUnverifiedUsers()
+	}
+}
+
+// cleanupUnverifiedUsers removes users who haven't verified their email within 24 hours
+func (s *Server) cleanupUnverifiedUsers() {
+	if !s.securityConfig.RequireVerification {
+		// Email verification not required, no cleanup needed
+		return
+	}
+	
+	store := s.db.CreateStore("users")
+	
+	// Find unverified users where verification token expired
+	query := database.NewQueryBuilder()
+	query.Where("isVerified", "=", false)
+	query.Where("verificationExpires", "<", time.Now())
+	
+	// Find expired unverified users
+	users, err := store.Find(context.Background(), query, database.QueryOptions{})
+	if err != nil {
+		log.Printf("Error finding unverified users for cleanup: %v", err)
+		return
+	}
+	
+	// Delete each expired unverified user
+	deletedCount := 0
+	for _, user := range users {
+		if userID, ok := user["id"].(string); ok {
+			deleteQuery := database.NewQueryBuilder().Where("id", "=", userID)
+			result, err := store.Remove(context.Background(), deleteQuery)
+			if err != nil {
+				log.Printf("Error deleting unverified user %s: %v", userID, err)
+				continue
+			}
+			if result.DeletedCount() > 0 {
+				deletedCount++
+			}
+		}
+	}
+	
+	if deletedCount > 0 {
+		log.Printf("🧹 Cleaned up %d unverified users", deletedCount)
 	}
 }

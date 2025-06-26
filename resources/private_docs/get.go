@@ -7,20 +7,15 @@ func Run(ctx *EventContext) error {
         return nil
     }
     
-    // Check if user is authenticated
-    if !ctx.Ctx.IsAuthenticated {
+    // Check if user is authenticated via Me object
+    if ctx.Me == nil {
         ctx.Cancel("Authentication required", 401)
         return nil
     }
     
     // Helper function to get user ID from JWT authentication context
     getUserID := func() string {
-        // JWT authentication provides user ID directly via context
-        if ctx.Ctx != nil && ctx.Ctx.UserID != "" {
-            return ctx.Ctx.UserID
-        }
-        
-        // Fallback: try to get from Me object (for backward compatibility)
+        // Try to get from Me object
         if ctx.Me != nil {
             if userID, ok := ctx.Me["id"].(string); ok {
                 return userID

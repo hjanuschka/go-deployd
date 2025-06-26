@@ -1,30 +1,40 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/hjanuschka/go-deployd/internal/auth"
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/database"
-	"github.com/hjanuschka/go-deployd/internal/sessions"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // AuthHandler handles system-level authentication with master key
 type AuthHandler struct {
-	db       database.DatabaseInterface
-	sessions *sessions.SessionStore
-	Security *config.SecurityConfig
+	db         database.DatabaseInterface
+	Security   *config.SecurityConfig
+	jwtManager *auth.JWTManager
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(db database.DatabaseInterface, sessions *sessions.SessionStore, security *config.SecurityConfig) *AuthHandler {
+func NewAuthHandler(db database.DatabaseInterface, security *config.SecurityConfig) *AuthHandler {
+	// Parse JWT expiration duration
+	jwtDuration, err := time.ParseDuration(security.JWTExpiration)
+	if err != nil {
+		jwtDuration = 24 * time.Hour // Default to 24 hours
+	}
+	
+	// Create JWT manager
+	jwtManager := auth.NewJWTManager(security.JWTSecret, jwtDuration)
+	
 	return &AuthHandler{
-		db:       db,
-		sessions: sessions,
-		Security: security,
+		db:         db,
+		Security:   security,
+		jwtManager: jwtManager,
 	}
 }
 
@@ -35,13 +45,13 @@ type SystemLoginRequest struct {
 }
 
 // SystemLoginResponse represents the response from system login
+// DEPRECATED: Use JWT authentication endpoints instead
 type SystemLoginResponse struct {
-	Success     bool   `json:"success"`
-	SessionID   string `json:"sessionId"`
-	Token       string `json:"token"`
+	Success     bool        `json:"success"`
+	Token       string      `json:"token"`
 	User        interface{} `json:"user"`
-	Message     string `json:"message"`
-	ExpiresAt   string `json:"expiresAt"`
+	Message     string      `json:"message"`
+	ExpiresAt   string      `json:"expiresAt"`
 }
 
 // HandleSystemLogin performs authentication using master key and user identifier
@@ -57,7 +67,11 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	
-	var req SystemLoginRequest
+	var req struct {
+		Email string `json:"email"`
+		Username string `json:"username"`
+	}
+	
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -67,40 +81,28 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	
-	// Master key is validated by RequireMasterKey middleware
-	// No need to validate it again here
-	
-	// Validate user identifier
-	if req.Username == "" && req.Email == "" {
+	// Either email or username must be provided
+	if req.Email == "" && req.Username == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"message": "Username or email is required",
+			"message": "Either email or username must be provided",
 		})
 		return
 	}
 	
-	// Find user in database
-	userStore := ah.db.CreateStore("users")
+	// Find user by email or username
+	store := ah.db.CreateStore("users")
+	query := database.NewQueryBuilder()
 	
-	var query database.QueryBuilder
 	if req.Email != "" {
-		query = database.NewQueryBuilder().Where("email", "$eq", req.Email)
+		query.Where("email", "=", req.Email)
 	} else {
-		query = database.NewQueryBuilder().Where("username", "$eq", req.Username)
+		query.Where("username", "=", req.Username)
 	}
 	
-	user, err := userStore.FindOne(r.Context(), query)
+	userData, err := store.FindOne(context.Background(), query)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": "Database error",
-		})
-		return
-	}
-	
-	if user == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -109,65 +111,43 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	
-	// Create or get session
-	session, err := ah.sessions.CreateSession("")
+	// Extract user information
+	userID, _ := userData["id"].(string)
+	username, _ := userData["username"].(string)
+	role, _ := userData["role"].(string)
+	isRoot := (role == "admin")
+	
+	// Generate JWT token for the user
+	token, err := ah.jwtManager.GenerateToken(userID, username, isRoot)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"message": "Failed to create session",
+			"message": "Failed to generate token",
 		})
 		return
 	}
 	
-	// Set session data
-	sessionData := map[string]interface{}{
-		"userId":     user["id"],
-		"username":   getStringField(user, "username"),
-		"email":      getStringField(user, "email"),
-		"role":       getStringField(user, "role"),
-		"loginTime":  time.Now(),
-		"loginType":  "master_key",
+	// Parse JWT expiration duration
+	jwtDuration, err := time.ParseDuration(ah.Security.JWTExpiration)
+	if err != nil {
+		jwtDuration = 24 * time.Hour // Default to 24 hours
 	}
-	
-	session.Set("user", sessionData)
-	session.Set("isRoot", getStringField(user, "role") == "admin")
-	
-	// Save session
-	if err := session.Save(ah.sessions); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": "Failed to save session",
-		})
-		return
-	}
-	
-	// Set session cookie
-	ah.sessions.SetSessionCookie(w, session)
-	
-	// Prepare user response (without password)
-	userResponse := make(map[string]interface{})
-	for k, v := range user {
-		if k != "password" {
-			userResponse[k] = v
-		}
-	}
-	
-	// Calculate expiration time
-	expiresAt := time.Now().Add(time.Duration(ah.Security.SessionTTL) * time.Second)
-	
-	response := SystemLoginResponse{
-		Success:   true,
-		SessionID: session.GetID(),
-		Token:     session.GetID(), // Use session ID as token for now
-		User:      userResponse,
-		Message:   "Authentication successful",
-		ExpiresAt: expiresAt.Format(time.RFC3339),
-	}
+	expiresAt := time.Now().Add(jwtDuration).Unix()
 	
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"token": token,
+		"expiresAt": expiresAt,
+		"isRoot": isRoot,
+		"user": map[string]interface{}{
+			"id": userID,
+			"username": username,
+			"email": userData["email"],
+			"role": role,
+		},
+	})
 }
 
 // HandleMasterKeyValidation validates a master key without performing authentication
@@ -227,8 +207,7 @@ func (ah *AuthHandler) HandleGetSecurityInfo(w http.ResponseWriter, r *http.Requ
 	isAdmin := ah.Security.ValidateMasterKey(masterKey)
 	
 	response := map[string]interface{}{
-		"sessionTTL":        ah.Security.SessionTTL,
-		"tokenTTL":          ah.Security.TokenTTL,
+		"jwtExpiration":     ah.Security.JWTExpiration,
 		"allowRegistration": ah.Security.AllowRegistration,
 	}
 	

@@ -86,10 +86,14 @@ function PropertiesEditor({ collection, onUpdate }) {
   const handleDeleteProperty = async (name) => {
     if (!confirm(`Are you sure you want to delete the "${name}" property?`)) return
 
+    console.log('Deleting property:', name)
     const updatedProperties = { ...collection.properties }
     delete updatedProperties[name]
     
+    console.log('Updated properties:', updatedProperties)
+    
     try {
+      console.log('Calling onUpdate...')
       await onUpdate({
         ...collection,
         properties: updatedProperties
@@ -103,6 +107,7 @@ function PropertiesEditor({ collection, onUpdate }) {
         isClosable: true,
       })
     } catch (err) {
+      console.error('Delete property error:', err)
       toast({
         title: 'Error deleting property',
         description: err.message,

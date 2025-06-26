@@ -27,6 +27,8 @@ func main() {
 	var (
 		host      = flag.String("host", "http://localhost:2403", "go-deployd server URL")
 		masterKey = flag.String("master-key", "", "master key for authentication")
+		username  = flag.String("username", "", "username for user authentication")
+		password  = flag.String("password", "", "password for user authentication")
 		command   = flag.String("cmd", "", "command to execute (login, get, post, put, delete)")
 		resource  = flag.String("resource", "", "resource/collection name")
 		id        = flag.String("id", "", "resource ID (for get, put, delete)")
@@ -42,12 +44,20 @@ func main() {
 	// Handle commands
 	switch *command {
 	case "login":
-		if *masterKey == "" {
-			fmt.Fprintf(os.Stderr, "Error: master-key required for login\n")
-			os.Exit(1)
-		}
-		if err := cli.login(*masterKey); err != nil {
-			fmt.Fprintf(os.Stderr, "Login failed: %v\n", err)
+		if *masterKey != "" {
+			// Master key authentication
+			if err := cli.loginWithMasterKey(*masterKey); err != nil {
+				fmt.Fprintf(os.Stderr, "Login failed: %v\n", err)
+				os.Exit(1)
+			}
+		} else if *username != "" && *password != "" {
+			// User/password authentication
+			if err := cli.loginWithUserPassword(*username, *password); err != nil {
+				fmt.Fprintf(os.Stderr, "Login failed: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: Either master-key or username+password required for login\n")
 			os.Exit(1)
 		}
 		fmt.Println("Login successful!")
@@ -103,13 +113,44 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "Usage: deployd-cli -cmd=<command> [options]\n")
 		fmt.Fprintf(os.Stderr, "Commands: login, get, post, put, delete\n")
+		fmt.Fprintf(os.Stderr, "\nAuthentication:\n")
+		fmt.Fprintf(os.Stderr, "  Login with master key: -cmd=login -master-key=<key>\n")
+		fmt.Fprintf(os.Stderr, "  Login with user/pass:  -cmd=login -username=<user> -password=<pass>\n")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 }
 
-func (c *CLI) login(masterKey string) error {
+func (c *CLI) loginWithMasterKey(masterKey string) error {
 	payload := map[string]string{"masterKey": masterKey}
+	data, _ := json.Marshal(payload)
+
+	resp, err := c.client.Post(c.baseURL+"/auth/login", "application/json", strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("login failed: %s", body)
+	}
+
+	var authResp AuthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+		return err
+	}
+
+	// Save token to file
+	tokenFile := os.ExpandEnv("$HOME/.deployd-token")
+	return os.WriteFile(tokenFile, []byte(authResp.Token), 0600)
+}
+
+func (c *CLI) loginWithUserPassword(username, password string) error {
+	payload := map[string]string{
+		"username": username,
+		"password": password,
+	}
 	data, _ := json.Marshal(payload)
 
 	resp, err := c.client.Post(c.baseURL+"/auth/login", "application/json", strings.NewReader(string(data)))

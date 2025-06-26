@@ -108,15 +108,17 @@ func (hrm *HotReloadGoManager) RunScript(eventType EventType, ctx *context.Conte
 		Errors:   make(map[string]string),
 		Query:    ctx.Query,
 		Internal: false,
-		IsRoot:   ctx.Session != nil && ctx.Session.IsRoot(),
+		IsRoot:   ctx.IsRoot,
 	}
 
-	if ctx.Session != nil {
-		if user := ctx.Session.Get("user"); user != nil {
-			if userMap, ok := user.(bson.M); ok {
-				eventCtx.Me = userMap
-			}
+	if ctx.IsAuthenticated {
+		// Create user data from JWT authentication
+		userData := map[string]interface{}{
+			"id":       ctx.UserID,
+			"username": ctx.Username,
+			"isRoot":   ctx.IsRoot,
 		}
+		eventCtx.Me = userData
 	}
 
 	// Set up cancel function

@@ -17,6 +17,8 @@ type Property struct {
 	Required bool        `json:"required,omitempty"`
 	Default  interface{} `json:"default,omitempty"`
 	Order    int         `json:"order,omitempty"`
+	Unique   bool        `json:"unique,omitempty"`
+	System   bool        `json:"system,omitempty"` // Indicates if this is a system-managed field
 }
 
 // BaseResource provides common functionality for all resources

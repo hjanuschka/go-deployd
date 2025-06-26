@@ -21,14 +21,20 @@ go install ./cmd/deployd-cli
 
 ### Authentication
 
-First, authenticate with your master key:
+You can authenticate using either a master key or username/password:
 
+#### Master Key Authentication
 ```bash
 deployd-cli -cmd=login -master-key=mk_your_master_key_here
 ```
 
-This will:
-- Send a POST request to `/auth/login` with the master key
+#### User/Password Authentication
+```bash
+deployd-cli -cmd=login -username=your_username -password=your_password
+```
+
+Both methods will:
+- Send a POST request to `/auth/login` with the credentials
 - Receive a JWT token valid for 24 hours
 - Store the token in `~/.deployd-token`
 
@@ -73,7 +79,8 @@ deployd-cli -host=https://api.example.com -cmd=get -resource=users
 
 - Tokens are stored in `~/.deployd-token` with 600 permissions
 - Tokens expire after 24 hours (configurable on server)
-- Re-run the login command to get a new token
+- Re-run the login command with either master key or user credentials to get a new token
+- The same token file is used regardless of which authentication method was used
 
 ## Scripting Examples
 

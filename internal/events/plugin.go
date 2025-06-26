@@ -169,33 +169,17 @@ func (gpm *GoPluginManager) RunPlugin(eventType EventType, ctx *context.Context,
 		Errors:   make(map[string]string),
 		Query:    ctx.Query,
 		Internal: false, // TODO: Add Internal field to Context if needed
-		IsRoot:   ctx.Session != nil && ctx.Session.IsRoot(),
+		IsRoot:   ctx.IsRoot,
 	}
 
-	if ctx.Session != nil {
-		// Get user from session data
-		if user := ctx.Session.Get("user"); user != nil {
-			// Handle both UserSessionData struct and map[string]interface{} formats
-			switch userData := user.(type) {
-			case bson.M:
-				eventCtx.Me = userData
-				// Add id field for compatibility if userId exists
-				if userId, exists := userData["userId"]; exists {
-					userData["id"] = userId
-				}
-			case map[string]interface{}:
-				eventCtx.Me = userData
-				// Add id field for compatibility if userId exists
-				if userId, exists := userData["userId"]; exists {
-					userData["id"] = userId
-				}
-			default:
-				// Try to convert struct to map for compatibility
-				if userMap := convertUserToMap(userData); userMap != nil {
-					eventCtx.Me = userMap
-				}
-			}
+	if ctx.IsAuthenticated {
+		// Create user data from JWT authentication
+		userData := map[string]interface{}{
+			"id":       ctx.UserID,
+			"username": ctx.Username,
+			"isRoot":   ctx.IsRoot,
 		}
+		eventCtx.Me = userData
 	}
 
 	// Set up cancel function

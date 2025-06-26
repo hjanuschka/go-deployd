@@ -455,11 +455,15 @@ func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 	
 	// me - current user
 	var meValue *v8.Value
-	if sc.ctx.Session != nil {
-		if user := sc.ctx.Session.Get("user"); user != nil {
-			userJSON, _ := json.Marshal(user)
-			meValue, _ = v8.JSONParse(v8ctx, string(userJSON))
+	if sc.ctx.IsAuthenticated {
+		// Create user data from JWT authentication
+		userData := map[string]interface{}{
+			"id":       sc.ctx.UserID,
+			"username": sc.ctx.Username,
+			"isRoot":   sc.ctx.IsRoot,
 		}
+		userJSON, _ := json.Marshal(userData)
+		meValue, _ = v8.JSONParse(v8ctx, string(userJSON))
 	}
 	if meValue == nil {
 		meValue = v8.Null(isolate)
@@ -475,15 +479,9 @@ func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 		}
 		
 		id := args[0].String()
-		if sc.ctx.Session != nil {
-			if user := sc.ctx.Session.Get("user"); user != nil {
-				if userMap, ok := user.(bson.M); ok {
-					if userID, ok := userMap["id"].(string); ok {
-						result, _ := v8.NewValue(isolate, userID == id)
-						return result
-					}
-				}
-			}
+		if sc.ctx.IsAuthenticated {
+			result, _ := v8.NewValue(isolate, sc.ctx.UserID == id)
+			return result
 		}
 		result, _ := v8.NewValue(isolate, false)
 		return result
@@ -502,8 +500,7 @@ func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 	internalValue, _ := v8.NewValue(isolate, false)
 	v8ctx.Global().Set("internal", internalValue)
 	
-	isRoot := sc.ctx.Session != nil && sc.ctx.Session.IsRoot()
-	isRootValue, _ := v8.NewValue(isolate, isRoot)
+	isRootValue, _ := v8.NewValue(isolate, sc.ctx.IsRoot)
 	v8ctx.Global().Set("isRoot", isRootValue)
 
 	return nil

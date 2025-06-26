@@ -26,6 +26,8 @@ import {
   FormControl,
   FormLabel,
   Input,
+  InputGroup,
+  InputLeftElement,
   useColorModeValue,
   Spinner,
   useToast,
@@ -40,15 +42,18 @@ import {
   FiRefreshCw,
   FiChevronLeft,
   FiChevronRight,
+  FiSearch,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { apiService } from '../services/api'
 
 function Collections() {
   const [collections, setCollections] = useState([])
+  const [filteredCollections, setFilteredCollections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [newCollectionName, setNewCollectionName] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [collectionsPerPage] = useState(12) // 4 rows x 3 columns
   const { isOpen, onOpen, onClose } = useDisclosure()
@@ -58,46 +63,42 @@ function Collections() {
   const cardBg = useColorModeValue('white', 'gray.700')
   const borderColor = useColorModeValue('gray.200', 'gray.600')
 
-  // Mock collections data for now
-  const mockCollections = [
-    {
-      name: 'todos',
-      documentCount: 3, // Updated to match actual API data
-      properties: {
-        title: { type: 'string', required: true },
-        completed: { type: 'boolean', default: false },
-        createdAt: { type: 'date', default: 'now' },
-        priority: { type: 'number', default: 1 },
-        description: { type: 'string' }
-      },
-      lastModified: new Date().toISOString()
-    }
-  ]
 
   useEffect(() => {
     loadCollections()
   }, [])
+
+  // Filter collections based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredCollections(collections)
+      setCurrentPage(1)
+      return
+    }
+
+    const filtered = collections.filter(collection => 
+      collection.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      Object.keys(collection.properties || {}).some(prop => 
+        prop.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    )
+    setFilteredCollections(filtered)
+    setCurrentPage(1) // Reset to first page when filtering
+  }, [collections, searchTerm])
 
   const loadCollections = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      // Get real data from API
-      const [collectionsData, todosData] = await Promise.all([
-        apiService.getCollections().catch(() => []),
-        apiService.getCollectionData('todos').catch(() => [])
-      ])
-
-      // Use real data or fallback to mock with real counts
-      const collections = collectionsData.length > 0 ? collectionsData : [
-        {
-          ...mockCollections[0],
-          documentCount: todosData.length // Use real document count
-        }
-      ]
+      // Get collections data from API
+      const collectionsData = await apiService.getCollections().catch(() => [])
+      
+      // Use real data - no fallback needed since collections API should always work
+      const collections = collectionsData || []
       
       setCollections(collections)
+      setFilteredCollections(collections)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -184,8 +185,8 @@ function Collections() {
   // Pagination logic
   const indexOfLastCollection = currentPage * collectionsPerPage
   const indexOfFirstCollection = indexOfLastCollection - collectionsPerPage
-  const currentCollections = collections.slice(indexOfFirstCollection, indexOfLastCollection)
-  const totalPages = Math.ceil(collections.length / collectionsPerPage)
+  const currentCollections = filteredCollections.slice(indexOfFirstCollection, indexOfLastCollection)
+  const totalPages = Math.ceil(filteredCollections.length / collectionsPerPage)
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber)
@@ -221,30 +222,48 @@ function Collections() {
 
   return (
     <Box>
-      <HStack justify="space-between" mb={6}>
-        <Heading size="lg">Collections</Heading>
-        <HStack spacing={2}>
-          <IconButton
-            icon={<FiRefreshCw />}
-            onClick={loadCollections}
-            variant="outline"
-            aria-label="Refresh collections"
-          />
-          <Button
-            leftIcon={<FiPlus />}
-            colorScheme="brand"
-            onClick={onOpen}
-          >
-            Create Collection
-          </Button>
+      <VStack spacing={6} align="stretch">
+        <HStack justify="space-between">
+          <Heading size="lg">Collections</Heading>
+          <HStack spacing={2}>
+            <IconButton
+              icon={<FiRefreshCw />}
+              onClick={loadCollections}
+              variant="outline"
+              aria-label="Refresh collections"
+            />
+            <Button
+              leftIcon={<FiPlus />}
+              colorScheme="brand"
+              onClick={onOpen}
+            >
+              Create Collection
+            </Button>
+          </HStack>
         </HStack>
-      </HStack>
+        
+        {/* Search Bar */}
+        <Box maxW="400px">
+          <InputGroup>
+            <InputLeftElement pointerEvents="none">
+              <FiSearch color="gray.400" />
+            </InputLeftElement>
+            <Input
+              placeholder="Search collections or properties..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="md"
+            />
+          </InputGroup>
+        </Box>
+      </VStack>
 
-      {collections.length > 0 && (
+      {filteredCollections.length > 0 && (
         <VStack spacing={6} align="stretch">
           <HStack justify="space-between" align="center">
             <Text fontSize="sm" color="gray.600">
-              Showing {indexOfFirstCollection + 1}-{Math.min(indexOfLastCollection, collections.length)} of {collections.length} collections
+              Showing {indexOfFirstCollection + 1}-{Math.min(indexOfLastCollection, filteredCollections.length)} of {filteredCollections.length} collections
+              {searchTerm && <Text as="span" color="brand.500"> (filtered from {collections.length} total)</Text>}
             </Text>
             
             {totalPages > 1 && (
@@ -444,6 +463,34 @@ function Collections() {
             onClick={onOpen}
           >
             Create Your First Collection
+          </Button>
+        </VStack>
+      )}
+
+      {filteredCollections.length === 0 && collections.length > 0 && !loading && (
+        <VStack spacing={6} align="center" py={12}>
+          <Box
+            p={6}
+            borderRadius="full"
+            bg="gray.100"
+            color="gray.400"
+          >
+            <FiSearch size={48} />
+          </Box>
+          <VStack spacing={2}>
+            <Heading size="lg" color="gray.600">
+              No matching collections
+            </Heading>
+            <Text color="gray.500" textAlign="center">
+              No collections match your search term "{searchTerm}"
+            </Text>
+          </VStack>
+          <Button
+            variant="outline"
+            colorScheme="brand"
+            onClick={() => setSearchTerm('')}
+          >
+            Clear Search
           </Button>
         </VStack>
       )}

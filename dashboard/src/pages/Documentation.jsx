@@ -1120,8 +1120,8 @@ curl "${serverUrl}/${selectedCollection}?\\$fields={\\"title\\":1,\\"status\\":1
                       <CodeBlock language="json" title=".deployd/security.json">
 {`{
   "masterKey": "mk_...",
-  "sessionTTL": 86400,
-  "tokenTTL": 2592000,
+  "jwtSecret": "your-jwt-secret-key",
+  "jwtExpiration": "24h",
   "allowRegistration": false
 }`}
                       </CodeBlock>
@@ -1252,32 +1252,52 @@ curl "${serverUrl}/${selectedCollection}?\\$fields={\\"title\\":1,\\"status\\":1
                   <VStack align="stretch" spacing={6}>
                     
                     <Box>
-                      <Text fontWeight="bold" mb={3}>Standard Login</Text>
-                      <CodeBlock language="bash" title="User login with username/password">
-{`curl -X POST "${serverUrl}/users/login" \\
+                      <Text fontWeight="bold" mb={3}>JWT Login with Master Key</Text>
+                      <Text mb={2} fontSize="sm" color="green.600">
+                        ✅ Master key authentication returns a JWT token with root privileges.
+                      </Text>
+                      <CodeBlock language="bash" title="Login with master key to get JWT" executable>
+{`curl -X POST "${serverUrl}/auth/login" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "username": "user@example.com",
-    "password": "userpassword"
+    "masterKey": "${masterKey}"
   }'`}
                       </CodeBlock>
                     </Box>
 
                     <Box>
-                      <Text fontWeight="bold" mb={3}>Get Current User (/me)</Text>
-                      <CodeBlock language="bash" title="Get current user info">
-{`# After login, with session cookie
-curl -b cookies.txt "${serverUrl}/users/me"`}
+                      <Text fontWeight="bold" mb={3}>JWT Login with Username/Password</Text>
+                      <Text mb={2} fontSize="sm" color="green.600">
+                        ✅ User/password authentication is fully supported and returns a JWT token.
+                      </Text>
+                      <CodeBlock language="bash" title="Login with username/password to get JWT" executable>
+{`curl -X POST "${serverUrl}/auth/login" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "username": "john@example.com",
+    "password": "securePassword123"
+  }'`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="gray.600" mt={2}>Response format:</Text>
+                      <CodeBlock language="json">
+{`{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresAt": 1719489600,
+  "isRoot": false
+}`}
                       </CodeBlock>
                     </Box>
 
                     <Box>
-                      <Text fontWeight="bold" mb={3}>Logout</Text>
-                      <CodeBlock language="bash" title="User logout">
-{`curl -X POST "${serverUrl}/users/logout" \\
-  -b cookies.txt`}
+                      <Text fontWeight="bold" mb={3}>Get Current User (/auth/me)</Text>
+                      <Text mb={2}>Use the JWT token to get user information:</Text>
+                      <CodeBlock language="bash" title="Get current user info with JWT" executable>
+{`# Using JWT token from login response
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \\
+  "${serverUrl}/auth/me"`}
                       </CodeBlock>
                     </Box>
+
                   </VStack>
                 </CardBody>
               </Card>
@@ -1323,19 +1343,267 @@ curl -b cookies.txt "${serverUrl}/users/me"`}
             <VStack align="stretch" spacing={6}>
               <TableOfContents sections={[
                 {
+                  id: 'jwt-auth-flow',
+                  title: 'JWT Authentication Flow',
+                  subsections: [
+                    { id: 'jwt-overview', title: 'Overview' },
+                    { id: 'create-user-jwt', title: 'Step 1: Create User' },
+                    { id: 'login-jwt', title: 'Step 2: Login and Get Token' },
+                    { id: 'use-token', title: 'Step 3: Use Token for API Calls' },
+                    { id: 'get-user-info', title: 'Step 4: Get User Info with /auth/me' }
+                  ]
+                },
+                {
                   id: 'security-features',
                   title: 'Security Features'
                 },
-                {
-                  id: 'session-management',
-                  title: 'Session Management',
-                  subsections: [
-                    { id: 'session-properties', title: 'Session Properties' },
-                    { id: 'session-validation', title: 'Session Validation' }
-                  ]
-                }
               ]} />
 
+              <Card bg={cardBg}>
+                <CardHeader>
+                  <Heading size="md">JWT Authentication Flow</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack align="stretch" spacing={6}>
+                    <Box>
+                      <Text fontWeight="bold" mb={3} id="jwt-overview">Overview</Text>
+                      <Text>
+                        Go-Deployd uses JWT (JSON Web Tokens) for stateless authentication. This complete example 
+                        shows how to create a user, login to get a JWT token, and use that token to access protected endpoints.
+                      </Text>
+                      <Text mt={2} fontSize="sm" color="green.600">
+                        ✅ Both master key and user/password authentication are fully supported with JWT tokens.
+                        You can authenticate with either a master key (for admin operations) or username/password (for user operations).
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3} id="create-user-jwt">Step 1: Create User (Master Key Required)</Text>
+                      <Text mb={2}>First, create a user using the master key:</Text>
+                      <CodeBlock language="bash" title="Create a new user" executable>
+{`curl -X POST "${serverUrl}/_admin/auth/create-user" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Master-Key: ${masterKey}" \\
+  -d '{
+    "userData": {
+      "username": "johndoe",
+      "email": "john@example.com",
+      "password": "securePassword123",
+      "name": "John Doe",
+      "role": "user"
+    }
+  }'`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="gray.600" mt={2}>Response:</Text>
+                      <CodeBlock language="json">
+{`{
+  "success": true,
+  "message": "User created successfully",
+  "user": {
+    "id": "65f7a8b9c1234567890abcde",
+    "username": "johndoe",
+    "email": "john@example.com",
+    "name": "John Doe",
+    "role": "user",
+    "createdAt": "2024-06-26T10:00:00Z"
+  }
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3} id="login-jwt">Step 2: Login and Get JWT Token</Text>
+                      <Text mb={2}>Login with either master key OR username/password to get a JWT token:</Text>
+                      
+                      <Text fontWeight="medium" mb={2} color="blue.600">Option A: Master Key Login (Root Privileges)</Text>
+                      <CodeBlock language="bash" title="Login with master key" executable>
+{`curl -X POST "${serverUrl}/auth/login" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "masterKey": "${masterKey}"
+  }'`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="gray.600" mt={2}>Response:</Text>
+                      <CodeBlock language="json">
+{`{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyb290IiwidXNlcm5hbWUiOiJyb290IiwiaXNSb290Ijp0cnVlLCJleHAiOjE3MTk0ODk2MDB9.xyzabc123...",
+  "expiresAt": 1719489600,
+  "isRoot": true
+}`}
+                      </CodeBlock>
+                      
+                      <Text fontWeight="medium" mb={2} mt={4} color="green.600">Option B: Username/Password Login (User Privileges)</Text>
+                      <CodeBlock language="bash" title="Login with username/password" executable>
+{`curl -X POST "${serverUrl}/auth/login" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "username": "johndoe",
+    "password": "securePassword123"
+  }'`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="gray.600" mt={2}>Response:</Text>
+                      <CodeBlock language="json">
+{`{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2NWY3YThiOWMxMjM0NTY3ODkwYWJjZGUiLCJ1c2VybmFtZSI6ImpvaG5kb2UiLCJpc1Jvb3QiOmZhbHNlLCJleHAiOjE3MTk0ODk2MDB9.abc123xyz...",
+  "expiresAt": 1719489600,
+  "isRoot": false
+}`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="green.600" mt={2}>
+                        ✅ Both master key and user/password authentication are fully supported!
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3} id="use-token">Step 3: Use Token for API Calls</Text>
+                      <Text mb={2}>Use the JWT token in the Authorization header for all subsequent API calls:</Text>
+                      <CodeBlock language="bash" title="Save token to variable">
+{`# Save the token from the login response
+TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`}
+                      </CodeBlock>
+                      <CodeBlock language="bash" title="Use token in API calls" executable>
+{`# Get all users
+curl -H "Authorization: Bearer $TOKEN" \\
+  "${serverUrl}/users"
+
+# Create a document
+curl -X POST "${serverUrl}/todos" \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Complete JWT implementation",
+    "completed": false
+  }'
+
+# Access admin endpoints
+curl -H "Authorization: Bearer $TOKEN" \\
+  "${serverUrl}/_admin/collections"`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3} id="get-user-info">Step 4: Get User Info with /auth/me</Text>
+                      <Text mb={2}>Use the `/auth/me` endpoint to get information about the currently authenticated user:</Text>
+                      <CodeBlock language="bash" title="Get current user info" executable>
+{`curl -H "Authorization: Bearer $TOKEN" \\
+  "${serverUrl}/auth/me"`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="gray.600" mt={2}>Response for root user:</Text>
+                      <CodeBlock language="json">
+{`{
+  "id": "root",
+  "username": "root",
+  "isRoot": true
+}`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="gray.600" mt={2}>Response for regular user (when implemented):</Text>
+                      <CodeBlock language="json">
+{`{
+  "id": "65f7a8b9c1234567890abcde",
+  "username": "johndoe",
+  "email": "john@example.com",
+  "name": "John Doe",
+  "role": "user",
+  "createdAt": "2024-06-26T10:00:00Z",
+  "updatedAt": "2024-06-26T10:00:00Z"
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Complete Example Script</Text>
+                      <Text mb={2}>Here's a complete bash script demonstrating the full flow:</Text>
+                      <CodeBlock language="bash" title="complete-jwt-flow.sh">
+{`#!/bin/bash
+
+# Configuration
+SERVER_URL="http://localhost:2403"
+MASTER_KEY="mk_your_master_key_here"
+
+echo "1. Creating user..."
+CREATE_RESPONSE=$(curl -s -X POST "$SERVER_URL/_admin/auth/create-user" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Master-Key: $MASTER_KEY" \\
+  -d '{
+    "userData": {
+      "username": "testuser",
+      "email": "test@example.com",
+      "password": "testPassword123",
+      "name": "Test User"
+    }
+  }')
+
+echo "User created: $(echo $CREATE_RESPONSE | jq -r '.user.username')"
+
+echo -e "\\n2. Logging in with master key..."
+LOGIN_RESPONSE=$(curl -s -X POST "$SERVER_URL/auth/login" \\
+  -H "Content-Type: application/json" \\
+  -d "{\"masterKey\": \"$MASTER_KEY\"}")
+
+TOKEN=$(echo $LOGIN_RESPONSE | jq -r '.token')
+echo "Got JWT token (master key): \${TOKEN:0:50}..."
+
+echo -e "\\n2b. Alternative: Login with username/password..."
+USER_LOGIN_RESPONSE=$(curl -s -X POST "$SERVER_URL/auth/login" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "username": "testuser",
+    "password": "testPassword123"
+  }')
+
+USER_TOKEN=$(echo $USER_LOGIN_RESPONSE | jq -r '.token')
+echo "Got JWT token (user): \${USER_TOKEN:0:50}..."
+echo "Using master key token for admin operations..."
+
+echo -e "\\n3. Using token to create a todo..."
+TODO_RESPONSE=$(curl -s -X POST "$SERVER_URL/todos" \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Test todo from JWT",
+    "completed": false
+  }')
+
+echo "Created todo: $(echo $TODO_RESPONSE | jq -r '.title')"
+
+echo -e "\\n4. Getting user info with /auth/me..."
+ME_RESPONSE=$(curl -s -H "Authorization: Bearer $TOKEN" \\
+  "$SERVER_URL/auth/me")
+
+echo "Current user: $(echo $ME_RESPONSE | jq '.')"
+
+echo -e "\\n5. Validating token..."
+VALIDATE_RESPONSE=$(curl -s -H "Authorization: Bearer $TOKEN" \\
+  "$SERVER_URL/auth/validate")
+
+echo "Token validation: $(echo $VALIDATE_RESPONSE | jq '.')"
+`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>JWT Token Structure</Text>
+                      <Text mb={2}>The JWT tokens contain the following claims:</Text>
+                      <CodeBlock language="json">
+{`{
+  "userId": "root",           // User ID (or "root" for master key)
+  "username": "root",         // Username
+  "isRoot": true,            // Whether user has root privileges
+  "exp": 1719489600,         // Expiration timestamp
+  "iat": 1719403200          // Issued at timestamp
+}`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="gray.600" mt={2}>
+                        • Tokens expire after 24 hours by default (configurable)
+                        <br />
+                        • Only minimal user data is stored in the token
+                        <br />
+                        • Full user data is fetched from the database when needed
+                      </Text>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
 
               <Card bg={cardBg}>
                 <CardHeader>
@@ -1344,7 +1612,7 @@ curl -b cookies.txt "${serverUrl}/users/me"`}
                 <CardBody>
                   <VStack align="start" spacing={3}>
                     <HStack><Badge colorScheme="green">✓</Badge><Text>bcrypt password hashing (cost 12)</Text></HStack>
-                    <HStack><Badge colorScheme="green">✓</Badge><Text>Secure session management with cookies</Text></HStack>
+                    <HStack><Badge colorScheme="green">✓</Badge><Text>JWT token authentication with secure signing</Text></HStack>
                     <HStack><Badge colorScheme="green">✓</Badge><Text>Master key authentication (96-char secure key)</Text></HStack>
                     <HStack><Badge colorScheme="green">✓</Badge><Text>File permissions (600) for sensitive config</Text></HStack>
                     <HStack><Badge colorScheme="green">✓</Badge><Text>Role-based access control (RBAC)</Text></HStack>
@@ -1357,33 +1625,54 @@ curl -b cookies.txt "${serverUrl}/users/me"`}
 
               <Card bg={cardBg}>
                 <CardHeader>
-                  <Heading size="md">Session Management</Heading>
+                  <Heading size="md">JWT Token Management</Heading>
                 </CardHeader>
                 <CardBody>
                   <VStack align="stretch" spacing={4}>
                     <Text>
-                      Sessions are automatically managed via HTTP-only cookies. User sessions include access control 
-                      and filtering based on user permissions.
+                      Go-Deployd uses JWT (JSON Web Tokens) for stateless authentication. Tokens are validated 
+                      on each request without requiring server-side session storage.
                     </Text>
                     
                     <Box>
-                      <Text fontWeight="bold" mb={2}>Session Properties:</Text>
+                      <Text fontWeight="bold" mb={2}>JWT Token Properties:</Text>
                       <VStack align="start" spacing={1}>
-                        <Text fontSize="sm">• <strong>TTL:</strong> Configurable timeout (default: 24 hours)</Text>
-                        <Text fontSize="sm">• <strong>Storage:</strong> Database-backed session store</Text>
-                        <Text fontSize="sm">• <strong>Security:</strong> HTTP-only cookies, secure flags in production</Text>
-                        <Text fontSize="sm">• <strong>Data:</strong> User ID, role, permissions, login time</Text>
+                        <Text fontSize="sm">• <strong>Expiration:</strong> 24 hours (configurable via JWTExpiration setting)</Text>
+                        <Text fontSize="sm">• <strong>Storage:</strong> Client-side (localStorage, cookies, or environment variables)</Text>
+                        <Text fontSize="sm">• <strong>Security:</strong> HMAC-SHA256 signed with secret key</Text>
+                        <Text fontSize="sm">• <strong>Claims:</strong> User ID, username, isRoot flag, expiration time</Text>
+                        <Text fontSize="sm">• <strong>Stateless:</strong> No server-side storage required</Text>
                       </VStack>
                     </Box>
 
-                    <CodeBlock language="bash" title="Session validation">
-{`# Sessions are automatically sent with cookies
-curl -b cookies.txt "${serverUrl}/users/me"
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Token Validation:</Text>
+                      <CodeBlock language="bash" title="Validate JWT token" executable>
+{`# Validate current token
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \\
+  "${serverUrl}/auth/validate"`}
+                      </CodeBlock>
+                    </Box>
 
-# Manual session token (if using API tokens)
-curl -H "Authorization: Bearer session_token_here" \\
-  "${serverUrl}/users/me"`}
-                    </CodeBlock>
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Using Tokens in Requests:</Text>
+                      <CodeBlock language="bash" title="JWT token usage patterns">
+{`# Standard Bearer token (recommended)
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \\
+  "${serverUrl}/api/endpoint"
+
+# Alternative: Store in environment variable
+export JWT_TOKEN="your_jwt_token_here"
+curl -H "Authorization: Bearer $JWT_TOKEN" \\
+  "${serverUrl}/api/endpoint"
+
+# For CLI tools: Save to file
+echo "your_jwt_token" > ~/.deployd-token
+curl -H "Authorization: Bearer $(cat ~/.deployd-token)" \\
+  "${serverUrl}/api/endpoint"`}
+                      </CodeBlock>
+                    </Box>
+
                   </VStack>
                 </CardBody>
               </Card>
@@ -1506,8 +1795,7 @@ curl -H "Authorization: Bearer session_token_here" \\
   -H "X-Master-Key: ${masterKey}" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "sessionTTL": 7200,
-    "tokenTTL": 86400,
+    "jwtExpiration": "24h",
     "allowRegistration": false
   }'`}
                       </CodeBlock>

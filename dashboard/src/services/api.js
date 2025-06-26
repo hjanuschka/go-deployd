@@ -27,9 +27,13 @@ api.interceptors.request.use(
 
 // Add response interceptor for error handling
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('API Response:', response.status, response.config.url, response.data)
+    return response
+  },
   (error) => {
     console.error('API Error:', error)
+    console.error('Error details:', error.response?.status, error.response?.data)
     
     // If we get 401, clear stored master key
     if (error.response?.status === 401) {
@@ -66,7 +70,13 @@ export const apiService = {
   },
 
   updateCollection: async (name, config) => {
+    console.log('apiService.updateCollection called')
+    console.log('Collection name:', name)
+    console.log('Config to send:', config)
+    console.log('URL:', `/_admin/collections/${name}`)
+    
     const response = await api.put(`/_admin/collections/${name}`, config)
+    console.log('API response:', response)
     return response.data
   },
 

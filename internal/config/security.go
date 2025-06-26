@@ -11,23 +11,64 @@ import (
 
 // SecurityConfig holds security-related configuration
 type SecurityConfig struct {
-	MasterKey           string `json:"masterKey"`
-	SessionTTL          int    `json:"sessionTTL"`          // in seconds
-	TokenTTL            int    `json:"tokenTTL"`            // in seconds (deprecated, use JWTExpiration)
-	AllowRegistration   bool   `json:"allowRegistration"`   // allow public user registration
-	JWTSecret           string `json:"jwtSecret"`           // JWT signing secret
-	JWTExpiration       string `json:"jwtExpiration"`       // JWT expiration duration (e.g., "24h", "1d")
+	MasterKey           string      `json:"masterKey"`
+	AllowRegistration   bool        `json:"allowRegistration"`   // allow public user registration
+	JWTSecret           string      `json:"jwtSecret"`           // JWT signing secret
+	JWTExpiration       string      `json:"jwtExpiration"`       // JWT expiration duration (e.g., "24h", "1d")
+	RequireVerification bool        `json:"requireVerification"` // require email verification for new users
+	Email               EmailConfig `json:"email"`               // email configuration for verification
+}
+
+// EmailConfig holds email service configuration
+type EmailConfig struct {
+	Provider string     `json:"provider"` // "smtp" or "ses"
+	SMTP     SMTPConfig `json:"smtp"`     // SMTP configuration
+	SES      SESConfig  `json:"ses"`      // AWS SES configuration
+	From     string     `json:"from"`     // sender email address
+	FromName string     `json:"fromName"` // sender display name
+}
+
+// SMTPConfig holds SMTP server configuration
+type SMTPConfig struct {
+	Host     string `json:"host"`     // SMTP server hostname
+	Port     int    `json:"port"`     // SMTP server port
+	Username string `json:"username"` // SMTP username
+	Password string `json:"password"` // SMTP password
+	TLS      bool   `json:"tls"`      // use TLS encryption
+}
+
+// SESConfig holds AWS SES configuration
+type SESConfig struct {
+	Region          string `json:"region"`          // AWS region
+	AccessKeyID     string `json:"accessKeyId"`     // AWS access key ID
+	SecretAccessKey string `json:"secretAccessKey"` // AWS secret access key
 }
 
 // DefaultSecurityConfig returns the default security configuration
 func DefaultSecurityConfig() *SecurityConfig {
 	return &SecurityConfig{
-		MasterKey:         "",
-		SessionTTL:        86400,  // 24 hours
-		TokenTTL:          2592000, // 30 days (deprecated)
-		AllowRegistration: true,   // allow registration by default
-		JWTSecret:         "",
-		JWTExpiration:     "24h",  // 24 hours default
+		MasterKey:           "",
+		AllowRegistration:   true,  // allow registration by default
+		JWTSecret:           "",
+		JWTExpiration:       "24h", // 24 hours default
+		RequireVerification: true,  // require email verification by default
+		Email: EmailConfig{
+			Provider: "smtp", // SMTP is default
+			SMTP: SMTPConfig{
+				Host:     "smtp.gmail.com",
+				Port:     587,
+				Username: "",
+				Password: "",
+				TLS:      true,
+			},
+			SES: SESConfig{
+				Region:          "us-east-1",
+				AccessKeyID:     "",
+				SecretAccessKey: "",
+			},
+			From:     "noreply@example.com",
+			FromName: "Go-Deployd",
+		},
 	}
 }
 

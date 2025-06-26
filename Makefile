@@ -1,4 +1,4 @@
-.PHONY: help build run run_sqlite run_mysql test clean deps mongo-start mongo-stop mongo-status dashboard dashboard-dev dashboard-build e2e-test e2e-test-mysql
+.PHONY: help build run run_sqlite run_mysql test clean deps mongo-start mongo-stop mongo-status dashboard dashboard-dev dashboard-build e2e-test e2e-test-mysql dev dev-sqlite dev-mongo install-dev-tools
 
 # Show help message with available targets
 help:
@@ -14,6 +14,13 @@ help:
 	@echo "  make run_sqlite          Run with SQLite (no external DB required)"
 	@echo "  make run_mysql           Run with MySQL (requires .env config)"
 	@echo "  make dashboard-dev       Run dashboard in dev mode"
+	@echo ""
+	@echo "🔥 Development Commands:"
+	@echo "  make dev                 Run both servers (React + Go) - recommended"
+	@echo "  make dev-simple          Run both servers (no hot reload)"
+	@echo "  make dev-sqlite          Run with hot reload (SQLite, requires air)"
+	@echo "  make dev-mongo           Run with hot reload (MongoDB, requires air)"
+	@echo "  make install-dev-tools   Install development tools (air, etc.)"
 	@echo ""
 	@echo "🧪 Test Commands:"
 	@echo "  make test                Run Go tests"
@@ -192,3 +199,52 @@ e2e-test-mysql:
 	fi
 	@chmod +x e2e/scripts/run-mysql-e2e.sh
 	@./e2e/scripts/run-mysql-e2e.sh
+
+# Install development tools
+install-dev-tools:
+	@echo "🔧 Installing development tools..."
+	@echo "Installing air for Go hot reloading..."
+	@go install github.com/air-verse/air@latest
+	@if command -v air &> /dev/null; then \
+		echo "✅ Air installed successfully"; \
+	else \
+		echo "❌ Failed to install air"; \
+		exit 1; \
+	fi
+	@echo "✅ All development tools installed!"
+
+# Development with both servers (recommended)
+dev: dev-simple
+
+# Development with both servers (no hot reload, but faster to start)
+dev-simple:
+	@echo "🔥 Starting development servers..."
+	@echo "📝 Features:"
+	@echo "   • React dashboard hot reload with Vite"
+	@echo "   • Go server (manual restart needed for Go changes)"
+	@echo "   • SQLite database (no external dependencies)"
+	@echo ""
+	@chmod +x scripts/dev-simple.sh
+	@./scripts/dev-simple.sh
+
+# Development with hot reload using SQLite
+dev-sqlite:
+	@echo "🔥 Starting development servers with hot reload (SQLite)..."
+	@echo "📝 Features:"
+	@echo "   • Go server hot reload with Air"
+	@echo "   • React dashboard hot reload with Vite"
+	@echo "   • SQLite database (no external dependencies)"
+	@echo ""
+	@chmod +x scripts/dev.sh
+	@./scripts/dev.sh
+
+# Development with hot reload using MongoDB
+dev-mongo:
+	@echo "🔥 Starting development servers with hot reload (MongoDB)..."
+	@echo "📝 Features:"
+	@echo "   • Go server hot reload with Air"
+	@echo "   • React dashboard hot reload with Vite"
+	@echo "   • MongoDB database"
+	@echo ""
+	@chmod +x scripts/dev-mongo.sh
+	@./scripts/dev-mongo.sh
