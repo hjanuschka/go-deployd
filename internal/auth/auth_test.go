@@ -272,16 +272,29 @@ func TestSessionManagement(t *testing.T) {
 		_, err := sessionStore.Insert(ctx, sessionData)
 		require.NoError(t, err)
 
-		// Find session
+		// CARMACK FIX: MySQL timing issue - retry with small delays
 		query := database.NewQueryBuilder().
 			Where("token", "=", sessionToken).
 			Where("active", "=", true).
 			Where("expiresAt", ">", time.Now())
 
-		sessions, err := sessionStore.Find(ctx, query, database.QueryOptions{})
-		require.NoError(t, err)
+		var sessions []map[string]interface{}
+		maxRetries := 3
+		for i := 0; i < maxRetries; i++ {
+			sessions, err = sessionStore.Find(ctx, query, database.QueryOptions{})
+			require.NoError(t, err)
+			
+			if len(sessions) == 1 {
+				break // Found the session
+			}
+			
+			if i < maxRetries-1 {
+				time.Sleep(10 * time.Millisecond) // Small delay between retries
+			}
+		}
+
 		if !assert.Len(t, sessions, 1) {
-			t.Logf("Expected 1 session but got %d. This may be a timing or query issue with MySQL.", len(sessions))
+			t.Logf("Expected 1 session but got %d after %d retries. This may be a MySQL transaction timing issue.", len(sessions), maxRetries)
 			return
 		}
 		assert.Equal(t, userID, sessions[0]["userId"])

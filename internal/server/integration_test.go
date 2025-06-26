@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/router"
 )
@@ -200,6 +201,7 @@ func TestCollectionCRUD(t *testing.T) {
 			"email": {"type": "string"}, 
 			"age": {"type": "number"},
 			"active": {"type": "boolean"},
+			"status": {"type": "string"},
 			"tags": {"type": "array"},
 			"metadata": {"type": "object"}
 		}
@@ -209,8 +211,12 @@ func TestCollectionCRUD(t *testing.T) {
 		t.Fatalf("Failed to create config.json: %v", err)
 	}
 
-	// Create a new router to pick up the new collection
+	// CARMACK FIX: Create a new router AND update httpMux to pick up the new collection
 	ts.router = router.New(ts.db, ts.config.Development, ts.config.ConfigPath)
+	
+	// Rebuild the HTTP mux with the new router - using gorilla/mux
+	ts.httpMux = mux.NewRouter()
+	ts.Server.setupRoutes() // This should register the new router with the mux
 
 	// Test data
 	testUser := map[string]interface{}{
