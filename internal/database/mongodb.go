@@ -24,8 +24,8 @@ type MongoUpdateResult struct {
 	*mongo.UpdateResult
 }
 
-func (r *MongoUpdateResult) ModifiedCount() int64   { return r.UpdateResult.ModifiedCount }
-func (r *MongoUpdateResult) UpsertedCount() int64   { 
+func (r *MongoUpdateResult) ModifiedCount() int64 { return r.UpdateResult.ModifiedCount }
+func (r *MongoUpdateResult) UpsertedCount() int64 {
 	if r.UpdateResult.UpsertedID != nil {
 		return 1
 	}
@@ -72,7 +72,7 @@ func (s *MongoStore) Find(ctx context.Context, query QueryBuilder, opts QueryOpt
 
 	// Convert QueryOptions to MongoDB options
 	findOpts := options.Find()
-	
+
 	if len(opts.Sort) > 0 {
 		sortBSON := bson.D{}
 		for field, direction := range opts.Sort {
@@ -80,15 +80,15 @@ func (s *MongoStore) Find(ctx context.Context, query QueryBuilder, opts QueryOpt
 		}
 		findOpts.SetSort(sortBSON)
 	}
-	
+
 	if opts.Limit != nil {
 		findOpts.SetLimit(*opts.Limit)
 	}
-	
+
 	if opts.Skip != nil {
 		findOpts.SetSkip(*opts.Skip)
 	}
-	
+
 	if len(opts.Fields) > 0 {
 		projection := bson.M{}
 		for field, include := range opts.Fields {
@@ -115,16 +115,16 @@ func (s *MongoStore) Find(ctx context.Context, query QueryBuilder, opts QueryOpt
 func (s *MongoStore) FindOne(ctx context.Context, query QueryBuilder) (map[string]interface{}, error) {
 	queryMap := query.ToMap()
 	bsonQuery := s.mapToBSON(queryMap)
-	
+
 	result, err := s.Store.FindOne(ctx, bsonQuery)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if result == nil {
 		return nil, nil
 	}
-	
+
 	// Convert bson.M to map[string]interface{} recursively
 	return s.convertBSONToMap(map[string]interface{}(result)), nil
 }
@@ -132,49 +132,49 @@ func (s *MongoStore) FindOne(ctx context.Context, query QueryBuilder) (map[strin
 func (s *MongoStore) Update(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
 	queryMap := query.ToMap()
 	updateMap := update.ToMap()
-	
+
 	bsonQuery := s.mapToBSON(queryMap)
 	bsonUpdate := s.mapToBSON(updateMap)
-	
+
 	result, err := s.Store.Update(ctx, bsonQuery, bsonUpdate)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoUpdateResult{UpdateResult: result}, nil
 }
 
 func (s *MongoStore) UpdateOne(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
 	queryMap := query.ToMap()
 	updateMap := update.ToMap()
-	
+
 	bsonQuery := s.mapToBSON(queryMap)
 	bsonUpdate := s.mapToBSON(updateMap)
-	
+
 	result, err := s.Store.UpdateOne(ctx, bsonQuery, bsonUpdate)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoUpdateResult{UpdateResult: result}, nil
 }
 
 func (s *MongoStore) Remove(ctx context.Context, query QueryBuilder) (DeleteResult, error) {
 	queryMap := query.ToMap()
 	bsonQuery := s.mapToBSON(queryMap)
-	
+
 	result, err := s.Store.Remove(ctx, bsonQuery)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoDeleteResult{DeleteResult: result}, nil
 }
 
 func (s *MongoStore) Count(ctx context.Context, query QueryBuilder) (int64, error) {
 	queryMap := query.ToMap()
 	bsonQuery := s.mapToBSON(queryMap)
-	
+
 	return s.Store.Count(ctx, bsonQuery)
 }
 
@@ -182,12 +182,12 @@ func (s *MongoStore) Increment(ctx context.Context, query QueryBuilder, incremen
 	queryMap := query.ToMap()
 	bsonQuery := s.mapToBSON(queryMap)
 	bsonInc := s.mapToBSON(increments)
-	
+
 	result, err := s.Store.Increment(ctx, bsonQuery, bsonInc)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoUpdateResult{UpdateResult: result}, nil
 }
 
@@ -195,12 +195,12 @@ func (s *MongoStore) Push(ctx context.Context, query QueryBuilder, pushOps map[s
 	queryMap := query.ToMap()
 	bsonQuery := s.mapToBSON(queryMap)
 	bsonPush := s.mapToBSON(pushOps)
-	
+
 	result, err := s.Store.Push(ctx, bsonQuery, bsonPush)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoUpdateResult{UpdateResult: result}, nil
 }
 
@@ -208,12 +208,12 @@ func (s *MongoStore) Pull(ctx context.Context, query QueryBuilder, pullOps map[s
 	queryMap := query.ToMap()
 	bsonQuery := s.mapToBSON(queryMap)
 	bsonPull := s.mapToBSON(pullOps)
-	
+
 	result, err := s.Store.Pull(ctx, bsonQuery, bsonPull)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoUpdateResult{UpdateResult: result}, nil
 }
 
@@ -221,51 +221,51 @@ func (s *MongoStore) AddToSet(ctx context.Context, query QueryBuilder, addOps ma
 	queryMap := query.ToMap()
 	bsonQuery := s.mapToBSON(queryMap)
 	bsonAdd := s.mapToBSON(addOps)
-	
+
 	result, err := s.Store.AddToSet(ctx, bsonQuery, bsonAdd)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoUpdateResult{UpdateResult: result}, nil
 }
 
 func (s *MongoStore) PopFirst(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
 	queryMap := query.ToMap()
 	bsonQuery := s.mapToBSON(queryMap)
-	
+
 	result, err := s.Store.PopFirst(ctx, bsonQuery, fields)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoUpdateResult{UpdateResult: result}, nil
 }
 
 func (s *MongoStore) PopLast(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
 	queryMap := query.ToMap()
 	bsonQuery := s.mapToBSON(queryMap)
-	
+
 	result, err := s.Store.PopLast(ctx, bsonQuery, fields)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoUpdateResult{UpdateResult: result}, nil
 }
 
 func (s *MongoStore) Upsert(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
 	queryMap := query.ToMap()
 	updateMap := update.ToMap()
-	
+
 	bsonQuery := s.mapToBSON(queryMap)
 	bsonUpdate := s.mapToBSON(updateMap)
-	
+
 	result, err := s.Store.Upsert(ctx, bsonQuery, bsonUpdate)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &MongoUpdateResult{UpdateResult: result}, nil
 }
 
@@ -275,18 +275,18 @@ func (s *MongoStore) Aggregate(ctx context.Context, pipeline []map[string]interf
 	for i, stage := range pipeline {
 		bsonPipeline[i] = s.mapToBSON(stage)
 	}
-	
+
 	results, err := s.Store.Aggregate(ctx, bsonPipeline)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert []bson.M to []map[string]interface{}
 	mapResults := make([]map[string]interface{}, len(results))
 	for i, result := range results {
 		mapResults[i] = map[string]interface{}(result)
 	}
-	
+
 	return mapResults, nil
 }
 
@@ -295,7 +295,7 @@ func (s *MongoStore) mapToBSON(m map[string]interface{}) bson.M {
 	if m == nil {
 		return nil
 	}
-	
+
 	result := make(bson.M)
 	for k, v := range m {
 		result[k] = v
@@ -306,11 +306,11 @@ func (s *MongoStore) mapToBSON(m map[string]interface{}) bson.M {
 // convertBSONToMap recursively converts BSON types to standard Go types
 func (s *MongoStore) convertBSONToMap(data map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	for key, value := range data {
 		result[key] = s.convertBSONValue(value)
 	}
-	
+
 	return result
 }
 

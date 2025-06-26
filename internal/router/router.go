@@ -19,11 +19,11 @@ import (
 )
 
 type Router struct {
-	resources     []resources.Resource
-	db            database.DatabaseInterface
-	development   bool
-	configPath    string
-	jwtManager    *auth.JWTManager
+	resources   []resources.Resource
+	db          database.DatabaseInterface
+	development bool
+	configPath  string
+	jwtManager  *auth.JWTManager
 }
 
 func New(db database.DatabaseInterface, development bool, configPath string) *Router {
@@ -44,9 +44,9 @@ func New(db database.DatabaseInterface, development bool, configPath string) *Ro
 		configPath:  configPath,
 		jwtManager:  jwtManager,
 	}
-	
+
 	r.loadResources()
-	
+
 	return r
 }
 
@@ -54,10 +54,10 @@ func (r *Router) loadResources() {
 	if r.configPath == "" {
 		r.configPath = "./resources"
 	}
-	
+
 	// Always create built-in users collection first
 	r.createBuiltinUsersCollection()
-	
+
 	// Create default collection resources if config path exists
 	if _, err := os.Stat(r.configPath); os.IsNotExist(err) {
 		// Create a default "todos" collection for demo purposes
@@ -77,22 +77,22 @@ func (r *Router) loadResources() {
 				},
 			},
 		}, r.db)
-		
+
 		r.resources = append(r.resources, todosCollection)
 		return
 	}
-	
+
 	// Load resources from config directory
 	err := filepath.Walk(r.configPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		
+
 		if info.IsDir() && path != r.configPath {
 			// This is a resource directory
 			resourceName := filepath.Base(path)
 			configFile := filepath.Join(path, "config.json")
-			
+
 			if _, err := os.Stat(configFile); err == nil {
 				// Load collection resource
 				collection, err := resources.LoadCollectionFromConfig(resourceName, path, r.db)
@@ -100,18 +100,18 @@ func (r *Router) loadResources() {
 					log.Printf("Failed to load collection %s: %v", resourceName, err)
 					return nil
 				}
-				
+
 				r.resources = append(r.resources, collection)
 			}
 		}
-		
+
 		return nil
 	})
-	
+
 	if err != nil {
 		log.Printf("Failed to load resources: %v", err)
 	}
-	
+
 	r.sortResources()
 }
 
@@ -120,12 +120,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-	
+
 	if req.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	
+
 	// Check for authentication (JWT token or master key only)
 	isAuthenticated := false
 	isRoot := false
@@ -158,23 +158,23 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
-	
+
 	// Find matching resource
 	resource := r.findMatchingResource(req.URL.Path)
 	if resource == nil {
 		http.Error(w, "Resource not found", http.StatusNotFound)
 		return
 	}
-	
+
 	// Create context with authentication data
 	authData := &context.AuthData{
-		UserID:       userID,
-		Username:     username,
-		IsRoot:       isRoot,
+		UserID:          userID,
+		Username:        username,
+		IsRoot:          isRoot,
 		IsAuthenticated: isAuthenticated,
 	}
 	ctx := context.New(req, w, resource, authData, r.development)
-	
+
 	// Handle the request
 	if err := resource.Handle(ctx); err != nil {
 		log.Printf("Resource handler error: %v", err)
@@ -195,10 +195,10 @@ func (r *Router) pathMatches(requestPath, resourcePath string) bool {
 	if resourcePath == "/" {
 		return true
 	}
-	
+
 	// Remove trailing slash from resource path
 	resourcePath = strings.TrimSuffix(resourcePath, "/")
-	
+
 	return strings.HasPrefix(requestPath, resourcePath)
 }
 
@@ -259,7 +259,7 @@ func (r *Router) createBuiltinUsersCollection() {
 			System:   true, // Mark as system field
 		},
 		"email": {
-			Type:     "string", 
+			Type:     "string",
 			Required: true,
 			Unique:   true,
 			System:   true, // Mark as system field
@@ -298,18 +298,18 @@ func (r *Router) createBuiltinUsersCollection() {
 			System:  true, // Mark as system field
 		},
 		"updatedAt": {
-			Type:    "date", 
+			Type:    "date",
 			Default: "now",
 			System:  true, // Mark as system field
 		},
 	}
-	
+
 	// Check if users collection config already exists and migrate if needed
 	usersConfigPath := filepath.Join(r.configPath, "users")
 	configFile := filepath.Join(usersConfigPath, "config.json")
-	
+
 	var finalConfig *resources.CollectionConfig
-	
+
 	if _, err := os.Stat(configFile); err == nil {
 		// Existing config found - perform migration
 		log.Printf("🔄 Found existing users collection, checking for schema migration...")
@@ -322,19 +322,19 @@ func (r *Router) createBuiltinUsersCollection() {
 			AllowAdditionalProperties: true,
 			IsBuiltin:                 true,
 		}
-		
+
 		// Save the initial config file
 		if err := r.saveCollectionConfig(usersConfigPath, finalConfig); err != nil {
 			log.Printf("Warning: Failed to save users collection config: %v", err)
 		}
 	}
-	
+
 	// Create UserCollection with the final config
 	usersCollection := resources.NewUserCollection("users", finalConfig, r.db)
-	
+
 	// CRITICAL: Set the configPath and load event scripts for built-in users collection
 	usersCollection.Collection.SetConfigPath(usersConfigPath)
-	
+
 	// Load event scripts if the users directory exists
 	if _, err := os.Stat(usersConfigPath); err == nil {
 		log.Printf("🔥 LOADING EVENT SCRIPTS FOR BUILT-IN USERS COLLECTION...")
@@ -346,7 +346,7 @@ func (r *Router) createBuiltinUsersCollection() {
 	} else {
 		log.Printf("⚠️ Users config directory not found: %s", usersConfigPath)
 	}
-	
+
 	r.resources = append(r.resources, usersCollection)
 }
 
@@ -362,7 +362,7 @@ func (r *Router) migrateBuiltinCollection(configFile string, currentBuiltinSchem
 			IsBuiltin:                 true,
 		}
 	}
-	
+
 	var existingConfig resources.CollectionConfig
 	if err := json.Unmarshal(data, &existingConfig); err != nil {
 		log.Printf("Warning: Failed to parse existing config, creating new one: %v", err)
@@ -372,15 +372,15 @@ func (r *Router) migrateBuiltinCollection(configFile string, currentBuiltinSchem
 			IsBuiltin:                 true,
 		}
 	}
-	
+
 	// Ensure properties map exists
 	if existingConfig.Properties == nil {
 		existingConfig.Properties = make(map[string]resources.Property)
 	}
-	
+
 	// Track if any changes were made
 	migrationNeeded := false
-	
+
 	// Add or update built-in system properties
 	for fieldName, builtinProperty := range currentBuiltinSchema {
 		if existingProperty, exists := existingConfig.Properties[fieldName]; exists {
@@ -397,7 +397,7 @@ func (r *Router) migrateBuiltinCollection(configFile string, currentBuiltinSchem
 			migrationNeeded = true
 		}
 	}
-	
+
 	// Ensure collection is marked as built-in and allows additional properties
 	if !existingConfig.IsBuiltin {
 		log.Printf("  🏗️ Marking users collection as built-in")
@@ -409,7 +409,7 @@ func (r *Router) migrateBuiltinCollection(configFile string, currentBuiltinSchem
 		existingConfig.AllowAdditionalProperties = true
 		migrationNeeded = true
 	}
-	
+
 	// Save updated config if migration was needed
 	if migrationNeeded {
 		if err := r.saveCollectionConfig(filepath.Dir(configFile), &existingConfig); err != nil {
@@ -420,7 +420,7 @@ func (r *Router) migrateBuiltinCollection(configFile string, currentBuiltinSchem
 	} else {
 		log.Printf("✅ Users collection schema is up to date")
 	}
-	
+
 	return &existingConfig
 }
 
@@ -439,17 +439,17 @@ func (r *Router) saveCollectionConfig(configDir string, config *resources.Collec
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	// Write config.json
 	configFile := filepath.Join(configDir, "config.json")
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	
+
 	if err := os.WriteFile(configFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
-	
+
 	return nil
 }

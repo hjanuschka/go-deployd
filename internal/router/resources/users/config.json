@@ -1,0 +1,56 @@
+{
+  "properties": {
+    "active": {
+      "type": "boolean",
+      "default": false,
+      "system": true
+    },
+    "createdAt": {
+      "type": "date",
+      "default": "now",
+      "system": true
+    },
+    "email": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "system": true
+    },
+    "isVerified": {
+      "type": "boolean",
+      "default": false,
+      "system": true
+    },
+    "password": {
+      "type": "string",
+      "required": true,
+      "system": true
+    },
+    "role": {
+      "type": "string",
+      "default": "user",
+      "system": true
+    },
+    "updatedAt": {
+      "type": "date",
+      "default": "now",
+      "system": true
+    },
+    "username": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "system": true
+    },
+    "verificationExpires": {
+      "type": "date",
+      "system": true
+    },
+    "verificationToken": {
+      "type": "string",
+      "system": true
+    }
+  },
+  "allowAdditionalProperties": true,
+  "isBuiltin": true
+}

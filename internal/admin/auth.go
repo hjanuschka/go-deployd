@@ -27,10 +27,10 @@ func NewAuthHandler(db database.DatabaseInterface, security *config.SecurityConf
 	if err != nil {
 		jwtDuration = 24 * time.Hour // Default to 24 hours
 	}
-	
+
 	// Create JWT manager
 	jwtManager := auth.NewJWTManager(security.JWTSecret, jwtDuration)
-	
+
 	return &AuthHandler{
 		db:         db,
 		Security:   security,
@@ -47,17 +47,17 @@ type SystemLoginRequest struct {
 // SystemLoginResponse represents the response from system login
 // DEPRECATED: Use JWT authentication endpoints instead
 type SystemLoginResponse struct {
-	Success     bool        `json:"success"`
-	Token       string      `json:"token"`
-	User        interface{} `json:"user"`
-	Message     string      `json:"message"`
-	ExpiresAt   string      `json:"expiresAt"`
+	Success   bool        `json:"success"`
+	Token     string      `json:"token"`
+	User      interface{} `json:"user"`
+	Message   string      `json:"message"`
+	ExpiresAt string      `json:"expiresAt"`
 }
 
 // HandleSystemLogin performs authentication using master key and user identifier
 func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -66,12 +66,12 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	
+
 	var req struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
 		Username string `json:"username"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -80,7 +80,7 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	
+
 	// Either email or username must be provided
 	if req.Email == "" && req.Username == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -90,17 +90,17 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	
+
 	// Find user by email or username
 	store := ah.db.CreateStore("users")
 	query := database.NewQueryBuilder()
-	
+
 	if req.Email != "" {
 		query.Where("email", "=", req.Email)
 	} else {
 		query.Where("username", "=", req.Username)
 	}
-	
+
 	userData, err := store.FindOne(context.Background(), query)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -110,13 +110,13 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	
+
 	// Extract user information
 	userID, _ := userData["id"].(string)
 	username, _ := userData["username"].(string)
 	role, _ := userData["role"].(string)
 	isRoot := (role == "admin")
-	
+
 	// Generate JWT token for the user
 	token, err := ah.jwtManager.GenerateToken(userID, username, isRoot)
 	if err != nil {
@@ -127,25 +127,25 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	
+
 	// Parse JWT expiration duration
 	jwtDuration, err := time.ParseDuration(ah.Security.JWTExpiration)
 	if err != nil {
 		jwtDuration = 24 * time.Hour // Default to 24 hours
 	}
 	expiresAt := time.Now().Add(jwtDuration).Unix()
-	
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"token": token,
+		"success":   true,
+		"token":     token,
 		"expiresAt": expiresAt,
-		"isRoot": isRoot,
+		"isRoot":    isRoot,
 		"user": map[string]interface{}{
-			"id": userID,
+			"id":       userID,
 			"username": username,
-			"email": userData["email"],
-			"role": role,
+			"email":    userData["email"],
+			"role":     role,
 		},
 	})
 }
@@ -153,31 +153,31 @@ func (ah *AuthHandler) HandleSystemLogin(w http.ResponseWriter, r *http.Request)
 // HandleMasterKeyValidation validates a master key without performing authentication
 func (ah *AuthHandler) HandleMasterKeyValidation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"valid": false,
+			"valid":   false,
 			"message": "Method not allowed",
 		})
 		return
 	}
-	
+
 	var req struct {
 		MasterKey string `json:"masterKey"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"valid": false,
+			"valid":   false,
 			"message": "Invalid JSON body",
 		})
 		return
 	}
-	
+
 	valid := ah.Security.ValidateMasterKey(req.MasterKey)
-	
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"valid": valid,
@@ -193,7 +193,7 @@ func (ah *AuthHandler) HandleMasterKeyValidation(w http.ResponseWriter, r *http.
 // HandleGetSecurityInfo returns non-sensitive security configuration info
 func (ah *AuthHandler) HandleGetSecurityInfo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -201,16 +201,16 @@ func (ah *AuthHandler) HandleGetSecurityInfo(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	
+
 	// Check if master key is provided for admin access
 	masterKey := r.Header.Get("X-Master-Key")
 	isAdmin := ah.Security.ValidateMasterKey(masterKey)
-	
+
 	response := map[string]interface{}{
 		"jwtExpiration":     ah.Security.JWTExpiration,
 		"allowRegistration": ah.Security.AllowRegistration,
 	}
-	
+
 	// Only show master key info to authenticated admin
 	if isAdmin {
 		response["hasMasterKey"] = ah.Security.MasterKey != ""
@@ -221,7 +221,7 @@ func (ah *AuthHandler) HandleGetSecurityInfo(w http.ResponseWriter, r *http.Requ
 			return "***"
 		}()
 	}
-	
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
@@ -229,7 +229,7 @@ func (ah *AuthHandler) HandleGetSecurityInfo(w http.ResponseWriter, r *http.Requ
 // HandleRegenerateMasterKey regenerates the master key (requires current master key)
 func (ah *AuthHandler) HandleRegenerateMasterKey(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -238,11 +238,11 @@ func (ah *AuthHandler) HandleRegenerateMasterKey(w http.ResponseWriter, r *http.
 		})
 		return
 	}
-	
+
 	var req struct {
 		CurrentMasterKey string `json:"currentMasterKey"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -251,7 +251,7 @@ func (ah *AuthHandler) HandleRegenerateMasterKey(w http.ResponseWriter, r *http.
 		})
 		return
 	}
-	
+
 	// Validate current master key
 	if !ah.Security.ValidateMasterKey(req.CurrentMasterKey) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -261,11 +261,11 @@ func (ah *AuthHandler) HandleRegenerateMasterKey(w http.ResponseWriter, r *http.
 		})
 		return
 	}
-	
+
 	// Generate new master key
 	newMasterKey := generateNewMasterKey()
 	ah.Security.MasterKey = newMasterKey
-	
+
 	// Save updated configuration
 	if err := config.SaveSecurityConfig(ah.Security, config.GetConfigDir()); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -275,11 +275,11 @@ func (ah *AuthHandler) HandleRegenerateMasterKey(w http.ResponseWriter, r *http.
 		})
 		return
 	}
-	
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "Master key regenerated successfully",
+		"success":      true,
+		"message":      "Master key regenerated successfully",
 		"newMasterKey": newMasterKey,
 	})
 }
@@ -295,27 +295,27 @@ func (ah *AuthHandler) RequireMasterKey(next http.HandlerFunc) http.HandlerFunc 
 				masterKey = strings.TrimPrefix(auth, "Bearer ")
 			}
 		}
-		
+
 		// Also check cookie for dashboard requests
 		if masterKey == "" {
 			if cookie, err := r.Cookie("masterKey"); err == nil {
 				masterKey = cookie.Value
 			}
 		}
-		
+
 		if !ah.Security.ValidateMasterKey(masterKey) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Master key required",
+				"error":   "Master key required",
 				"message": "This endpoint requires a valid master key",
 			})
 			return
 		}
-		
+
 		// Master key authentication provides admin privileges automatically
 		// isRoot behavior is handled by the master key validation itself
-		
+
 		next(w, r)
 	}
 }
@@ -328,7 +328,7 @@ type CreateUserRequest struct {
 // HandleCreateUser creates a user with master key authentication
 func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -337,7 +337,7 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	
+
 	var req CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -347,15 +347,15 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	
+
 	// Master key is validated by RequireMasterKey middleware
 	// No need to validate it again here
-	
+
 	// Validate required user data
 	email, hasEmail := req.UserData["email"].(string)
 	username, hasUsername := req.UserData["username"].(string)
 	password, hasPassword := req.UserData["password"].(string)
-	
+
 	if !hasEmail && !hasUsername {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -364,7 +364,7 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	
+
 	if !hasPassword || password == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -373,10 +373,10 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	
+
 	// Check if user already exists
 	userStore := ah.db.CreateStore("users")
-	
+
 	if hasEmail {
 		query := database.NewQueryBuilder().Where("email", "$eq", email)
 		existing, err := userStore.FindOne(r.Context(), query)
@@ -397,7 +397,7 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	
+
 	if hasUsername {
 		query := database.NewQueryBuilder().Where("username", "$eq", username)
 		existing, err := userStore.FindOne(r.Context(), query)
@@ -418,7 +418,7 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	
+
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
@@ -429,13 +429,13 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	
+
 	// Set hashed password and default role
 	req.UserData["password"] = string(hashedPassword)
 	if _, hasRole := req.UserData["role"]; !hasRole {
 		req.UserData["role"] = "user"
 	}
-	
+
 	// Create user
 	result, err := userStore.Insert(r.Context(), req.UserData)
 	if err != nil {
@@ -446,7 +446,7 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	
+
 	// Convert result to map and remove password from response
 	var userResult map[string]interface{}
 	if resultMap, ok := result.(map[string]interface{}); ok {
@@ -461,7 +461,7 @@ func (ah *AuthHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 	}
-	
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	appcontext "github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/resources"
-	appcontext "github.com/hjanuschka/go-deployd/internal/context"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -44,7 +44,7 @@ func (eh *EventsHandler) GetEvents(w http.ResponseWriter, r *http.Request) {
 
 	// Check for existing script files
 	eventTypes := []string{"get", "validate", "post", "put", "delete", "aftercommit", "beforerequest"}
-	
+
 	for _, eventType := range eventTypes {
 		// Check for .js file
 		jsPath := filepath.Join(collection.GetConfigPath(), eventType+".js")
@@ -264,7 +264,7 @@ func (eh *EventsHandler) saveScriptToFile(filePath, content, scriptType string) 
 		return err
 	}
 
-	// Add package declaration for Go files  
+	// Add package declaration for Go files
 	if scriptType == "go" && !strings.Contains(content, "package ") {
 		content = "package main\n\n" + content
 	}

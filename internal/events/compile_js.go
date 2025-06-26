@@ -8,7 +8,7 @@ import (
 func CompileJS(filename, source string) (*v8.UnboundScript, error) {
 	isolate := v8.NewIsolate()
 	defer isolate.Dispose()
-	
+
 	unbound, err := isolate.CompileUnboundScript(source, filename, v8.CompileOptions{})
 	if err != nil {
 		return nil, err

@@ -73,6 +73,14 @@ func CompileJSLegacy(filename, source string) (*goja.Program, error) {
 
 // CompileGoPlugin compiles a Go source file to a plugin
 func CompileGoPlugin(sourcePath, pluginPath string) error {
+	// Force recompilation by removing existing plugin
+	// This prevents version mismatch issues in CI/CD
+	if _, err := os.Stat(pluginPath); err == nil {
+		if err := os.Remove(pluginPath); err != nil {
+			return fmt.Errorf("failed to remove existing plugin: %w", err)
+		}
+	}
+
 	// Read the source file
 	source, err := os.ReadFile(sourcePath)
 	if err != nil {
@@ -85,11 +93,11 @@ func CompileGoPlugin(sourcePath, pluginPath string) error {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
-	
+
 	// Create a temporary wrapper file in the temp directory
 	wrapperPath := filepath.Join(tempDir, "main.go")
 	wrapper := CreateGoWrapper(string(source))
-	
+
 	if err := os.WriteFile(wrapperPath, []byte(wrapper), 0644); err != nil {
 		return fmt.Errorf("failed to write wrapper: %w", err)
 	}
@@ -106,7 +114,7 @@ require (
 	golang.org/x/crypto v0.39.0
 )
 `
-	
+
 	if err := os.WriteFile(modPath, []byte(modContent), 0644); err != nil {
 		return fmt.Errorf("failed to write go.mod: %w", err)
 	}
@@ -120,7 +128,7 @@ github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+D
 golang.org/x/crypto v0.39.0 h1:SHs+kF4LP+f+p14esP5jAoDpHU8Gu/v9lFRK6IT5imM=
 golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632U=
 `
-	
+
 	if err := os.WriteFile(sumPath, []byte(sumContent), 0644); err != nil {
 		return fmt.Errorf("failed to write go.sum: %w", err)
 	}
@@ -128,50 +136,50 @@ golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632
 	// Get the Go root and construct the path to the Go executable
 	goRoot := runtime.GOROOT()
 	goExe := filepath.Join(goRoot, "bin", "go")
-	
+
 	// Fallback to PATH lookup if GOROOT doesn't work
 	if _, err := os.Stat(goExe); err != nil {
 		if goExe, err = exec.LookPath("go"); err != nil {
 			return fmt.Errorf("failed to find go executable: %w", err)
 		}
 	}
-	
+
 	// Download dependencies first
 	modCmd := exec.Command(goExe, "mod", "download")
-	modCmd.Env = append(os.Environ(), 
+	modCmd.Env = append(os.Environ(),
 		"GO111MODULE=on",
 		"GOWORK=off",
 	)
 	modCmd.Dir = tempDir
-	
+
 	if modOutput, err := modCmd.CombinedOutput(); err != nil {
 		// Log but don't fail - dependencies might already be available
 		fmt.Printf("Go mod download output: %s\n", modOutput)
 	}
-	
+
 	// Ensure target directory exists
 	if err := os.MkdirAll(filepath.Dir(pluginPath), 0755); err != nil {
 		return fmt.Errorf("failed to create plugin directory: %w", err)
 	}
-	
+
 	// Convert to absolute path to ensure correct output location
 	absPluginPath, err := filepath.Abs(pluginPath)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path: %w", err)
 	}
-	
+
 	// Compile the plugin using the same Go version with absolute output path
 	cmd := exec.Command(goExe, "build", "-buildmode=plugin", "-o", absPluginPath, "main.go")
-	cmd.Env = append(os.Environ(), 
+	cmd.Env = append(os.Environ(),
 		"GO111MODULE=on",
 		"GOWORK=off", // Disable workspace mode
 	)
 	cmd.Dir = tempDir
-	
+
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("compilation failed: %w\nOutput: %s", err, output)
 	}
-	
+
 	// Verify the plugin file was created
 	if _, err := os.Stat(absPluginPath); err != nil {
 		return fmt.Errorf("plugin file not created at expected location %s: %w", absPluginPath, err)
@@ -185,13 +193,13 @@ golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632
 // RunGoPlugin loads and executes a Go plugin
 func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interface{}) error {
 	startTime := time.Now()
-	
+
 	// Load the plugin
 	p, err := plugin.Open(pluginPath)
 	if err != nil {
 		return fmt.Errorf("failed to load plugin: %w", err)
 	}
-	
+
 	loadTime := time.Since(startTime)
 
 	// Look up the EventHandler symbol
@@ -233,27 +241,27 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interf
 		}
 		panic("CANCEL")
 	}
-	
+
 	// Set up log function
 	eventCtx.Log = func(message string, data ...map[string]interface{}) {
 		// Only log in development mode
 		if !ctx.Development {
 			return
 		}
-		
+
 		source := "go"
 		if eventCtx.Resource != nil {
 			source = fmt.Sprintf("go:%s", eventCtx.Resource.GetName())
 		}
-		
+
 		var logData map[string]interface{}
 		if len(data) > 0 {
 			logData = data[0]
 		}
-		
+
 		// Log to structured logging system AND stdout with user-generated level
 		logging.UserGenerated(message, source, logData)
-		
+
 		// Also log to stdout for immediate visibility
 		fmt.Printf("[USER LOG] %s: %s", source, message)
 		if logData != nil {
@@ -268,7 +276,7 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interf
 	handler := symHandler.(interface{})
 	if runnable, ok := handler.(interface{ Run(interface{}) error }); ok {
 		executeStart := time.Now()
-		
+
 		// Run with panic recovery
 		func() {
 			defer func() {
@@ -280,9 +288,9 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interf
 			}()
 			err = runnable.Run(eventCtx)
 		}()
-		
+
 		executeTime := time.Since(executeStart)
-		
+
 		// Log detailed timing
 		logging.Debug("Go plugin execution details", "go-plugin", map[string]interface{}{
 			"plugin":      filepath.Base(pluginPath),
@@ -304,12 +312,12 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interf
 		if eventCtx.HasErrors() {
 			return &ValidationError{Errors: eventCtx.Errors}
 		}
-		
+
 		// Sync modified data back to the original data parameter
 		for key, value := range eventCtx.Data {
 			data[key] = value
 		}
-		
+
 		// Apply hidden fields
 		if hiddenFields := eventCtx.GetHiddenFields(); hiddenFields != nil {
 			for _, field := range hiddenFields {
@@ -345,28 +353,28 @@ func convertUserToMap(userData interface{}) map[string]interface{} {
 	if userData == nil {
 		return nil
 	}
-	
+
 	// Use reflection to convert struct to map
 	val := reflect.ValueOf(userData)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
-	
+
 	if val.Kind() != reflect.Struct {
 		return nil
 	}
-	
+
 	result := make(map[string]interface{})
 	typ := val.Type()
-	
+
 	for i := 0; i < val.NumField(); i++ {
 		field := typ.Field(i)
 		fieldValue := val.Field(i)
-		
+
 		if !fieldValue.CanInterface() {
 			continue
 		}
-		
+
 		// Convert field name to camelCase for consistency
 		var fieldName string
 		if jsonTag := field.Tag.Get("json"); jsonTag != "" && jsonTag != "-" {
@@ -374,15 +382,15 @@ func convertUserToMap(userData interface{}) map[string]interface{} {
 		} else {
 			fieldName = strings.ToLower(field.Name[:1]) + field.Name[1:]
 		}
-		
+
 		result[fieldName] = fieldValue.Interface()
-		
+
 		// Special handling for userId -> id mapping for compatibility
 		if fieldName == "userId" {
 			result["id"] = fieldValue.Interface()
 		}
 	}
-	
+
 	return result
 }
 
@@ -399,7 +407,7 @@ func addCompatibilityFields(userData map[string]interface{}) {
 	} else if val, exists := userData["id"]; exists {
 		userID = val
 	}
-	
+
 	// If we found a user ID, ensure all variations exist
 	if userID != nil {
 		userData["userId"] = userID

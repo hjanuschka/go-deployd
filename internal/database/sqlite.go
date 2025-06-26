@@ -34,8 +34,8 @@ type SQLiteUpdateResult struct {
 	upsertedID    interface{}
 }
 
-func (r *SQLiteUpdateResult) ModifiedCount() int64   { return r.modifiedCount }
-func (r *SQLiteUpdateResult) UpsertedCount() int64   { return r.upsertedCount }
+func (r *SQLiteUpdateResult) ModifiedCount() int64    { return r.modifiedCount }
+func (r *SQLiteUpdateResult) UpsertedCount() int64    { return r.upsertedCount }
 func (r *SQLiteUpdateResult) UpsertedID() interface{} { return r.upsertedID }
 
 // SQLiteDeleteResult implements DeleteResult interface
@@ -485,7 +485,7 @@ func (s *SQLiteStore) Upsert(ctx context.Context, query QueryBuilder, update Upd
 
 	// Merge query and update into a new document
 	newDoc := make(map[string]interface{})
-	
+
 	// Add query fields
 	for field, value := range queryMap {
 		if !strings.HasPrefix(field, "$") {

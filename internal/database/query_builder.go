@@ -86,7 +86,7 @@ func (q *BaseQueryBuilder) Clone() QueryBuilder {
 
 func (q *BaseQueryBuilder) ToMap() map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	// Add regular conditions
 	for _, cond := range q.conditions {
 		if cond.Operator == "$eq" || cond.Operator == "=" {
@@ -107,7 +107,7 @@ func (q *BaseQueryBuilder) ToMap() map[string]interface{} {
 			}
 		}
 	}
-	
+
 	// Add OR groups
 	if len(q.orGroups) > 0 {
 		orConditions := make([]map[string]interface{}, 0)
@@ -126,7 +126,7 @@ func (q *BaseQueryBuilder) ToMap() map[string]interface{} {
 		}
 		result["$or"] = orConditions
 	}
-	
+
 	return result
 }
 
@@ -165,10 +165,10 @@ func (q *SQLQueryBuilder) ToSQL() (string, []interface{}) {
 	if len(q.conditions) == 0 && len(q.orGroups) == 0 && len(q.rawConditions) == 0 {
 		return "", nil
 	}
-	
+
 	var whereParts []string
 	var args []interface{}
-	
+
 	// Add regular conditions
 	for _, cond := range q.conditions {
 		sqlOperator, argCount := q.convertOperator(cond.Operator)
@@ -187,7 +187,7 @@ func (q *SQLQueryBuilder) ToSQL() (string, []interface{}) {
 			}
 		}
 	}
-	
+
 	// Add OR groups
 	for _, group := range q.orGroups {
 		if len(group) > 0 {
@@ -214,17 +214,17 @@ func (q *SQLQueryBuilder) ToSQL() (string, []interface{}) {
 			}
 		}
 	}
-	
+
 	// Add raw conditions
 	for _, rawCond := range q.rawConditions {
 		whereParts = append(whereParts, rawCond.SQL)
 		args = append(args, rawCond.Args...)
 	}
-	
+
 	if len(whereParts) == 0 {
 		return "", nil
 	}
-	
+
 	return strings.Join(whereParts, " AND "), args
 }
 

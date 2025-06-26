@@ -24,9 +24,9 @@ type JWTClaims struct {
 }
 
 type JWTManager struct {
-	secretKey      []byte
-	tokenDuration  time.Duration
-	issuer         string
+	secretKey     []byte
+	tokenDuration time.Duration
+	issuer        string
 }
 
 func NewJWTManager(secretKey string, tokenDuration time.Duration) *JWTManager {

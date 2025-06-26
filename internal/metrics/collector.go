@@ -46,21 +46,21 @@ type AggregatedMetric struct {
 }
 
 type MetricsData struct {
-	DetailedMetrics []Metric                       `json:"detailed_metrics"`
-	HourlyAgg       map[string]AggregatedMetric    `json:"hourly_agg"`
-	DailyAgg        map[string]AggregatedMetric    `json:"daily_agg"`
-	MonthlyAgg      map[string]AggregatedMetric    `json:"monthly_agg"`
-	EventMetrics    map[string][]Metric            `json:"event_metrics"`
-	LastSave        time.Time                      `json:"last_save"`
+	DetailedMetrics []Metric                    `json:"detailed_metrics"`
+	HourlyAgg       map[string]AggregatedMetric `json:"hourly_agg"`
+	DailyAgg        map[string]AggregatedMetric `json:"daily_agg"`
+	MonthlyAgg      map[string]AggregatedMetric `json:"monthly_agg"`
+	EventMetrics    map[string][]Metric         `json:"event_metrics"`
+	LastSave        time.Time                   `json:"last_save"`
 }
 
 type Collector struct {
 	mu              sync.RWMutex
 	detailedMetrics []Metric
-	hourlyAgg       map[string]AggregatedMetric  // key: "collection:hour"
-	dailyAgg        map[string]AggregatedMetric  // key: "collection:day"
-	monthlyAgg      map[string]AggregatedMetric  // key: "collection:month"
-	eventMetrics    map[string][]Metric          // key: "collection.event"
+	hourlyAgg       map[string]AggregatedMetric // key: "collection:hour"
+	dailyAgg        map[string]AggregatedMetric // key: "collection:day"
+	monthlyAgg      map[string]AggregatedMetric // key: "collection:month"
+	eventMetrics    map[string][]Metric         // key: "collection.event"
 	startTime       time.Time
 	dataPath        string
 	lastFlush       time.Time
@@ -79,13 +79,13 @@ func NewCollector() *Collector {
 		flushInterval:   5 * time.Minute, // Flush every 5 minutes
 		lastFlush:       time.Now(),
 	}
-	
+
 	// Load existing data on startup
 	c.loadFromDisk()
-	
+
 	// Start periodic flush routine
 	go c.periodicFlush()
-	
+
 	return c
 }
 
@@ -222,19 +222,19 @@ func (c *Collector) RecordMetric(metric Metric) {
 
 	metric.ID = generateID()
 	metric.Timestamp = time.Now()
-	
+
 	// Extract collection from metadata or path
 	collection := c.extractCollection(metric)
-	
+
 	c.detailedMetrics = append(c.detailedMetrics, metric)
-	
+
 	// Store event-specific metrics for hook events
 	if metric.Type == HookMetric {
 		if eventFull, ok := metric.Metadata["event_full"].(string); ok {
 			c.eventMetrics[eventFull] = append(c.eventMetrics[eventFull], metric)
 		}
 	}
-	
+
 	c.updateAggregated(metric, collection)
 	c.cleanup()
 }
@@ -254,7 +254,7 @@ func (c *Collector) extractCollection(metric Metric) string {
 		if len(path) > 0 && path[0] == '/' {
 			path = path[1:]
 		}
-		
+
 		// Split by slash and take first part
 		for i, char := range path {
 			if char == '/' {
@@ -267,7 +267,7 @@ func (c *Collector) extractCollection(metric Metric) string {
 				break
 			}
 		}
-		
+
 		// If no slash found, use the whole path (minus leading slash)
 		if path != "_dashboard" && path != "_admin" && path != "" {
 			return path
@@ -279,17 +279,17 @@ func (c *Collector) extractCollection(metric Metric) string {
 
 func (c *Collector) updateAggregated(metric Metric, collection string) {
 	now := metric.Timestamp
-	
+
 	// Update hourly aggregation
 	hour := now.Truncate(time.Hour)
 	hourKey := collection + ":" + hour.Format("2006-01-02T15")
 	c.updateAggregatedMetric(hourKey, hour, collection, "hourly", metric)
-	
-	// Update daily aggregation  
+
+	// Update daily aggregation
 	day := now.Truncate(24 * time.Hour)
 	dayKey := collection + ":" + day.Format("2006-01-02")
 	c.updateAggregatedMetric(dayKey, day, collection, "daily", metric)
-	
+
 	// Update monthly aggregation
 	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	monthKey := collection + ":" + month.Format("2006-01")
@@ -308,7 +308,7 @@ func (c *Collector) updateAggregatedMetric(key string, timestamp time.Time, coll
 	default:
 		return
 	}
-	
+
 	agg, exists := aggMap[key]
 	if !exists {
 		agg = AggregatedMetric{
@@ -322,14 +322,14 @@ func (c *Collector) updateAggregatedMetric(key string, timestamp time.Time, coll
 
 	agg.Count++
 	duration := float64(metric.Duration.Nanoseconds())
-	
+
 	// Update average duration
 	if agg.Count == 1 {
 		agg.AvgDuration = duration
 	} else {
 		agg.AvgDuration = (agg.AvgDuration*float64(agg.Count-1) + duration) / float64(agg.Count)
 	}
-	
+
 	// Update min/max duration
 	if duration < agg.MinDuration {
 		agg.MinDuration = duration
@@ -369,7 +369,7 @@ func (c *Collector) updateAggregatedMetric(key string, timestamp time.Time, coll
 
 func (c *Collector) cleanup() {
 	now := time.Now()
-	
+
 	// Clean detailed metrics older than 24 hours
 	cutoff24h := now.Add(-24 * time.Hour)
 	var filtered []Metric
@@ -523,35 +523,35 @@ func (c *Collector) GetSystemStats() map[string]interface{} {
 
 	now := time.Now()
 	uptime := now.Sub(c.startTime)
-	
+
 	// Count metrics in last hour
 	lastHour := now.Add(-time.Hour)
 	var hourlyCount int64
 	var hourlyErrors int64
-	
+
 	for _, metric := range c.detailedMetrics {
 		if metric.Timestamp.After(lastHour) {
 			hourlyCount++
 			if (metric.Type == RequestMetric && metric.Status >= 400) ||
-			   (metric.Type != RequestMetric && metric.Error != "") {
+				(metric.Type != RequestMetric && metric.Error != "") {
 				hourlyErrors++
 			}
 		}
 	}
 
 	return map[string]interface{}{
-		"uptime_seconds":       uptime.Seconds(),
-		"total_metrics":        len(c.detailedMetrics),
-		"hourly_requests":      hourlyCount,
-		"hourly_error_rate":    func() float64 {
+		"uptime_seconds":  uptime.Seconds(),
+		"total_metrics":   len(c.detailedMetrics),
+		"hourly_requests": hourlyCount,
+		"hourly_error_rate": func() float64 {
 			if hourlyCount > 0 {
 				return float64(hourlyErrors) / float64(hourlyCount) * 100
 			}
 			return 0
 		}(),
-		"aggregated_periods":   len(c.hourlyAgg) + len(c.dailyAgg) + len(c.monthlyAgg),
-		"collections":          len(c.GetCollections()),
-		"event_types":          len(c.eventMetrics),
+		"aggregated_periods": len(c.hourlyAgg) + len(c.dailyAgg) + len(c.monthlyAgg),
+		"collections":        len(c.GetCollections()),
+		"event_types":        len(c.eventMetrics),
 	}
 }
 

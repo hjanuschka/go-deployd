@@ -8,9 +8,9 @@ import (
 type DatabaseType string
 
 const (
-	DatabaseTypeMongoDB DatabaseType = "mongodb"
-	DatabaseTypeSQLite  DatabaseType = "sqlite"
-	DatabaseTypeMySQL   DatabaseType = "mysql"
+	DatabaseTypeMongoDB  DatabaseType = "mongodb"
+	DatabaseTypeSQLite   DatabaseType = "sqlite"
+	DatabaseTypeMySQL    DatabaseType = "mysql"
 	DatabaseTypePostgres DatabaseType = "postgres"
 )
 
@@ -42,7 +42,7 @@ type StoreInterface interface {
 	UpdateOne(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error)
 	Remove(ctx context.Context, query QueryBuilder) (DeleteResult, error)
 	Count(ctx context.Context, query QueryBuilder) (int64, error)
-	
+
 	// MongoDB-style operations that need translation for SQL
 	Increment(ctx context.Context, query QueryBuilder, increments map[string]interface{}) (UpdateResult, error)
 	Push(ctx context.Context, query QueryBuilder, pushOps map[string]interface{}) (UpdateResult, error)

@@ -48,7 +48,7 @@ type CompiledGoScript struct {
 func NewUniversalScriptManager() *UniversalScriptManager {
 	// Initialize V8 pool for JavaScript events
 	v8Pool := GetV8Pool()
-	
+
 	return &UniversalScriptManager{
 		jsScripts:        make(map[EventType]*Script),
 		goPlugins:        make(map[EventType]*CompiledGoScript),
@@ -61,7 +61,7 @@ func NewUniversalScriptManager() *UniversalScriptManager {
 // LoadScriptsWithConfig loads event scripts with runtime configuration
 func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, eventConfig map[string]EventConfiguration) error {
 	usm.configPath = configPath
-	
+
 	eventNames := map[EventType]string{
 		EventGet:           "get",
 		EventValidate:      "validate",
@@ -71,24 +71,24 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 		EventAfterCommit:   "aftercommit",
 		EventBeforeRequest: "beforerequest",
 	}
-	
+
 	usm.mu.Lock()
 	defer usm.mu.Unlock()
-	
+
 	// Create plugins directory
 	pluginDir := filepath.Join(configPath, ".plugins")
 	os.MkdirAll(pluginDir, 0755)
-	
+
 	for eventType, baseName := range eventNames {
 		// Get preferred runtime from config
 		preferredRuntime := "go" // default to Go
 		if config, exists := eventConfig[baseName]; exists && config.Runtime != "" {
 			preferredRuntime = config.Runtime
 		}
-		
-		fmt.Printf("🔍 LOADING EVENT SCRIPT: %s/%s - runtime: %s (config exists: %v)\n", 
+
+		fmt.Printf("🔍 LOADING EVENT SCRIPT: %s/%s - runtime: %s (config exists: %v)\n",
 			filepath.Base(configPath), baseName, preferredRuntime, eventConfig[baseName])
-		
+
 		// Load only the configured runtime - no fallback
 		if preferredRuntime == "go" {
 			// Only try Go script - compile to plugin on startup
@@ -119,7 +119,7 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 					source: string(content),
 					path:   jsPath,
 				}
-				
+
 				// Pre-compile the script in V8 pool for better performance
 				if usm.v8Pool != nil {
 					if precompileErr := usm.v8Pool.PrecompileScript(jsPath, string(content)); precompileErr != nil {
@@ -130,14 +130,14 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 						script.isPrecompiled = true
 					}
 				}
-				
+
 				usm.jsScripts[eventType] = script
 				usm.scriptTypes[eventType] = ScriptTypeJS
 			}
 			// If no .js file exists, that's fine - just don't load any script for this event
 		}
 	}
-	
+
 	return nil
 }
 
@@ -145,7 +145,7 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 func (usm *UniversalScriptManager) loadGoScript(eventType EventType, sourcePath string, modTime int64) error {
 	pluginName := strings.TrimSuffix(filepath.Base(sourcePath), ".go")
 	pluginPath := filepath.Join(usm.configPath, ".plugins", pluginName+".so")
-	
+
 	// Check if we need to recompile
 	needsCompile := true
 	if existing, exists := usm.goPlugins[eventType]; exists {
@@ -158,19 +158,19 @@ func (usm *UniversalScriptManager) loadGoScript(eventType EventType, sourcePath 
 			needsCompile = false
 		}
 	}
-	
+
 	if needsCompile {
 		if err := CompileGoPlugin(sourcePath, pluginPath); err != nil {
 			return err
 		}
 	}
-	
+
 	usm.goPlugins[eventType] = &CompiledGoScript{
 		SourcePath:   sourcePath,
 		PluginPath:   pluginPath,
 		LastModified: modTime,
 	}
-	
+
 	return nil
 }
 
@@ -178,18 +178,18 @@ func (usm *UniversalScriptManager) loadGoScript(eventType EventType, sourcePath 
 func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Context, data map[string]interface{}) error {
 	// Start timing
 	startTime := time.Now()
-	
+
 	// Log event trigger with payload
 	var collectionName string
 	if ctx.Resource != nil {
 		collectionName = ctx.Resource.GetName()
 	}
-	
+
 	var userID interface{}
 	if ctx.IsAuthenticated {
 		userID = ctx.UserID
 	}
-	
+
 	logging.Info("🚀 EVENT TRIGGERED", "event", map[string]interface{}{
 		"type":       string(eventType),
 		"collection": collectionName,
@@ -197,44 +197,50 @@ func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Co
 		"user":       userID,
 		"payload":    data,
 	})
-	
+
 	// Check if we have any script for this event
 	usm.mu.RLock()
 	scriptType, exists := usm.scriptTypes[eventType]
 	logging.Info("🔍 CHECKING SCRIPT AVAILABILITY", "event", map[string]interface{}{
-		"eventType":    string(eventType),
-		"exists":       exists,
-		"scriptType":   string(scriptType),
-		"allScripts":   usm.scriptTypes,
-		"goPlugins":    len(usm.goPlugins),
-		"jsScripts":    len(usm.jsScripts),
+		"eventType":  string(eventType),
+		"exists":     exists,
+		"scriptType": string(scriptType),
+		"allScripts": usm.scriptTypes,
+		"goPlugins":  len(usm.goPlugins),
+		"jsScripts":  len(usm.jsScripts),
 	})
-	
+
 	if !exists {
 		usm.mu.RUnlock()
 		logging.Info("❌ NO SCRIPT FOUND FOR EVENT", "event", map[string]interface{}{
-			"eventType": string(eventType),
+			"eventType":  string(eventType),
 			"collection": collectionName,
 		})
 		return nil // No script for this event
 	}
-	
+
 	var err error
 	var runtime string
-	
+
 	switch scriptType {
 	case ScriptTypeGo:
 		runtime = "go"
 		goScript := usm.goPlugins[eventType]
 		usm.mu.RUnlock()
-		
+
 		logging.Info("🔧 EXECUTING GO SCRIPT", "event", map[string]interface{}{
 			"eventType":  string(eventType),
 			"collection": collectionName,
 			"hasScript":  goScript != nil,
-			"pluginPath": func() string { if goScript != nil { return goScript.PluginPath } else { return "nil" } }(),
+			"pluginPath": func() string {
+				if goScript != nil {
+					return goScript.PluginPath
+				} else {
+					return "nil"
+				}
+			}(),
 		})
-		
+
 		// Use compiled plugin for Go scripts
 		if goScript != nil {
 			err = RunGoPlugin(goScript.PluginPath, ctx, data)
@@ -248,20 +254,20 @@ func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Co
 				"eventType": string(eventType),
 			})
 		}
-		
+
 	case ScriptTypeJS:
 		runtime = "js"
 		jsScript := usm.jsScripts[eventType]
 		usm.mu.RUnlock()
-		
+
 		logging.Info("🔧 EXECUTING JS SCRIPT", "event", map[string]interface{}{
 			"eventType":  string(eventType),
 			"collection": collectionName,
 			"hasScript":  jsScript != nil,
 		})
-		
+
 		err = usm.runJSScript(jsScript, ctx, data)
-		
+
 	default:
 		usm.mu.RUnlock()
 		logging.Error("❌ UNKNOWN SCRIPT TYPE", "event", map[string]interface{}{
@@ -270,13 +276,13 @@ func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Co
 		})
 		return nil
 	}
-	
+
 	// Calculate execution time
 	duration := time.Since(startTime)
-	
+
 	// Record hook execution metrics
 	metrics.RecordHookExecution(collectionName, string(eventType), duration, err)
-	
+
 	// Log event completion with timing
 	if err != nil {
 		logging.Error("Event failed", "event", map[string]interface{}{
@@ -289,15 +295,15 @@ func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Co
 		})
 	} else {
 		logging.Info("Event completed", "event", map[string]interface{}{
-			"type":       string(eventType),
-			"collection": collectionName,
-			"runtime":    runtime,
-			"duration":   duration.String(),
-			"durationMs": duration.Milliseconds(),
+			"type":         string(eventType),
+			"collection":   collectionName,
+			"runtime":      runtime,
+			"duration":     duration.String(),
+			"durationMs":   duration.Milliseconds(),
 			"dataModified": data,
 		})
 	}
-	
+
 	return err
 }
 
@@ -312,6 +318,12 @@ func (usm *UniversalScriptManager) runJSScript(script *Script, ctx *context.Cont
 	if err != nil {
 		return err
 	}
+
+	// Copy modified data back to original data parameter
+	for key, value := range scriptCtx.data {
+		data[key] = value
+	}
+
 	return scriptCtx.GetError()
 }
 
@@ -319,9 +331,9 @@ func (usm *UniversalScriptManager) runJSScript(script *Script, ctx *context.Cont
 func (usm *UniversalScriptManager) GetScriptInfo() map[string]interface{} {
 	usm.mu.RLock()
 	defer usm.mu.RUnlock()
-	
+
 	info := make(map[string]interface{})
-	
+
 	for eventType, scriptType := range usm.scriptTypes {
 		eventName := strings.ToLower(string(eventType))
 		switch scriptType {
@@ -342,7 +354,7 @@ func (usm *UniversalScriptManager) GetScriptInfo() map[string]interface{} {
 			}
 		}
 	}
-	
+
 	return info
 }
 
@@ -361,14 +373,14 @@ func (usm *UniversalScriptManager) ReloadScript(eventType EventType) error {
 func (usm *UniversalScriptManager) LoadHotReloadScript(eventType EventType, source string) error {
 	usm.mu.Lock()
 	defer usm.mu.Unlock()
-	
+
 	// Write source to the actual file location
 	eventName := strings.ToLower(string(eventType))
 	sourcePath := filepath.Join(usm.configPath, eventName+".go")
 	if err := os.WriteFile(sourcePath, []byte(source), 0644); err != nil {
 		return err
 	}
-	
+
 	// Compile to plugin
 	pluginPath := filepath.Join(usm.configPath, ".plugins", eventName+".so")
 	fmt.Printf("🔄 Hot-reloading Go event script: %s/%s.go\n", filepath.Base(usm.configPath), eventName)
@@ -376,9 +388,9 @@ func (usm *UniversalScriptManager) LoadHotReloadScript(eventType EventType, sour
 		fmt.Printf("❌ Failed to hot-reload Go script: %v\n", err)
 		return err
 	}
-	
+
 	fmt.Printf("✅ Successfully hot-reloaded Go event script: %s/%s.go\n", filepath.Base(usm.configPath), eventName)
-	
+
 	// Update plugin reference
 	usm.goPlugins[eventType] = &CompiledGoScript{
 		SourcePath:   sourcePath,

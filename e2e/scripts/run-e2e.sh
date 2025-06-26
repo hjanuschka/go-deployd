@@ -181,11 +181,14 @@ test_crud_operations() {
     local read_response=$(curl -s -w "\n%{http_code}" "http://localhost:$port/users/$created_user_id")
     local read_code=$(echo "$read_response" | tail -n1)
     if [ "$read_code" -eq 200 ]; then
-        local user_name=$(echo "$read_response" | sed '$d' | jq -r '.name')
+        local read_body=$(echo "$read_response" | sed '$d')
+        local user_name=$(echo "$read_body" | jq -r '.name')
+        log "DEBUG: Read response body: $read_body"
+        log "DEBUG: Extracted user name: '$user_name'"
         if [ "$user_name" = "Test User" ]; then
             success "READ operation successful"
         else
-            error "READ operation returned incorrect data"
+            error "READ operation returned incorrect data - expected 'Test User', got '$user_name'"
             return 1
         fi
     else
@@ -578,13 +581,7 @@ run_database_tests() {
     
     log "==================== Testing $db_type ===================="
     
-    # Start server
-    if ! start_server "$db_type" "$port" "$db_name"; then
-        error "Failed to start $db_type server"
-        return 1
-    fi
-    
-    # Create collections configuration
+    # Create collections configuration BEFORE starting server
     mkdir -p "$PROJECT_ROOT/resources"/{users,products,orders,private_docs}
     
     # Create simple configs for test collections
@@ -592,6 +589,12 @@ run_database_tests() {
     echo '{"properties":{"name":{"type":"string","required":true},"price":{"type":"number","required":true},"category":{"type":"string","required":true},"inStock":{"type":"boolean","default":true},"quantity":{"type":"number","default":0}}}' > "$PROJECT_ROOT/resources/products/config.json"  
     echo '{"properties":{"userId":{"type":"string","required":true},"status":{"type":"string","required":true},"total":{"type":"number","required":true},"items":{"type":"array"}}}' > "$PROJECT_ROOT/resources/orders/config.json"
     echo '{"properties":{"title":{"type":"string","required":true},"content":{"type":"string","required":true},"userId":{"type":"string","required":true},"private":{"type":"boolean","default":true}}}' > "$PROJECT_ROOT/resources/private_docs/config.json"
+    
+    # Start server AFTER creating collection configs
+    if ! start_server "$db_type" "$port" "$db_name"; then
+        error "Failed to start $db_type server"
+        return 1
+    fi
     
     # Create GET event for private_docs to implement user-based filtering
     cat > "$PROJECT_ROOT/resources/private_docs/get.go" << 'EOF'

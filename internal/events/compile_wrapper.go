@@ -11,34 +11,60 @@ func CreateGoWrapper(userCode string) string {
 	lines := strings.Split(userCode, "\n")
 	var imports []string
 	var functions []string
-	
+
 	inImportBlock := false
+	foundFunction := false
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip package declaration
 		if strings.HasPrefix(trimmed, "package ") {
 			continue
 		}
-		
-		// Handle import statements
+
+		// Once we hit a function, everything goes to functions
+		if strings.HasPrefix(trimmed, "func ") {
+			foundFunction = true
+			functions = append(functions, line)
+			continue
+		}
+
+		// If we've found a function already, everything goes to functions
+		if foundFunction {
+			functions = append(functions, line)
+			continue
+		}
+
+		// Handle import statements (only before any functions)
 		if strings.HasPrefix(trimmed, "import ") {
-			inImportBlock = true
-			imports = append(imports, line)
-		} else if inImportBlock && (trimmed == ")" || strings.Contains(trimmed, ")")) {
-			imports = append(imports, line)
-			inImportBlock = false
+			if strings.Contains(line, `"`) {
+				// Single import like: import "errors"
+				start := strings.Index(line, `"`)
+				end := strings.LastIndex(line, `"`)
+				if start < end {
+					importPath := line[start : end+1]
+					imports = append(imports, importPath)
+				}
+			} else if strings.Contains(trimmed, "(") {
+				// Multi-line import block starting
+				inImportBlock = true
+			}
 		} else if inImportBlock {
-			imports = append(imports, line)
+			if trimmed == ")" {
+				inImportBlock = false
+			} else if trimmed != "" && strings.Contains(trimmed, `"`) {
+				// Import line within block
+				imports = append(imports, strings.TrimSpace(trimmed))
+			}
 		} else if trimmed != "" {
-			// Regular code (functions, etc.) - skip empty lines at the beginning
+			// Non-import, non-function code (could be variables, constants, etc.)
 			functions = append(functions, line)
 		}
 	}
-	
-	userImports := strings.Join(imports, "\n")
+
 	userFunctions := strings.Join(functions, "\n")
-	
+
 	// Check if fmt is already imported by user OR if user code uses fmt functions
 	hasFmt := false
 	for _, imp := range imports {
@@ -47,24 +73,31 @@ func CreateGoWrapper(userCode string) string {
 			break
 		}
 	}
-	
+
 	// Check if user code actually uses fmt functions
-	usesFmt := strings.Contains(userFunctions, "fmt.") || 
-	          strings.Contains(userFunctions, "Printf") ||
-	          strings.Contains(userFunctions, "Sprintf") ||
-	          strings.Contains(userFunctions, "Print")
-	
-	// Build imports section - only import fmt if user code uses it and doesn't already import it
-	wrapperImports := `"reflect"`
-	if usesFmt && !hasFmt {
-		wrapperImports = `"fmt"
-	"reflect"`
+	usesFmt := strings.Contains(userFunctions, "fmt.") ||
+		strings.Contains(userFunctions, "Printf") ||
+		strings.Contains(userFunctions, "Sprintf") ||
+		strings.Contains(userFunctions, "Print")
+
+	// Build complete imports section, merging user imports with wrapper imports
+	var allImports []string
+
+	// Add user imports
+	for _, imp := range imports {
+		allImports = append(allImports, "\t"+imp)
 	}
-	
+
+	// Add wrapper-required imports if not already present
+	if !hasFmt && usesFmt {
+		allImports = append(allImports, "\t\"fmt\"")
+	}
+	allImports = append(allImports, "\t\"reflect\"")
+
 	template := `package main
 
 import (
-	` + wrapperImports + `
+` + strings.Join(allImports, "\n") + `
 )
 
 %s
@@ -90,6 +123,9 @@ type EventContext struct {
 	
 	// Me contains the current user (if authenticated)
 	Me map[string]interface{}
+	
+	// Method is the HTTP method (GET, POST, PUT, DELETE, etc.)
+	Method string
 	
 	// IsRoot indicates if the user has root/admin privileges
 	IsRoot bool
@@ -135,8 +171,6 @@ func (ctx *EventContext) GetHiddenFields() []string {
 	return ctx.hideFields
 }
 
-%s
-
 // EventHandler is the exported plugin handler
 var EventHandler eventHandler
 
@@ -155,6 +189,7 @@ func (h eventHandler) Run(ctx interface{}) error {
 		Data:     safeGetMapField(v, "Data"),
 		Query:    safeGetMapField(v, "Query"),
 		Me:       safeGetMapField(v, "Me"),
+		Method:   safeGetStringField(v, "Method"),
 		IsRoot:   safeGetBoolField(v, "IsRoot"),
 		Internal: safeGetBoolField(v, "Internal"),
 		Errors:   safeGetStringMapField(v, "Errors"),
@@ -219,6 +254,17 @@ func safeGetBoolField(v reflect.Value, fieldName string) bool {
 	return false
 }
 
+func safeGetStringField(v reflect.Value, fieldName string) string {
+	val := getFieldValue(v, fieldName)
+	if val == nil {
+		return ""
+	}
+	if strVal, ok := val.(string); ok {
+		return strVal
+	}
+	return ""
+}
+
 func safeGetStringMapField(v reflect.Value, fieldName string) map[string]string {
 	val := getFieldValue(v, fieldName)
 	if val == nil {
@@ -252,6 +298,6 @@ func safeGetLogField(v reflect.Value, fieldName string) func(string, ...map[stri
 	return deployd.Log // fallback to global deployd.Log
 }
 `
-	
-	return fmt.Sprintf(template, userImports, userFunctions)
+
+	return fmt.Sprintf(template, userFunctions)
 }

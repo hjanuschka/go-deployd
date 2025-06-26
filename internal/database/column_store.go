@@ -221,7 +221,7 @@ func (s *ColumnStore) convertValueForColumn(value interface{}, col ColumnDefinit
 // buildInsertSQL builds the INSERT SQL statement
 func (s *ColumnStore) buildInsertSQL(columnValues map[string]interface{}, jsonData map[string]interface{}) (string, []interface{}, error) {
 	quotedTable := s.quoteIdentifier(s.tableName)
-	
+
 	var columns []string
 	var placeholders []string
 	var args []interface{}
@@ -272,7 +272,7 @@ func (s *ColumnStore) Find(ctx context.Context, query QueryBuilder, opts QueryOp
 // buildSelectSQL builds the SELECT SQL statement with column-aware WHERE clauses
 func (s *ColumnStore) buildSelectSQL(query QueryBuilder, opts QueryOptions) (string, []interface{}, error) {
 	quotedTable := s.quoteIdentifier(s.tableName)
-	
+
 	// Select all columns by default
 	selectClause := "*"
 	if len(opts.Fields) > 0 {
@@ -314,7 +314,7 @@ func (s *ColumnStore) buildSelectClause(fields map[string]int) string {
 
 	var columns []string
 	hasInclusions := false
-	
+
 	// Check if this is inclusion or exclusion mode
 	for _, include := range fields {
 		if include == 1 {
@@ -326,7 +326,7 @@ func (s *ColumnStore) buildSelectClause(fields map[string]int) string {
 	if hasInclusions {
 		// Include mode: only select specified fields
 		columns = append(columns, s.quoteIdentifier("id")) // Always include id
-		
+
 		for field, include := range fields {
 			if include == 1 && field != "id" {
 				if s.hasColumn(field) {
@@ -334,7 +334,7 @@ func (s *ColumnStore) buildSelectClause(fields map[string]int) string {
 				}
 			}
 		}
-		
+
 		// If any non-column fields are requested, include data column
 		for field, include := range fields {
 			if include == 1 && !s.hasColumn(field) {
@@ -463,7 +463,7 @@ func (s *ColumnStore) mongoOpToSQL(op string) string {
 // buildOrderClause builds column-aware ORDER BY clause
 func (s *ColumnStore) buildOrderClause(sort map[string]int) string {
 	var orderParts []string
-	
+
 	for field, direction := range sort {
 		dir := "ASC"
 		if direction == -1 {
@@ -688,7 +688,7 @@ func (s *ColumnStore) updateSingleDocument(ctx context.Context, doc map[string]i
 
 func (s *ColumnStore) buildUpdateSQL(columnValues map[string]interface{}, jsonData map[string]interface{}, id interface{}) (string, []interface{}, error) {
 	quotedTable := s.quoteIdentifier(s.tableName)
-	
+
 	var setParts []string
 	var args []interface{}
 
@@ -894,7 +894,7 @@ func (s *ColumnStore) Upsert(ctx context.Context, query QueryBuilder, update Upd
 
 	// Merge query and update into a new document
 	newDoc := make(map[string]interface{})
-	
+
 	// Add query fields
 	for field, value := range queryMap {
 		if !strings.HasPrefix(field, "$") {
