@@ -173,7 +173,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		IsRoot:       isRoot,
 		IsAuthenticated: isAuthenticated,
 	}
-	ctx := context.New(req, w, resource, authData)
+	ctx := context.New(req, w, resource, authData, r.development)
 	
 	// Handle the request
 	if err := resource.Handle(ctx); err != nil {

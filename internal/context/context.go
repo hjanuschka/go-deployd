@@ -45,12 +45,13 @@ type AuthData struct {
 	IsAuthenticated bool
 }
 
-func New(req *http.Request, res http.ResponseWriter, resource Resource, auth *AuthData) *Context {
+func New(req *http.Request, res http.ResponseWriter, resource Resource, auth *AuthData, development bool) *Context {
 	ctx := &Context{
 		Request:      req,
 		Response:     res,
 		Resource:     resource,
 		Method:       req.Method,
+		Development:  development,
 		ctx:          req.Context(),
 	}
 

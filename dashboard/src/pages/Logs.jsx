@@ -34,6 +34,7 @@ import {
   FiInfo,
   FiAlertTriangle,
   FiXCircle,
+  FiUser,
 } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -143,6 +144,7 @@ function Logs() {
       case 'warn': case 'warning': return <FiAlertTriangle color="orange" />
       case 'error': return <FiXCircle color="red" />
       case 'debug': return <FiFilter color="gray" />
+      case 'user-generated': return <FiUser color="purple" />
       default: return <FiFileText />
     }
   }
@@ -153,6 +155,7 @@ function Logs() {
       case 'warn': case 'warning': return 'orange'
       case 'error': return 'red'
       case 'debug': return 'gray'
+      case 'user-generated': return 'purple'
       default: return 'gray'
     }
   }
@@ -211,6 +214,7 @@ function Logs() {
                 <option value="info">Info</option>
                 <option value="warn">Warning</option>
                 <option value="error">Error</option>
+                <option value="user-generated">User Generated</option>
               </Select>
             </FormControl>
             <FormControl maxW="200px">

@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -250,7 +251,17 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interf
 			logData = data[0]
 		}
 		
-		logging.Info(message, source, logData)
+		// Log to structured logging system AND stdout with user-generated level
+		logging.UserGenerated(message, source, logData)
+		
+		// Also log to stdout for immediate visibility
+		fmt.Printf("[USER LOG] %s: %s", source, message)
+		if logData != nil {
+			if dataJSON, err := json.Marshal(logData); err == nil {
+				fmt.Printf(" | Data: %s", string(dataJSON))
+			}
+		}
+		fmt.Printf("\n")
 	}
 
 	// Use reflection to call the Run method

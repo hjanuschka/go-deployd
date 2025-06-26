@@ -1,7 +1,13 @@
 package logging
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -9,10 +15,11 @@ import (
 type LogLevel string
 
 const (
-	DEBUG LogLevel = "debug"
-	INFO  LogLevel = "info"
-	WARN  LogLevel = "warn"
-	ERROR LogLevel = "error"
+	DEBUG         LogLevel = "debug"
+	INFO          LogLevel = "info"
+	WARN          LogLevel = "warn"
+	ERROR         LogLevel = "error"
+	USER_GENERATED LogLevel = "user-generated"
 )
 
 type LogEntry struct {
@@ -24,7 +31,9 @@ type LogEntry struct {
 }
 
 type Logger struct {
-	mu sync.RWMutex
+	mu     sync.RWMutex
+	logDir string
+	file   *os.File
 }
 
 var globalLogger *Logger
@@ -32,7 +41,20 @@ var once sync.Once
 
 func InitializeLogger(logDir string) error {
 	once.Do(func() {
-		globalLogger = &Logger{}
+		globalLogger = &Logger{
+			logDir: logDir,
+		}
+		
+		// Create log directory if it doesn't exist
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			fmt.Printf("Warning: Failed to create log directory: %v\n", err)
+			return
+		}
+		
+		// Open today's log file
+		if err := globalLogger.openLogFile(); err != nil {
+			fmt.Printf("Warning: Failed to open log file: %v\n", err)
+		}
 	})
 	return nil
 }
@@ -45,10 +67,32 @@ func GetLogger() *Logger {
 	return globalLogger
 }
 
-
+// openLogFile opens or creates today's log file
+func (l *Logger) openLogFile() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	
+	// Close existing file if open
+	if l.file != nil {
+		l.file.Close()
+	}
+	
+	// Create filename with today's date
+	today := time.Now().Format("2006-01-02")
+	filename := filepath.Join(l.logDir, fmt.Sprintf("%s.jsonl", today))
+	
+	// Open file in append mode, create if it doesn't exist
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	
+	l.file = file
+	return nil
+}
 
 func (l *Logger) Log(level LogLevel, message string, source string, data map[string]interface{}) {
-	// Only log timing information to console
+	// Console output for event timing
 	if source == "event" && data != nil {
 		if duration, ok := data["durationMs"]; ok {
 			// Skip logging events with 0ms duration
@@ -68,6 +112,32 @@ func (l *Logger) Log(level LogLevel, message string, source string, data map[str
 			}
 		}
 	}
+	
+	// Write to JSON-L log file
+	l.writeLogEntry(level, message, source, data)
+}
+
+func (l *Logger) writeLogEntry(level LogLevel, message string, source string, data map[string]interface{}) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	
+	if l.file == nil {
+		return
+	}
+	
+	entry := LogEntry{
+		Timestamp: time.Now(),
+		Level:     level,
+		Message:   message,
+		Source:    source,
+		Data:      data,
+	}
+	
+	// Marshal to JSON and write to file
+	if jsonData, err := json.Marshal(entry); err == nil {
+		l.file.WriteString(string(jsonData) + "\n")
+		l.file.Sync() // Ensure data is written to disk
+	}
 }
 
 func (l *Logger) Debug(message string, source string, data map[string]interface{}) {
@@ -86,18 +156,86 @@ func (l *Logger) Error(message string, source string, data map[string]interface{
 	l.Log(ERROR, message, source, data)
 }
 
+func (l *Logger) UserGenerated(message string, source string, data map[string]interface{}) {
+	l.Log(USER_GENERATED, message, source, data)
+}
+
 func (l *Logger) GetLogFiles() ([]string, error) {
-	return []string{}, nil
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	
+	if l.logDir == "" {
+		return []string{}, nil
+	}
+	
+	files, err := os.ReadDir(l.logDir)
+	if err != nil {
+		return []string{}, err
+	}
+	
+	var logFiles []string
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".jsonl") {
+			logFiles = append(logFiles, file.Name())
+		}
+	}
+	
+	// Sort files by name (which includes date)
+	sort.Strings(logFiles)
+	return logFiles, nil
 }
 
 func (l *Logger) ReadLogs(filename string, level LogLevel) ([]LogEntry, error) {
-	return []LogEntry{}, nil
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	
+	var logFile string
+	if filename == "" {
+		// Use today's log file if no filename specified
+		today := time.Now().Format("2006-01-02")
+		logFile = filepath.Join(l.logDir, fmt.Sprintf("%s.jsonl", today))
+	} else {
+		logFile = filepath.Join(l.logDir, filename)
+	}
+	
+	file, err := os.Open(logFile)
+	if err != nil {
+		return []LogEntry{}, nil // Return empty if file doesn't exist
+	}
+	defer file.Close()
+	
+	var logs []LogEntry
+	scanner := bufio.NewScanner(file)
+	
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		
+		var entry LogEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue // Skip invalid JSON lines
+		}
+		
+		// Filter by level if specified
+		if level != "" && entry.Level != level {
+			continue
+		}
+		
+		logs = append(logs, entry)
+	}
+	
+	return logs, nil
 }
 
 func (l *Logger) GetLogPath(filename string) string {
-	return ""
+	if filename == "" {
+		today := time.Now().Format("2006-01-02")
+		filename = fmt.Sprintf("%s.jsonl", today)
+	}
+	return filepath.Join(l.logDir, filename)
 }
-
 
 // Global convenience functions
 func Debug(message string, source string, data map[string]interface{}) {
@@ -114,4 +252,8 @@ func Warn(message string, source string, data map[string]interface{}) {
 
 func Error(message string, source string, data map[string]interface{}) {
 	GetLogger().Error(message, source, data)
+}
+
+func UserGenerated(message string, source string, data map[string]interface{}) {
+	GetLogger().UserGenerated(message, source, data)
 }
