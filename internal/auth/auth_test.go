@@ -280,7 +280,10 @@ func TestSessionManagement(t *testing.T) {
 
 		sessions, err := sessionStore.Find(ctx, query, database.QueryOptions{})
 		require.NoError(t, err)
-		assert.Len(t, sessions, 1)
+		if !assert.Len(t, sessions, 1) {
+			t.Logf("Expected 1 session but got %d. This may be a timing or query issue with MySQL.", len(sessions))
+			return
+		}
 		assert.Equal(t, userID, sessions[0]["userId"])
 	})
 

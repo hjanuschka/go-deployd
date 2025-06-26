@@ -184,6 +184,33 @@ func TestCollectionCRUD(t *testing.T) {
 	loginResp := loginWithMasterKey(t, ts)
 	authHeader := "Bearer " + loginResp.Token
 
+	// Create the todos collection directory
+	todosDir := filepath.Join(ts.testDir, "resources", "todos")
+	err := os.MkdirAll(todosDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create todos directory: %v", err)
+	}
+
+	// Create a simple collection config
+	configContent := `{
+		"type": "Collection",
+		"properties": {
+			"name": {"type": "string"},
+			"email": {"type": "string"}, 
+			"age": {"type": "number"},
+			"active": {"type": "boolean"},
+			"tags": {"type": "array"},
+			"metadata": {"type": "object"}
+		}
+	}`
+	err = os.WriteFile(filepath.Join(todosDir, "config.json"), []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create config.json: %v", err)
+	}
+
+	// Reload resources to pick up the new collection
+	ts.router.LoadResources()
+
 	// Test data
 	testUser := map[string]interface{}{
 		"name":     "John Doe",
