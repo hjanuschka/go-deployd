@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -57,6 +58,7 @@ type SchemaManager struct {
 	dbType     DatabaseType
 	configPath string
 	schemas    map[string]*CollectionSchema
+	mu         sync.RWMutex
 }
 
 // NewSchemaManager creates a new schema manager
@@ -72,17 +74,27 @@ func NewSchemaManager(db *sql.DB, dbType DatabaseType, configPath string) *Schem
 // GetSchema returns the schema for a collection, loading it if necessary
 func (sm *SchemaManager) GetSchema(collectionName string) (*CollectionSchema, error) {
 	// Check if we have a cached schema
+	sm.mu.RLock()
 	if schema, exists := sm.schemas[collectionName]; exists {
 		// Check if config file has been modified
 		configPath := sm.getConfigPath(collectionName)
 		if stat, err := os.Stat(configPath); err == nil {
 			if stat.ModTime().After(schema.ModTime) {
-				// Config file was modified, reload schema
+				// Config file was modified, need to reload schema
+				sm.mu.RUnlock()
+				sm.mu.Lock()
 				delete(sm.schemas, collectionName)
+				sm.mu.Unlock()
 			} else {
+				sm.mu.RUnlock()
 				return schema, nil
 			}
+		} else {
+			sm.mu.RUnlock()
+			return schema, nil
 		}
+	} else {
+		sm.mu.RUnlock()
 	}
 
 	// Load schema from config
@@ -91,7 +103,9 @@ func (sm *SchemaManager) GetSchema(collectionName string) (*CollectionSchema, er
 		return nil, err
 	}
 
+	sm.mu.Lock()
 	sm.schemas[collectionName] = schema
+	sm.mu.Unlock()
 	return schema, nil
 }
 

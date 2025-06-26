@@ -211,6 +211,12 @@ func TestCollectionCRUD(t *testing.T) {
 
 	// Create a new router to pick up the new collection
 	ts.router = router.New(ts.db, ts.config.Development, ts.config.ConfigPath)
+	
+	// Update the http mux with the new router
+	ts.httpMux = http.NewServeMux()
+	ts.httpMux.Handle("/auth/", http.StripPrefix("/auth", ts.authHandler))
+	ts.httpMux.Handle("/dashboard/", http.StripPrefix("/dashboard", ts.dashboardHandler))
+	ts.httpMux.Handle("/", ts.router)
 
 	// Test data
 	testUser := map[string]interface{}{
