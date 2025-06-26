@@ -312,6 +312,12 @@ func (usm *UniversalScriptManager) runJSScript(script *Script, ctx *context.Cont
 	if err != nil {
 		return err
 	}
+	
+	// Copy modified data back to original data parameter
+	for key, value := range scriptCtx.data {
+		data[key] = value
+	}
+	
 	return scriptCtx.GetError()
 }
 

@@ -1,0 +1,79 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  quick-check:
+    name: Quick PR Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Go format check
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "❌ Go files are not formatted properly:"
+          gofmt -s -l .
+          echo ""
+          echo "Please run: go fmt ./..."
+          exit 1
+        fi
+        echo "✅ Go formatting is correct"
+
+    - name: Go vet
+      run: |
+        echo "🔍 Running go vet..."
+        go vet ./...
+        echo "✅ go vet passed"
+
+    - name: Run event system tests
+      run: |
+        echo "🔧 Testing Event System (Core Feature)..."
+        echo "========================================"
+        
+        # Setup JS dependencies for V8 execution
+        cd js-sandbox && npm ci && cd ..
+        
+        # Run the specific tests that verify event handlers work
+        go test -v -run "TestJavaScriptEventHandlers|TestEventHandlerExecution" ./internal/events/
+        
+        echo ""
+        echo "✅ Event system verification passed!"
+
+    - name: Quick build test
+      run: |
+        echo "🔨 Testing build..."
+        go build -o deployd ./cmd/deployd/
+        go build -o deployd-cli ./cmd/deployd-cli/
+        echo "✅ Build successful"
+
+    - name: PR Summary
+      run: |
+        echo "## 🎉 PR Check Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Code Formatting**: All Go files properly formatted" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Static Analysis**: go vet passed without issues" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Event System**: JavaScript event handlers verified working" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Build**: Application compiles successfully" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "*Ready for full CI pipeline on merge to main/develop*" >> $GITHUB_STEP_SUMMARY
