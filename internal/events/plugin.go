@@ -169,7 +169,7 @@ func (gpm *GoPluginManager) RunPlugin(eventType EventType, ctx *context.Context,
 		Errors:   make(map[string]string),
 		Query:    ctx.Query,
 		Internal: false, // TODO: Add Internal field to Context if needed
-		IsRoot:   ctx.Session != nil && ctx.Session.IsRoot(),
+		IsRoot:   ctx.IsRoot,
 	}
 
 	if ctx.Session != nil {

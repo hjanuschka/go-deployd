@@ -1,8 +1,7 @@
 <div align="center">
-  <img src="dashboard/public/deployd-logo.png" alt="Go-Deployd Logo" width="120" height="120">
+  <img src="dashboard/public/deployd-logo.png" alt="Go-Deployd Logo" width="200" height="200">
+  <h1>Go-Deployd</h1>
 </div>
-
-# 🚀 Go-Deployd
 
 > **A high-performance, modern reimagining of Deployd in Go**  
 > Build JSON APIs in seconds with zero configuration. Focus on your frontend while Go-Deployd handles the backend.
@@ -57,6 +56,59 @@ go run cmd/deployd/main.go -dev -db-type sqlite
 ```
 
 The server will start at `http://localhost:2403` with a default "todos" collection and admin dashboard at `http://localhost:2403/_dashboard/`.
+
+## 🐳 Running with Docker
+
+You can easily run Go-Deployd using Docker.
+
+1.  **Build the Docker image:**
+    ```bash
+    docker build -t go-deployd .
+    ```
+
+2.  **Run the Docker container:**
+    ```bash
+    docker run -p 2403:2403 -v $(pwd)/resources:/app/resources -v $(pwd)/.deployd:/app/.deployd go-deployd
+    ```
+    This command maps the local `resources` and `.deployd` directories into the container, so your data and configuration are persisted.
+
+## 🛠️ Command-Line Interface (CLI)
+
+Go-Deployd includes a CLI for managing your application.
+
+### `create-collection`
+Creates a new collection configuration.
+
+```bash
+# Usage
+./bin/deployd create-collection <collection-name>
+
+# Example
+./bin/deployd create-collection posts
+```
+This will create `resources/posts/config.json`.
+
+### `create-user`
+Creates a new user in the database.
+
+```bash
+# Usage
+./bin/deployd create-user --username <name> --password <pass> [--email <email>] [--role <role>]
+
+# Example
+./bin/deployd create-user -u admin -p secretpassword -e "admin@example.com" --role admin
+```
+
+### `set-secret`
+Sets a value in the `.deployd/security.json` file.
+
+```bash
+# Usage
+./bin/deployd set-secret <key> <value>
+
+# Example
+./bin/deployd set-secret jwtSecret new-super-secret-key
+```
 
 ### 🎨 Dashboard Access
 
@@ -160,10 +212,10 @@ curl "http://localhost:2403/todos?priority=1"
 ### MongoDB Query Operators
 ```bash
 # Greater than
-curl "http://localhost:2403/todos?\$gt[priority]=1"
+curl "http://localhost:2403/todos?$gt[priority]=1"
 
 # In array
-curl "http://localhost:2403/todos?\$in[status]=todo,done"
+curl "http://localhost:2403/todos?$in[status]=todo,done"
 ```
 
 ### Special Endpoints

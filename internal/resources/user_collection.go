@@ -143,7 +143,9 @@ func (uc *UserCollection) handleLogin(ctx *appcontext.Context) error {
 	if err := ctx.Session.Save(ctx.SessionStore); err != nil {
 		return ctx.WriteError(500, "Failed to save session")
 	}
-	
+
+	ctx.SessionStore.SetSessionCookie(ctx.Response, ctx.Session)
+
 	// Return user data (without password) and token
 	userResponse := make(map[string]interface{})
 	for k, v := range user {
@@ -152,7 +154,7 @@ func (uc *UserCollection) handleLogin(ctx *appcontext.Context) error {
 		}
 	}
 	userResponse["token"] = token
-	
+
 	return ctx.WriteJSON(userResponse)
 }
 

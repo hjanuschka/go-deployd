@@ -502,7 +502,7 @@ func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 	internalValue, _ := v8.NewValue(isolate, false)
 	v8ctx.Global().Set("internal", internalValue)
 	
-	isRoot := sc.ctx.Session != nil && sc.ctx.Session.IsRoot()
+	isRoot := sc.ctx.IsRoot
 	isRootValue, _ := v8.NewValue(isolate, isRoot)
 	v8ctx.Global().Set("isRoot", isRootValue)
 

@@ -153,6 +153,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				isRoot = true
 				userID = "root"
 				username = "root"
+				log.Printf("Master key authenticated, isRoot: %v", isRoot)
 			}
 		}
 	}
@@ -171,7 +172,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		IsRoot:       isRoot,
 		IsAuthenticated: isAuthenticated,
 	}
-	ctx := context.New(req, w, resource, authData)
+	session, _ := r.sessions.GetSessionFromRequest(req)
+	ctx := context.New(req, w, resource, authData, session, r.sessions)
 	
 	// Handle the request
 	if err := resource.Handle(ctx); err != nil {
