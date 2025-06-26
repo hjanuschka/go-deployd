@@ -1,0 +1,62 @@
+package main
+
+import (
+	"strings"
+	"time"
+	"github.com/hjanuschka/go-deployd/internal/events"
+)
+
+// Example POST event handler in Go
+// This file would be compiled to a plugin at startup
+
+func Run(ctx *events.EventContext) error {
+	// Access the data being saved
+	data := ctx.Data
+	
+	// Validate title
+	title, ok := data["title"].(string)
+	if !ok || strings.TrimSpace(title) == "" {
+		ctx.Error("title", "Title is required")
+	}
+	
+	// Set default completed status
+	if _, exists := data["completed"]; !exists {
+		data["completed"] = false
+	}
+	
+	// Set creation timestamp
+	data["createdAt"] = time.Now()
+	
+	// Example: Require authentication for certain titles
+	if title == "$REQUIRE_AUTH" {
+		if ctx.Me == nil {
+			ctx.Cancel("You are not authorized", 401)
+		}
+	}
+	
+	// Example: Add user info if authenticated
+	if ctx.Me != nil {
+		data["createdBy"] = ctx.Me["id"]
+	}
+	
+	// Example: Validate priority range
+	if priority, exists := data["priority"]; exists {
+		if p, ok := priority.(float64); ok {
+			if p < 1 || p > 5 {
+				ctx.Error("priority", "Priority must be between 1 and 5")
+			}
+		} else {
+			ctx.Error("priority", "Priority must be a number")
+		}
+	}
+	
+	// Check if there are validation errors
+	if ctx.HasErrors() {
+		return nil // Will return validation errors
+	}
+	
+	return nil
+}
+
+// main function required for plugins but not used
+func main() {}

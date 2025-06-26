@@ -1,16 +1,14 @@
 {
+  "eventConfig": {
+    "get": {
+      "runtime": "go"
+    }
+  },
   "properties": {
-    "active": {
-      "type": "boolean",
-      "default": false,
-      "system": true
-    },
-    "age": {
-      "type": "number"
-    },
-    "createdAt": {
-      "type": "date",
-      "default": "now",
+    "username": {
+      "type": "string",
+      "required": true,
+      "unique": true,
       "system": true
     },
     "email": {
@@ -18,14 +16,6 @@
       "required": true,
       "unique": true,
       "system": true
-    },
-    "isVerified": {
-      "type": "boolean",
-      "default": false,
-      "system": true
-    },
-    "name": {
-      "type": "string"
     },
     "password": {
       "type": "string",
@@ -37,24 +27,39 @@
       "default": "user",
       "system": true
     },
-    "updatedAt": {
-      "type": "date",
-      "default": "now",
+    "active": {
+      "type": "boolean",
+      "default": false,
       "system": true
     },
-    "username": {
+    "isVerified": {
+      "type": "boolean",
+      "default": false,
+      "system": true
+    },
+    "verificationToken": {
       "type": "string",
-      "required": true,
-      "unique": true,
       "system": true
     },
     "verificationExpires": {
       "type": "date",
       "system": true
     },
-    "verificationToken": {
+    "createdAt": {
+      "type": "date",
+      "default": "now",
+      "system": true,
+      "order": 9998
+    },
+    "updatedAt": {
+      "type": "date",
+      "default": "now",
+      "system": true,
+      "order": 9999
+    },
+    "xxxx": {
       "type": "string",
-      "system": true
+      "order": 1
     }
   },
   "allowAdditionalProperties": true,
