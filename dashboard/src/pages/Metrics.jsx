@@ -39,6 +39,7 @@ import {
   Cell
 } from 'recharts';
 import { FiActivity, FiDatabase, FiAlertTriangle, FiServer, FiClock } from 'react-icons/fi';
+import { AnimatedBackground } from '../components/AnimatedBackground';
 
 const COLORS = ['#3182CE', '#38A169', '#D69E2E', '#E53E3E', '#00B5D8'];
 
@@ -208,7 +209,10 @@ export default function Metrics() {
   const recentErrors = getRecentErrors();
 
   return (
-    <VStack spacing={6} align="stretch">
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
+        <VStack spacing={6} align="stretch">
       <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
         <Heading size="lg">Performance Metrics</Heading>
         <HStack spacing={4}>
@@ -511,6 +515,8 @@ export default function Metrics() {
           </CardBody>
         </Card>
       )}
-    </VStack>
+        </VStack>
+      </Box>
+    </Box>
   );
 }

@@ -217,12 +217,22 @@ function App() {
   }
 
   // Force login page if not authenticated (but not still loading)
-  // If authenticated and on login page, show dashboard instead
   if (!isAuthenticated && !loading) {
     return <Login onLogin={handleLogin} />
   }
   
-  // If authenticated but somehow on login page, redirect will happen in handleLogin
+  // If authenticated and on login page, redirect to dashboard
+  if (isAuthenticated && location.pathname === '/login') {
+    navigate('/', { replace: true })
+    return (
+      <Center minH="100vh">
+        <VStack spacing={4}>
+          <Spinner size="xl" color="brand.500" />
+          <Text>Redirecting to dashboard...</Text>
+        </VStack>
+      </Center>
+    )
+  }
 
   return <AuthenticatedApp />
 }

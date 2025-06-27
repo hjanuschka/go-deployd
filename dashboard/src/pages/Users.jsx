@@ -39,6 +39,7 @@ import {
 } from '@chakra-ui/react'
 import { FiPlus, FiEdit2, FiTrash2, FiUser } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
+import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function Users() {
   const [users, setUsers] = useState([])
@@ -509,7 +510,9 @@ function Users() {
   }
 
   return (
-    <Box>
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
       <HStack justify="space-between" mb={6}>
         <Heading size="lg" color="brand.500">
           Users Management
@@ -650,6 +653,7 @@ function Users() {
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
+      </Box>
     </Box>
   )
 }

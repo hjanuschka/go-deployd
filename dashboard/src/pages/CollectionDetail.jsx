@@ -47,6 +47,7 @@ import { apiService } from '../services/api'
 import DocumentModal from '../components/DocumentModal'
 import PropertiesEditor from '../components/PropertiesEditor'
 import EventsEditor from '../components/EventsEditor'
+import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function CollectionDetail() {
   const { name } = useParams()
@@ -358,7 +359,9 @@ function CollectionDetail() {
   }
 
   return (
-    <Box>
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
       <HStack justify="space-between" mb={6}>
         <VStack align="start" spacing={1}>
           <Heading size="lg">{collection.name}</Heading>
@@ -611,6 +614,7 @@ curl -X PUT http://localhost:2403/${name}/{id} \\
         collection={collection}
         onSave={handleSaveDocument}
       />
+      </Box>
     </Box>
   )
 }

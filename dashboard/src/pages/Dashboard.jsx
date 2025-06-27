@@ -195,7 +195,6 @@ function Dashboard() {
               value={stats.collections.length}
               icon={FiDatabase}
               gradient="brand"
-              trend="+12%"
               subtitle="Active collections"
             />
           </GridItem>
@@ -205,7 +204,6 @@ function Dashboard() {
               value={stats.totalDocuments}
               icon={FiFile}
               gradient="success"
-              trend="+45"
               subtitle="Total documents"
             />
           </GridItem>
@@ -215,7 +213,6 @@ function Dashboard() {
               value={stats.serverInfo?.uptime || 'N/A'}
               icon={FiClock}
               gradient="warning"
-              trend="99.9%"
               subtitle="System uptime"
             />
           </GridItem>
@@ -224,8 +221,7 @@ function Dashboard() {
               title="Status"
               value="Healthy"
               icon={FiActivity}
-              gradient="danger"
-              trend="All systems"
+              gradient="success"
               subtitle={stats.serverInfo?.database || 'Connected'}
             />
           </GridItem>

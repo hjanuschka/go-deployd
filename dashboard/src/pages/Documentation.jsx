@@ -58,6 +58,7 @@ import {
 } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
 import { apiService } from '../services/api'
+import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function Documentation() {
   const [collections, setCollections] = useState([])
@@ -778,7 +779,10 @@ function Documentation() {
   )
 
   return (
-    <VStack align="stretch" spacing={6}>
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
+        <VStack align="stretch" spacing={6}>
       <VStack align="stretch" spacing={4}>
         <HStack justify="space-between">
           <HStack>
@@ -2404,7 +2408,9 @@ export DATABASE_URL="mongodb://localhost:27017/deployd_prod"
           </ModalFooter>
         </ModalContent>
       </Modal>
-    </VStack>
+        </VStack>
+      </Box>
+    </Box>
   )
 }
 

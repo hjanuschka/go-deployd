@@ -37,6 +37,7 @@ import {
   FiUser,
 } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
+import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function Logs() {
   const [logs, setLogs] = useState([])
@@ -169,7 +170,10 @@ function Logs() {
   }
 
   return (
-    <VStack align="stretch" spacing={6}>
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
+        <VStack align="stretch" spacing={6}>
       <HStack justify="space-between">
         <HStack>
           <FiFileText />
@@ -303,7 +307,9 @@ function Logs() {
           )}
         </CardBody>
       </Card>
-    </VStack>
+        </VStack>
+      </Box>
+    </Box>
   )
 }
 

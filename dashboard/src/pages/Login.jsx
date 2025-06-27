@@ -128,17 +128,27 @@ function Login({ onLogin }) {
                 <Heading 
                   size="xl" 
                   textAlign="center" 
-                  color="white"
-                  textShadow="2px 2px 4px rgba(0,0,0,0.5)"
+                  color={useColorModeValue('gray.800', 'white')}
+                  bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+                  px={6}
+                  py={3}
+                  borderRadius="xl"
+                  backdropFilter="blur(10px)"
+                  textShadow={useColorModeValue('none', '2px 2px 4px rgba(0,0,0,0.5)')}
                   fontWeight="bold"
                 >
                   Go-Deployd Dashboard
                 </Heading>
                 <Text 
-                  color="whiteAlpha.800" 
+                  color={useColorModeValue('gray.700', 'whiteAlpha.900')} 
                   textAlign="center"
                   fontSize="lg"
-                  textShadow="1px 1px 2px rgba(0,0,0,0.3)"
+                  bg={useColorModeValue('whiteAlpha.800', 'blackAlpha.500')}
+                  px={4}
+                  py={2}
+                  borderRadius="lg"
+                  backdropFilter="blur(10px)"
+                  textShadow={useColorModeValue('none', '1px 1px 2px rgba(0,0,0,0.3)')}
                 >
                   Enter your master key to access the admin dashboard
                 </Text>
@@ -156,10 +166,10 @@ function Login({ onLogin }) {
             <Box
               w="full"
               p={8}
-              bg="whiteAlpha.100"
+              bg={useColorModeValue('whiteAlpha.950', 'whiteAlpha.100')}
               backdropFilter="blur(20px)"
               borderWidth="1px"
-              borderColor="whiteAlpha.200"
+              borderColor={useColorModeValue('gray.300', 'whiteAlpha.200')}
               borderRadius="2xl"
               shadow="2xl"
               position="relative"
@@ -179,7 +189,7 @@ function Login({ onLogin }) {
               <form onSubmit={handleLogin}>
                 <VStack spacing={6}>
                   <FormControl isRequired>
-                    <FormLabel color="white" fontWeight="semibold">
+                    <FormLabel color={useColorModeValue('gray.800', 'white')} fontWeight="semibold">
                       Master Key
                     </FormLabel>
                     <InputGroup>
@@ -190,11 +200,11 @@ function Login({ onLogin }) {
                         placeholder="mk_..."
                         fontFamily="mono"
                         fontSize="sm"
-                        bg="whiteAlpha.100"
-                        borderColor="whiteAlpha.300"
-                        color="white"
-                        _placeholder={{ color: 'whiteAlpha.600' }}
-                        _hover={{ borderColor: 'whiteAlpha.400' }}
+                        bg={useColorModeValue('white', 'whiteAlpha.100')}
+                        borderColor={useColorModeValue('gray.300', 'whiteAlpha.300')}
+                        color={useColorModeValue('gray.800', 'white')}
+                        _placeholder={{ color: useColorModeValue('gray.500', 'whiteAlpha.600') }}
+                        _hover={{ borderColor: useColorModeValue('gray.400', 'whiteAlpha.400') }}
                         _focus={{ 
                           borderColor: 'brand.400',
                           boxShadow: '0 0 0 1px var(--chakra-colors-brand-400)'
@@ -207,8 +217,8 @@ function Login({ onLogin }) {
                           onClick={() => setShowKey(!showKey)}
                           icon={showKey ? <ViewOffIcon /> : <ViewIcon />}
                           aria-label={showKey ? 'Hide master key' : 'Show master key'}
-                          color="whiteAlpha.700"
-                          _hover={{ color: 'white', bg: 'whiteAlpha.200' }}
+                          color={useColorModeValue('gray.600', 'whiteAlpha.700')}
+                          _hover={{ color: useColorModeValue('gray.800', 'white'), bg: useColorModeValue('gray.100', 'whiteAlpha.200') }}
                         />
                       </InputRightElement>
                     </InputGroup>
@@ -223,12 +233,12 @@ function Login({ onLogin }) {
                       <Alert 
                         status="error" 
                         borderRadius="lg"
-                        bg="red.500"
-                        color="white"
+                        bg={useColorModeValue('red.50', 'red.500')}
+                        color={useColorModeValue('red.800', 'white')}
                         border="1px solid"
-                        borderColor="red.600"
+                        borderColor={useColorModeValue('red.200', 'red.600')}
                       >
-                        <AlertIcon color="white" />
+                        <AlertIcon color={useColorModeValue('red.800', 'white')} />
                         {error}
                       </Alert>
                     </MotionBox>
@@ -275,15 +285,15 @@ function Login({ onLogin }) {
               spacing={3} 
               textAlign="center"
               p={4}
-              bg="whiteAlpha.100"
+              bg={useColorModeValue('whiteAlpha.900', 'whiteAlpha.100')}
               borderRadius="lg"
               backdropFilter="blur(10px)"
             >
-              <Text fontSize="sm" color="whiteAlpha.800" fontWeight="medium">
+              <Text fontSize="sm" color={useColorModeValue('gray.700', 'whiteAlpha.900')} fontWeight="medium">
                 💡 The master key is displayed in the console when you first start the server.
               </Text>
-              <Text fontSize="sm" color="whiteAlpha.700">
-                📁 It's also stored in <Text as="code" bg="whiteAlpha.200" px={2} py={1} borderRadius="md" color="white">.deployd/security.json</Text>
+              <Text fontSize="sm" color={useColorModeValue('gray.600', 'whiteAlpha.800')}>
+                📁 It's also stored in <Text as="code" bg={useColorModeValue('gray.100', 'whiteAlpha.200')} px={2} py={1} borderRadius="md" color={useColorModeValue('gray.800', 'white')}>.deployd/security.json</Text>
               </Text>
             </VStack>
           </MotionBox>
