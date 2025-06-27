@@ -89,7 +89,7 @@ func New(config *Config) (*Server, error) {
 	if config.Development {
 		logLevel = logging.DEBUG
 	}
-	
+
 	// Check for LOG_LEVEL environment variable override
 	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
 		switch strings.ToUpper(envLevel) {
@@ -103,7 +103,7 @@ func New(config *Config) (*Server, error) {
 			logLevel = logging.ERROR
 		}
 	}
-	
+
 	if err := logging.InitializeLogger(logging.Config{
 		LogDir:    "./logs",
 		DevMode:   config.Development,

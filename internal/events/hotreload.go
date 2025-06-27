@@ -267,10 +267,10 @@ func (hrm *HotReloadGoManager) ReloadAllIfChanged() error {
 				// Source has changed, recompile
 				if err := hrm.compilePlugin(hotPlugin.SourcePath, hotPlugin.PluginPath); err != nil {
 					logging.GetLogger().WithComponent("events").Error("Failed to recompile hot-reload plugin", logging.Fields{
-						"event_type":   string(eventType),
-						"source_path":  hotPlugin.SourcePath,
-						"plugin_path":  hotPlugin.PluginPath,
-						"error":        err.Error(),
+						"event_type":  string(eventType),
+						"source_path": hotPlugin.SourcePath,
+						"plugin_path": hotPlugin.PluginPath,
+						"error":       err.Error(),
 					})
 					continue
 				}

@@ -87,9 +87,9 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 
 		logger := logging.GetLogger().WithComponent("events")
 		logger.Debug("Loading event script", logging.Fields{
-			"collection": filepath.Base(configPath),
-			"event": baseName,
-			"runtime": preferredRuntime,
+			"collection":    filepath.Base(configPath),
+			"event":         baseName,
+			"runtime":       preferredRuntime,
 			"config_exists": eventConfig[baseName],
 		})
 
@@ -99,8 +99,8 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 			goPath := filepath.Join(configPath, baseName+".go")
 			if _, err := os.ReadFile(goPath); err == nil {
 				logger.Info("Compiling Go event script", logging.Fields{
-					"collection": filepath.Base(configPath),
-					"script": baseName + ".go",
+					"collection":  filepath.Base(configPath),
+					"script":      baseName + ".go",
 					"source_path": goPath,
 				})
 				// Compile Go script to plugin
@@ -108,15 +108,15 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 				if err := CompileGoPlugin(goPath, pluginPath); err != nil {
 					logger.Error("Failed to compile Go script", logging.Fields{
 						"source_path": goPath,
-						"error": err.Error(),
-						"collection": filepath.Base(configPath),
-						"event": baseName,
+						"error":       err.Error(),
+						"collection":  filepath.Base(configPath),
+						"event":       baseName,
 					})
 					// Don't load this event script at all if Go compilation fails
 				} else {
 					logger.Info("Successfully compiled Go event script", logging.Fields{
-						"collection": filepath.Base(configPath),
-						"script": baseName + ".go",
+						"collection":  filepath.Base(configPath),
+						"script":      baseName + ".go",
 						"plugin_path": pluginPath,
 					})
 					usm.goPlugins[eventType] = &CompiledGoScript{
@@ -143,9 +143,9 @@ func (usm *UniversalScriptManager) LoadScriptsWithConfig(configPath string, even
 						// Log error but continue - fallback to runtime compilation
 						logger.Warn("Failed to precompile JavaScript", logging.Fields{
 							"script_path": jsPath,
-							"error": precompileErr.Error(),
-							"collection": filepath.Base(configPath),
-							"event": baseName,
+							"error":       precompileErr.Error(),
+							"collection":  filepath.Base(configPath),
+							"event":       baseName,
 						})
 					} else {
 						// Mark script as compiled for optimized execution
@@ -407,8 +407,8 @@ func (usm *UniversalScriptManager) LoadHotReloadScript(eventType EventType, sour
 	pluginPath := filepath.Join(usm.configPath, ".plugins", eventName+".so")
 	logger := logging.GetLogger().WithComponent("events")
 	logger.Info("Hot-reloading Go event script", logging.Fields{
-		"collection": filepath.Base(usm.configPath),
-		"event":      eventName,
+		"collection":  filepath.Base(usm.configPath),
+		"event":       eventName,
 		"source_path": sourcePath,
 		"plugin_path": pluginPath,
 	})
@@ -422,8 +422,8 @@ func (usm *UniversalScriptManager) LoadHotReloadScript(eventType EventType, sour
 	}
 
 	logger.Info("Successfully hot-reloaded Go event script", logging.Fields{
-		"collection": filepath.Base(usm.configPath),
-		"event":      eventName,
+		"collection":  filepath.Base(usm.configPath),
+		"event":       eventName,
 		"source_path": sourcePath,
 		"plugin_path": pluginPath,
 	})

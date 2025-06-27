@@ -39,3 +39,5 @@ linters:
     # - unused
     # - ineffassign  
     - misspell
+  disable:
+    - gocritic  # Disable go-critic due to embedded ruleguard panic

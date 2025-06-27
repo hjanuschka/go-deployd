@@ -53,7 +53,7 @@ func main() {
 	if *dev {
 		logLevel = logging.DEBUG
 	}
-	
+
 	// Check for LOG_LEVEL environment variable override
 	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
 		switch strings.ToUpper(envLevel) {
@@ -67,21 +67,21 @@ func main() {
 			logLevel = logging.ERROR
 		}
 	}
-	
+
 	logging.InitializeLogger(logging.Config{
 		LogDir:    "./logs",
 		DevMode:   *dev,
 		MinLevel:  logLevel,
 		Component: "main",
 	})
-	
+
 	logger := logging.GetLogger()
 	logger.Info("Starting go-deployd server", logging.Fields{
-		"port": *port,
-		"database_type": *dbType,
+		"port":             *port,
+		"database_type":    *dbType,
 		"development_mode": *dev,
 	})
-	
+
 	if *dbType == "sqlite" {
 		logger.Info("Using SQLite database", logging.Fields{
 			"database_file": *dbName,
@@ -89,9 +89,9 @@ func main() {
 	} else {
 		logger.Info("Using network database", logging.Fields{
 			"database_type": *dbType,
-			"host": *dbHost,
-			"port": *dbPort,
-			"database": *dbName,
+			"host":          *dbHost,
+			"port":          *dbPort,
+			"database":      *dbName,
 		})
 	}
 
@@ -110,7 +110,7 @@ func main() {
 		ConfigPath:       *config,
 		Development:      *dev,
 	})
-	
+
 	// For now, skip embedded dashboard - will implement later
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
@@ -169,16 +169,16 @@ func checkJSSandboxModules() {
 	// Check if node_modules exists
 	if _, err := os.Stat(nodeModulesDir); os.IsNotExist(err) {
 		logging.GetLogger().Info("Installing JavaScript event handler dependencies")
-		
+
 		// Run npm install in js-sandbox directory
 		cmd := exec.Command("npm", "install")
 		cmd.Dir = jsSandboxDir
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		
+
 		if err := cmd.Run(); err != nil {
 			logging.GetLogger().Warn("Failed to install js-sandbox dependencies", logging.Fields{
-				"error": err.Error(),
+				"error":  err.Error(),
 				"impact": "JavaScript events may not have access to npm modules",
 			})
 		} else {

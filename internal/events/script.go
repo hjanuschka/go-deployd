@@ -517,12 +517,12 @@ func setupUtilityFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 		for i, arg := range args {
 			argsSlice[i] = arg.String()
 		}
-		
+
 		source := "javascript"
 		if sc.ctx != nil && sc.ctx.Resource != nil {
 			source = fmt.Sprintf("js:%s", sc.ctx.Resource.GetName())
 		}
-		
+
 		logging.GetLogger().WithComponent("events").Debug("JavaScript emit function called", logging.Fields{
 			"source": source,
 			"args":   argsSlice,

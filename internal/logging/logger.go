@@ -59,17 +59,17 @@ type LogEntry struct {
 }
 
 type Logger struct {
-	mu          sync.RWMutex
-	logDir      string
-	file        *os.File
-	logChan     chan *LogEntry
-	stopChan    chan struct{}
-	wg          sync.WaitGroup
-	devMode     bool
-	minLevel    LogLevel
-	output      io.Writer
-	component   string
-	fields      Fields
+	mu            sync.RWMutex
+	logDir        string
+	file          *os.File
+	logChan       chan *LogEntry
+	stopChan      chan struct{}
+	wg            sync.WaitGroup
+	devMode       bool
+	minLevel      LogLevel
+	output        io.Writer
+	component     string
+	fields        Fields
 	sensitiveKeys []string
 }
 
@@ -100,7 +100,7 @@ func InitializeLogger(config Config) error {
 			"password", "secret", "key", "token", "auth",
 			"masterkey", "master_key", "private", "credential",
 		}
-		
+
 		sensitiveKeys := append(defaultSensitiveKeys, config.SensitiveKeys...)
 
 		globalLogger = &Logger{
@@ -150,7 +150,7 @@ func GetLogger() *Logger {
 		// Use environment variables for configuration
 		devMode := getEnvironment() == "development"
 		logLevel := getLogLevelFromEnv()
-		
+
 		InitializeLogger(Config{
 			LogDir:   "./logs",
 			DevMode:  devMode,
@@ -186,7 +186,7 @@ func (l *Logger) WithFields(fields Fields) *Logger {
 	for k, v := range fields {
 		newFields[k] = v
 	}
-	
+
 	return &Logger{
 		logDir:        l.logDir,
 		logChan:       l.logChan,
@@ -203,22 +203,22 @@ func (l *Logger) WithFields(fields Fields) *Logger {
 // WithContext extracts common fields from context
 func (l *Logger) WithContext(ctx context.Context) *Logger {
 	fields := make(Fields)
-	
+
 	// Extract trace ID if present
 	if traceID := ctx.Value("trace_id"); traceID != nil {
 		fields["trace_id"] = traceID
 	}
-	
+
 	// Extract user ID if present
 	if userID := ctx.Value("user_id"); userID != nil {
 		fields["user_id"] = userID
 	}
-	
+
 	// Extract request ID if present
 	if requestID := ctx.Value("request_id"); requestID != nil {
 		fields["request_id"] = requestID
 	}
-	
+
 	return l.WithFields(fields)
 }
 
@@ -252,13 +252,13 @@ func getCaller(skip int) string {
 	if !ok {
 		return "unknown"
 	}
-	
+
 	// Get only the last two directories and filename
 	parts := strings.Split(file, "/")
 	if len(parts) > 2 {
 		file = strings.Join(parts[len(parts)-2:], "/")
 	}
-	
+
 	return fmt.Sprintf("%s:%d", file, line)
 }
 
@@ -277,7 +277,7 @@ func (l *Logger) redactSensitiveData(data interface{}) interface{} {
 		for key, value := range v {
 			lowerKey := strings.ToLower(key)
 			shouldRedact := false
-			
+
 			// Check if key contains any sensitive keywords
 			for _, sensitive := range l.sensitiveKeys {
 				if strings.Contains(lowerKey, strings.ToLower(sensitive)) {
@@ -285,7 +285,7 @@ func (l *Logger) redactSensitiveData(data interface{}) interface{} {
 					break
 				}
 			}
-			
+
 			if shouldRedact {
 				redacted[key] = "[REDACTED]"
 			} else {
@@ -313,28 +313,28 @@ func (l *Logger) formatConsoleOutput(entry *LogEntry) string {
 			break
 		}
 	}
-	
+
 	color := levelColors[level]
 	timestamp := entry.Timestamp.Format("15:04:05.000")
-	
+
 	// Build the message
 	var parts []string
-	
+
 	// Add timestamp and level with color
 	parts = append(parts, fmt.Sprintf("%s%s [%s]%s", color, timestamp, entry.Level, colorReset))
-	
+
 	// Add component if present
 	if entry.Component != "" {
 		parts = append(parts, fmt.Sprintf("[%s]", entry.Component))
 	}
-	
+
 	// Add message
 	parts = append(parts, entry.Message)
-	
+
 	// Add key structured data in a readable format (not full JSON)
 	if len(entry.Data) > 0 {
 		var readableParts []string
-		
+
 		// Show important fields in a readable way
 		for key, value := range entry.Data {
 			switch key {
@@ -354,17 +354,17 @@ func (l *Logger) formatConsoleOutput(entry *LogEntry) string {
 				}
 			}
 		}
-		
+
 		if len(readableParts) > 0 {
 			parts = append(parts, fmt.Sprintf("(%s)", strings.Join(readableParts, ", ")))
 		}
 	}
-	
+
 	// Add caller in dev mode for errors and debug
 	if l.devMode && entry.Caller != "" && (level == ERROR || level == DEBUG) {
 		parts = append(parts, fmt.Sprintf("@%s", entry.Caller))
 	}
-	
+
 	return strings.Join(parts, " ")
 }
 

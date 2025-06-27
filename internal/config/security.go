@@ -94,7 +94,7 @@ func LoadSecurityConfig(configDir string) (*SecurityConfig, error) {
 		}
 
 		logging.GetLogger().Info("Generated new master key", logging.Fields{
-			"config_file": configFile,
+			"config_file":       configFile,
 			"master_key_length": len(config.MasterKey),
 		})
 		fmt.Printf("🔐 Generated new master key and saved to %s\n", configFile)

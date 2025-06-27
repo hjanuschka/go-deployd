@@ -71,7 +71,7 @@ func NewAdminHandler(db database.DatabaseInterface, router *router.Router, admin
 		"registration_allowed":  securityConfig.AllowRegistration,
 		"verification_required": securityConfig.RequireVerification,
 	})
-	
+
 	// Show master key for administrative access
 	fmt.Printf("🔐 Master Key: %s\n", securityConfig.MasterKey)
 

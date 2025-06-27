@@ -1,37 +1,32 @@
 {
   "properties": {
-    "title": {
-      "type": "string",
-      "required": true
-    },
     "completed": {
       "type": "boolean",
-      "default": false
-    },
-    "priority": {
-      "type": "number",
-      "default": 1
-    },
-    "description": {
-      "type": "string"
-    },
-    "dueDate": {
-      "type": "date"
+      "default": false,
+      "order": 2
     },
     "createdAt": {
       "type": "date",
-      "default": "now"
-    }
-  },
-  "eventConfig": {
-    "validate": {
-      "runtime": "go"
+      "default": "now",
+      "order": 3
     },
-    "post": {
-      "runtime": "go"
+    "description": {
+      "type": "string",
+      "order": 4
     },
-    "get": {
-      "runtime": "go"
+    "dueDate": {
+      "type": "date",
+      "order": 5
+    },
+    "priority": {
+      "type": "number",
+      "default": 1,
+      "order": 6
+    },
+    "title": {
+      "type": "string",
+      "required": true,
+      "order": 1
     }
   }
 }
