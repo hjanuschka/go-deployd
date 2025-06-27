@@ -329,8 +329,8 @@ func (s *Server) serveDashboardWithAuth(dashboardPath string) http.HandlerFunc {
 		// Extract path
 		path := strings.TrimPrefix(r.URL.Path, "/_dashboard/")
 
-		// Allow login page without authentication
-		if path == "login" || path == "login/" || strings.HasPrefix(path, "assets/") {
+		// Allow login page, assets, and logo files without authentication
+		if path == "login" || path == "login/" || strings.HasPrefix(path, "assets/") || strings.HasSuffix(path, ".png") || strings.HasSuffix(path, ".svg") || strings.HasSuffix(path, ".ico") {
 			s.serveDashboardFile(w, r, dashboardPath, path)
 			return
 		}
