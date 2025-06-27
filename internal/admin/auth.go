@@ -284,39 +284,41 @@ func (ah *AuthHandler) HandleRegenerateMasterKey(w http.ResponseWriter, r *http.
 	})
 }
 
-// Middleware to require master key authentication
+// Middleware to require master key or JWT authentication
 func (ah *AuthHandler) RequireMasterKey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// First check master key authentication
 		masterKey := r.Header.Get("X-Master-Key")
 		if masterKey == "" {
-			// Also check Authorization header with Bearer format
-			auth := r.Header.Get("Authorization")
-			if strings.HasPrefix(auth, "Bearer ") {
-				masterKey = strings.TrimPrefix(auth, "Bearer ")
-			}
-		}
-
-		// Also check cookie for dashboard requests
-		if masterKey == "" {
+			// Also check cookie for dashboard requests
 			if cookie, err := r.Cookie("masterKey"); err == nil {
 				masterKey = cookie.Value
 			}
 		}
 
-		if !ah.Security.ValidateMasterKey(masterKey) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":   "Master key required",
-				"message": "This endpoint requires a valid master key",
-			})
+		if ah.Security.ValidateMasterKey(masterKey) {
+			next(w, r)
 			return
 		}
 
-		// Master key authentication provides admin privileges automatically
-		// isRoot behavior is handled by the master key validation itself
+		// Check JWT authentication with isRoot=true
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") && ah.jwtManager != nil {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			if claims, err := ah.jwtManager.ValidateToken(token); err == nil && claims.IsRoot {
+				next(w, r)
+				return
+			}
+		}
 
-		next(w, r)
+		// Neither master key nor valid JWT token with isRoot
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   "Authentication required",
+			"message": "This endpoint requires a valid master key or root JWT token",
+		})
+		return
 	}
 }
 
