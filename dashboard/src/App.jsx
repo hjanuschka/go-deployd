@@ -57,6 +57,8 @@ import Login from './pages/Login'
 import Metrics from './pages/Metrics'
 import Sidebar from './components/Sidebar'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ToastProvider } from './components/ToastSystem'
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
 
 const menuItems = [
   { text: 'Dashboard', icon: FiHome, path: '/' },
@@ -75,6 +77,9 @@ function AuthenticatedApp() {
   const { logout, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  
+  // Initialize keyboard shortcuts
+  useKeyboardShortcuts()
 
   const bg = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
@@ -222,7 +227,9 @@ function App() {
 function AppWithAuth() {
   return (
     <AuthProvider>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </AuthProvider>
   )
 }
