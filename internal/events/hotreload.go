@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hjanuschka/go-deployd/internal/context"
+	"github.com/hjanuschka/go-deployd/internal/logging"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -265,20 +266,33 @@ func (hrm *HotReloadGoManager) ReloadAllIfChanged() error {
 			if stat.ModTime().After(hotPlugin.LastCompiled) {
 				// Source has changed, recompile
 				if err := hrm.compilePlugin(hotPlugin.SourcePath, hotPlugin.PluginPath); err != nil {
-					fmt.Printf("Failed to recompile %s: %v\n", eventType, err)
+					logging.GetLogger().WithComponent("events").Error("Failed to recompile hot-reload plugin", logging.Fields{
+						"event_type":   string(eventType),
+						"source_path":  hotPlugin.SourcePath,
+						"plugin_path":  hotPlugin.PluginPath,
+						"error":        err.Error(),
+					})
 					continue
 				}
 
 				// Reload plugin
 				p, err := plugin.Open(hotPlugin.PluginPath)
 				if err != nil {
-					fmt.Printf("Failed to reload plugin %s: %v\n", eventType, err)
+					logging.GetLogger().WithComponent("events").Error("Failed to reload hot-reload plugin", logging.Fields{
+						"event_type":  string(eventType),
+						"plugin_path": hotPlugin.PluginPath,
+						"error":       err.Error(),
+					})
 					continue
 				}
 
 				hotPlugin.Plugin = p
 				hotPlugin.LastCompiled = time.Now()
-				fmt.Printf("Hot-reloaded %s plugin\n", eventType)
+				logging.GetLogger().WithComponent("events").Info("Successfully hot-reloaded plugin", logging.Fields{
+					"event_type":    string(eventType),
+					"plugin_path":   hotPlugin.PluginPath,
+					"last_compiled": hotPlugin.LastCompiled,
+				})
 			}
 		}
 	}

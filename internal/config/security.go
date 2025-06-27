@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/hjanuschka/go-deployd/internal/logging"
 )
 
 // SecurityConfig holds security-related configuration
@@ -91,6 +93,10 @@ func LoadSecurityConfig(configDir string) (*SecurityConfig, error) {
 			return nil, fmt.Errorf("failed to save default security config: %w", err)
 		}
 
+		logging.GetLogger().Info("Generated new master key", logging.Fields{
+			"config_file": configFile,
+			"master_key_length": len(config.MasterKey),
+		})
 		fmt.Printf("🔐 Generated new master key and saved to %s\n", configFile)
 		fmt.Printf("   Master Key: %s\n", config.MasterKey)
 		fmt.Printf("   Keep this key secure! It provides administrative access.\n")
@@ -115,7 +121,10 @@ func LoadSecurityConfig(configDir string) (*SecurityConfig, error) {
 		if err := SaveSecurityConfig(&config, configDir); err != nil {
 			return nil, fmt.Errorf("failed to save updated security config: %w", err)
 		}
-		fmt.Printf("🔐 Generated missing master key: %s\n", config.MasterKey)
+		logging.GetLogger().Info("Generated missing master key", logging.Fields{
+			"master_key_length": len(config.MasterKey),
+		})
+		fmt.Printf("🔐 Generated missing master key: [HIDDEN FOR SECURITY]\n")
 	}
 
 	// Generate JWT secret if it's missing
@@ -124,6 +133,9 @@ func LoadSecurityConfig(configDir string) (*SecurityConfig, error) {
 		if err := SaveSecurityConfig(&config, configDir); err != nil {
 			return nil, fmt.Errorf("failed to save updated security config: %w", err)
 		}
+		logging.GetLogger().Info("Generated JWT secret", logging.Fields{
+			"jwt_secret_length": len(config.JWTSecret),
+		})
 		fmt.Printf("🔑 Generated JWT secret\n")
 	}
 

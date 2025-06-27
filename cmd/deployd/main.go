@@ -10,9 +10,11 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/server"
 )
 
@@ -45,15 +47,52 @@ func main() {
 		}
 	}
 
-	fmt.Printf("🚀 Starting go-deployd server...\n")
-	fmt.Printf("   Port: %d\n", *port)
-	if *dbType == "sqlite" {
-		fmt.Printf("   Database: %s (SQLite file: %s)\n", *dbType, *dbName)
-	} else {
-		fmt.Printf("   Database: %s://%s:%d/%s\n", *dbType, *dbHost, *dbPort, *dbName)
-	}
+	// Initialize logging early for startup messages
+	// Use environment variable for log level, with dev mode override
+	logLevel := logging.INFO
 	if *dev {
-		fmt.Printf("   Mode: development\n")
+		logLevel = logging.DEBUG
+	}
+	
+	// Check for LOG_LEVEL environment variable override
+	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
+		switch strings.ToUpper(envLevel) {
+		case "DEBUG":
+			logLevel = logging.DEBUG
+		case "INFO":
+			logLevel = logging.INFO
+		case "WARN", "WARNING":
+			logLevel = logging.WARN
+		case "ERROR":
+			logLevel = logging.ERROR
+		}
+	}
+	
+	logging.InitializeLogger(logging.Config{
+		LogDir:    "./logs",
+		DevMode:   *dev,
+		MinLevel:  logLevel,
+		Component: "main",
+	})
+	
+	logger := logging.GetLogger()
+	logger.Info("Starting go-deployd server", logging.Fields{
+		"port": *port,
+		"database_type": *dbType,
+		"development_mode": *dev,
+	})
+	
+	if *dbType == "sqlite" {
+		logger.Info("Using SQLite database", logging.Fields{
+			"database_file": *dbName,
+		})
+	} else {
+		logger.Info("Using network database", logging.Fields{
+			"database_type": *dbType,
+			"host": *dbHost,
+			"port": *dbPort,
+			"database": *dbName,
+		})
 	}
 
 	// Ensure js-sandbox has npm modules installed for JavaScript events
@@ -84,7 +123,9 @@ func main() {
 	}
 
 	go func() {
-		fmt.Printf("🌐 Server listening on http://localhost:%d\n", *port)
+		logging.GetLogger().Info("Server listening", logging.Fields{
+			"url": fmt.Sprintf("http://localhost:%d", *port),
+		})
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}
@@ -94,7 +135,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	fmt.Println("\n🛑 Shutting down server...")
+	logging.GetLogger().Info("Shutting down server")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -103,7 +144,8 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
-	fmt.Println("✅ Server gracefully stopped")
+	logging.GetLogger().Info("Server gracefully stopped")
+	logging.Shutdown()
 }
 
 // checkJSSandboxModules ensures npm modules are installed for JavaScript event handlers
@@ -124,7 +166,7 @@ func checkJSSandboxModules() {
 
 	// Check if node_modules exists
 	if _, err := os.Stat(nodeModulesDir); os.IsNotExist(err) {
-		fmt.Printf("📦 Installing JavaScript event handler dependencies...\n")
+		logging.GetLogger().Info("Installing JavaScript event handler dependencies")
 		
 		// Run npm install in js-sandbox directory
 		cmd := exec.Command("npm", "install")
@@ -133,10 +175,12 @@ func checkJSSandboxModules() {
 		cmd.Stderr = os.Stderr
 		
 		if err := cmd.Run(); err != nil {
-			fmt.Printf("⚠️  Warning: Failed to install js-sandbox dependencies: %v\n", err)
-			fmt.Printf("   JavaScript events may not have access to npm modules\n")
+			logging.GetLogger().Warn("Failed to install js-sandbox dependencies", logging.Fields{
+				"error": err.Error(),
+				"impact": "JavaScript events may not have access to npm modules",
+			})
 		} else {
-			fmt.Printf("✅ JavaScript event handler dependencies installed\n")
+			logging.GetLogger().Info("JavaScript event handler dependencies installed")
 		}
 	}
 }

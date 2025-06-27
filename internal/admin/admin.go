@@ -58,11 +58,21 @@ func NewAdminHandler(db database.DatabaseInterface, router *router.Router, admin
 	// Load security configuration
 	securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
 	if err != nil {
-		fmt.Printf("Warning: Failed to load security config: %v\n", err)
+		logging.GetLogger().Warn("Failed to load security config", logging.Fields{
+			"error": err.Error(),
+		})
 		securityConfig = config.DefaultSecurityConfig()
 	}
 
-	// Log master key on startup
+	// Log that security is configured and show master key for admin access
+	logging.GetLogger().Info("Security configuration loaded", logging.Fields{
+		"master_key_configured": securityConfig.MasterKey != "",
+		"jwt_secret_configured": securityConfig.JWTSecret != "",
+		"registration_allowed":  securityConfig.AllowRegistration,
+		"verification_required": securityConfig.RequireVerification,
+	})
+	
+	// Show master key for administrative access
 	fmt.Printf("🔐 Master Key: %s\n", securityConfig.MasterKey)
 
 	authHandler := NewAuthHandler(db, securityConfig)
@@ -793,9 +803,8 @@ func (h *AdminHandler) getLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger := logging.GetLogger()
-	logLevel := logging.LogLevel(level)
 
-	logs, err := logger.ReadLogs(filename, logLevel)
+	logs, err := logger.ReadLogs(filename, level)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -866,7 +875,7 @@ func (h *AdminHandler) downloadLogs(w http.ResponseWriter, r *http.Request) {
 
 	// If level filter is specified, filter the logs
 	if level != "" {
-		logs, err := logger.ReadLogs(filename, logging.LogLevel(level))
+		logs, err := logger.ReadLogs(filename, level)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Failed to read logs"))

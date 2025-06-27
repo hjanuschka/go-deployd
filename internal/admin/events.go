@@ -11,6 +11,7 @@ import (
 
 	appcontext "github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/events"
+	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -132,7 +133,12 @@ func (eh *EventsHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		filePath := filepath.Join(collection.GetConfigPath(), eventName+".go")
 		if err := eh.saveScriptToFile(filePath, request.Script, "go"); err != nil {
 			// Log warning but don't fail the request
-			fmt.Printf("Warning: Failed to save Go script to file: %v\n", err)
+			logging.GetLogger().WithComponent("events").Warn("Failed to save Go script to file", logging.Fields{
+				"collection": collectionName,
+				"event":      eventName,
+				"file_path":  filePath,
+				"error":      err.Error(),
+			})
 		}
 
 	case "js":

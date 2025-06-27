@@ -82,8 +82,32 @@ func New(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// Initialize logging system with dev mode
-	if err := logging.InitializeLoggerWithDevMode("./logs", config.Development); err != nil {
+	// Initialize logging system with enhanced configuration
+	logLevel := logging.INFO
+	if config.Development {
+		logLevel = logging.DEBUG
+	}
+	
+	// Check for LOG_LEVEL environment variable override
+	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
+		switch strings.ToUpper(envLevel) {
+		case "DEBUG":
+			logLevel = logging.DEBUG
+		case "INFO":
+			logLevel = logging.INFO
+		case "WARN", "WARNING":
+			logLevel = logging.WARN
+		case "ERROR":
+			logLevel = logging.ERROR
+		}
+	}
+	
+	if err := logging.InitializeLogger(logging.Config{
+		LogDir:    "./logs",
+		DevMode:   config.Development,
+		MinLevel:  logLevel,
+		Component: "server",
+	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize logging: %w", err)
 	}
 

@@ -1,7 +1,6 @@
 package events
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -154,7 +153,10 @@ golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632
 
 	if modOutput, err := modCmd.CombinedOutput(); err != nil {
 		// Log but don't fail - dependencies might already be available
-		fmt.Printf("Go mod download output: %s\n", modOutput)
+		logging.GetLogger().WithComponent("events").Debug("Go mod download completed with output", logging.Fields{
+			"output": string(modOutput),
+			"error":  err.Error(),
+		})
 	}
 
 	// Ensure target directory exists
@@ -259,17 +261,8 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interf
 			logData = data[0]
 		}
 
-		// Log to structured logging system AND stdout with user-generated level
+		// Log to structured logging system with user-generated level
 		logging.UserGenerated(message, source, logData)
-
-		// Also log to stdout for immediate visibility
-		fmt.Printf("[USER LOG] %s: %s", source, message)
-		if logData != nil {
-			if dataJSON, err := json.Marshal(logData); err == nil {
-				fmt.Printf(" | Data: %s", string(dataJSON))
-			}
-		}
-		fmt.Printf("\n")
 	}
 
 	// Use reflection to call the Run method

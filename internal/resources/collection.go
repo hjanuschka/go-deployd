@@ -837,7 +837,7 @@ func (c *Collection) runValidateEvent(ctx *appcontext.Context, data map[string]i
 }
 
 func (c *Collection) runGetEvent(ctx *appcontext.Context, data map[string]interface{}) error {
-	logging.Info("🔥 RUNNING GET EVENT", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+	logging.Debug("🔥 RUNNING GET EVENT", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 		"documentId": data["id"],
 		"email":      data["email"],
 		"hasScript":  c.scriptManager != nil,
@@ -848,11 +848,6 @@ func (c *Collection) runGetEvent(ctx *appcontext.Context, data map[string]interf
 	if err != nil {
 		logging.Error("❌ GET EVENT FAILED", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 			"error": err.Error(),
-		})
-	} else {
-		logging.Info("✅ GET EVENT COMPLETED", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
-			"documentId":   data["id"],
-			"modifiedData": data,
 		})
 	}
 
