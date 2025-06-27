@@ -1,10 +1,10 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import { useToast } from '../components/ToastSystem'
 
 export const useKeyboardShortcuts = () => {
   const { toast } = useToast()
 
-  const shortcuts = {
+  const shortcuts = useMemo(() => ({
     // Navigation shortcuts
     'cmd+k': {
       description: 'Open command palette',
@@ -57,7 +57,7 @@ export const useKeyboardShortcuts = () => {
         }
       }
     }
-  }
+  }), [toast])
 
   const showShortcutsHelp = useCallback(() => {
     const shortcutsList = Object.entries(shortcuts)
@@ -118,7 +118,7 @@ export const useKeyboardShortcuts = () => {
       event.preventDefault()
       shortcuts[shortcutKey].action()
     }
-  }, [shortcuts])
+  }, [shortcuts]) // Now shortcuts is memoized so this is safe
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
