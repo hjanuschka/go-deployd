@@ -232,33 +232,88 @@ curl "http://localhost:2403/todos/count"
 curl "http://localhost:2403/collections"
 ```
 
-## 🛠️ Available Commands
+## 🛠️ Build & Deploy Commands
+
+### 🏗️ **Building**
 
 ```bash
-# Quick start (SQLite, zero dependencies)
-make run_sqlite          # Production-ready server
+# Build development binary (includes web/ folder dependency)
+make build
 
-# Development (with hot reload)
-make dev-sqlite          # Recommended for development
-make dev                 # With MongoDB
-make install-dev-tools   # Install air for hot reload
+# Build standalone production binary (NO web/ folder needed!)
+make dist
+```
 
-# Building
-make build              # Build binary
-make dashboard-build    # Build dashboard for production
+### 🔥 **Development Workflow**
 
-# Database options
-make run                # MongoDB (requires MongoDB server)
-make run_mysql          # MySQL (requires .env config)
+```bash
+# Install development tools first
+make install-dev-tools
 
+# Development with hot reload (recommended)
+make dev-sqlite          # SQLite + Go hot reload + React dev server
+make dev-mongo           # MongoDB + Go hot reload + React dev server
+
+# Alternative: Simple development (no hot reload)
+make dev-simple          # Faster startup, manual restarts needed
+
+# Dashboard development
+make dashboard-dev       # React-only dev server (port 3001)
+make dashboard-build-dev # Build dashboard with debug symbols
+```
+
+**Development Features:**
+- 🔥 **Go hot reload** with `air` - changes trigger automatic rebuilds
+- 🎨 **React hot reload** with Vite - instant UI updates  
+- 🐛 **Debug symbols** - Unminified JS (3.3MB) + 7MB sourcemaps
+- ⚡ **Fast rebuilds** - Optimized for development speed
+- 📝 **Config exclusion** - Changes to `resources/*/config.json` don't trigger reload
+
+### 🚀 **Production Deployment**
+
+```bash
+# Method 1: Standalone Binary (RECOMMENDED)
+make dist                    # Creates bin/deployd-dist
+./bin/deployd-dist -port 80  # Only needs resources/ folder!
+
+# Method 2: Standard Binary + Web Assets
+make build                   # Creates bin/deployd
+make dashboard-build         # Creates optimized web/dashboard/
+./bin/deployd -port 80       # Needs both binary + web/ folder
+```
+
+**Production Features:**
+- 📦 **Standalone deployment** - Single binary + `resources/` folder
+- ⚡ **Optimized dashboard** - Minified (1.6MB), code-split, compressed
+- 🔒 **Production security** - No debug symbols or sourcemaps
+- 🚀 **Fast startup** - Pre-built assets, no build step needed
+
+### 🎯 **Database Options**
+
+```bash
+# SQLite (recommended, zero dependencies)
+make run_sqlite          # or ./bin/deployd-dist -db-type sqlite
+
+# MongoDB (requires MongoDB server)
+make run                 # or ./bin/deployd-dist -db-type mongodb
+
+# MySQL (requires MySQL + .env config)
+make run_mysql           # or ./bin/deployd-dist -db-type mysql
+```
+
+### 🧪 **Testing & Utilities**
+
+```bash
 # Testing
-make test               # Run Go tests
-make e2e-test          # End-to-end tests
+make test               # Run Go unit tests
+make e2e-test          # End-to-end API tests
+make test-coverage     # Tests with coverage report
 
 # Utilities
 make clean             # Clean build artifacts
 make fmt               # Format Go code
-make help              # Show all commands
+make lint              # Lint Go code (requires golangci-lint)
+make help              # Show all available commands
 ```
 
 ## 📁 Project Structure
