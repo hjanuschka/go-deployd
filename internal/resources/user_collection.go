@@ -121,8 +121,8 @@ func (uc *UserCollection) handleMe(ctx *appcontext.Context) error {
 
 // handleRegister creates a new user account
 func (uc *UserCollection) handleRegister(ctx *appcontext.Context) error {
-	// Check if registration is allowed
-	if !uc.securityConfig.AllowRegistration {
+	// Check if registration is allowed (skip check for root users)
+	if !uc.securityConfig.AllowRegistration && !ctx.IsRoot {
 		return ctx.WriteError(403, "User registration is disabled. Please contact administrator.")
 	}
 

@@ -172,6 +172,9 @@ func (s *Server) setupRoutes() {
 	dashboardPath := filepath.Join("web", "dashboard")
 	s.httpMux.PathPrefix("/_dashboard/").HandlerFunc(s.serveDashboardWithAuth(dashboardPath))
 
+	// Serve self-test page
+	s.httpMux.HandleFunc("/self-test.html", s.handleSelfTest)
+
 	// Root route handling
 	s.setupRootRoute()
 
@@ -1192,4 +1195,15 @@ func (s *Server) cleanupUnverifiedUsers() {
 	if deletedCount > 0 {
 		log.Printf("🧹 Cleaned up %d unverified users", deletedCount)
 	}
+}
+
+// handleSelfTest serves the API self-test page
+func (s *Server) handleSelfTest(w http.ResponseWriter, r *http.Request) {
+	// Enable CORS for the self-test page
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
+	
+	// Serve the self-test.html file
+	selfTestPath := filepath.Join("web", "self-test.html")
+	http.ServeFile(w, r, selfTestPath)
 }
