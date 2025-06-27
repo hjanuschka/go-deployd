@@ -216,17 +216,13 @@ function App() {
     return result
   }
 
-  // Handle authentication and routing
-  useEffect(() => {
-    if (!loading && isAuthenticated && location.pathname === '/login') {
-      navigate('/')
-    }
-  }, [isAuthenticated, loading, location.pathname]) // navigate is stable in React Router v6
-
-  // Force login page if URL path is /login or not authenticated (but not still loading)
-  if (location.pathname === '/login' || (!isAuthenticated && !loading)) {
+  // Force login page if not authenticated (but not still loading)
+  // If authenticated and on login page, show dashboard instead
+  if (!isAuthenticated && !loading) {
     return <Login onLogin={handleLogin} />
   }
+  
+  // If authenticated but somehow on login page, redirect will happen in handleLogin
 
   return <AuthenticatedApp />
 }
