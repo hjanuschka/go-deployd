@@ -75,6 +75,13 @@ resources/x12/
 resources/test*/
 resources/*test/
 
+# Ignore all resources except the samples and core files
+resources/*/
+!resources/metrics.json
+!resources/users/
+!resources/todo-js/
+!resources/todo-go/
+
 # E2E test results
 e2e/results/*.log
 e2e/results/*.pid
