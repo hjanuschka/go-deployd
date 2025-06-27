@@ -10,13 +10,13 @@ const api = axios.create({
   withCredentials: true,
 })
 
-// Add request interceptor to include master key from localStorage if available
+// Add request interceptor to include JWT token from localStorage if available
 api.interceptors.request.use(
   (config) => {
-    // Get master key from localStorage or cookie
-    const masterKey = localStorage.getItem('masterKey')
-    if (masterKey) {
-      config.headers['X-Master-Key'] = masterKey
+    // Get JWT token from localStorage
+    const authToken = localStorage.getItem('authToken')
+    if (authToken) {
+      config.headers['Authorization'] = `Bearer ${authToken}`
     }
     return config
   },
@@ -35,9 +35,10 @@ api.interceptors.response.use(
     console.error('API Error:', error)
     console.error('Error details:', error.response?.status, error.response?.data)
     
-    // If we get 401, clear stored master key
+    // If we get 401, clear stored auth token and user data
     if (error.response?.status === 401) {
-      localStorage.removeItem('masterKey')
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('authUser')
       // Optionally redirect to login page
       window.location.href = '/_dashboard/login'
     }
