@@ -2,9 +2,6 @@ run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
-  skip-dirs:
-    - resources
-    - web
 
 issues:
   max-issues-per-linter: 0
@@ -12,6 +9,7 @@ issues:
   exclude-dirs:
     - .excluded
     - resources
+    - web
   exclude-files:
     - "test_event_system.go"
   exclude-rules:
@@ -22,14 +20,17 @@ issues:
         - errcheck
         - dupl
         - gosec
-    # Exclude resources directory from all linters (plugin source files)
-    - path: "resources/.*\\.go$"
+    # Exclude resources directory from ALL linters (plugin source files)
+    - path: "resources/.*"
       linters:
         - typecheck
         - govet
         - gofmt
         - goimports
         - misspell
+        - staticcheck
+        - unused
+        - ineffassign
     # Exclude "deployd" misspelling - it's the project name
     - text: "deployd.*is a misspelling of.*deployed"
       linters:
