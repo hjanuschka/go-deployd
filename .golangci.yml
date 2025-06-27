@@ -2,6 +2,9 @@ run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
+  skip-dirs:
+    - resources
+    - web
 
 issues:
   max-issues-per-linter: 0
@@ -20,7 +23,7 @@ issues:
         - dupl
         - gosec
     # Exclude resources directory from all linters (plugin source files)
-    - path: "resources/"
+    - path: "resources/.*\\.go$"
       linters:
         - typecheck
         - govet

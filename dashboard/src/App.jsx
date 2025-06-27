@@ -42,6 +42,7 @@ import {
   FiFileText,
   FiActivity,
   FiUsers,
+  FiPlay,
 } from 'react-icons/fi'
 import { useNavigate, useLocation } from 'react-router-dom'
 
@@ -62,6 +63,7 @@ const menuItems = [
   { text: 'Collections', icon: FiDatabase, path: '/collections' },
   { text: 'Users', icon: FiUsers, path: '/users' },
   { text: 'Metrics', icon: FiActivity, path: '/metrics' },
+  { text: 'API Test', icon: FiPlay, path: '/self-test.html', external: true },
   { text: 'Documentation', icon: FiBook, path: '/documentation' },
   { text: 'Logs', icon: FiFileText, path: '/logs' },
   { text: 'Settings', icon: FiSettings, path: '/settings' }

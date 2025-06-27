@@ -15,8 +15,13 @@ function Sidebar({ menuItems, onClose }) {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const handleNavigation = (path) => {
-    navigate(path)
+  const handleNavigation = (item) => {
+    if (item.external) {
+      // Open external link in new tab
+      window.open(item.path, '_blank')
+    } else {
+      navigate(item.path)
+    }
     if (onClose) onClose()
   }
 
@@ -47,7 +52,7 @@ function Sidebar({ menuItems, onClose }) {
       {/* Navigation */}
       <VStack spacing={1} align="stretch" flex="1" p={4}>
         {menuItems.map((item) => {
-          const isActive = location.pathname === item.path
+          const isActive = !item.external && location.pathname === item.path
           
           return (
             <Button
@@ -55,7 +60,7 @@ function Sidebar({ menuItems, onClose }) {
               variant="ghost"
               justifyContent="flex-start"
               leftIcon={<Icon as={item.icon} />}
-              onClick={() => handleNavigation(item.path)}
+              onClick={() => handleNavigation(item)}
               color={isActive ? 'white' : 'gray.300'}
               bg={isActive ? 'brand.500' : 'transparent'}
               _hover={{
