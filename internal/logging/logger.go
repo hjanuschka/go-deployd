@@ -31,13 +31,13 @@ type LogEntry struct {
 }
 
 type Logger struct {
-	mu         sync.RWMutex
-	logDir     string
-	file       *os.File
-	logChan    chan *LogEntry
-	stopChan   chan struct{}
-	wg         sync.WaitGroup
-	devMode    bool
+	mu       sync.RWMutex
+	logDir   string
+	file     *os.File
+	logChan  chan *LogEntry
+	stopChan chan struct{}
+	wg       sync.WaitGroup
+	devMode  bool
 }
 
 var globalLogger *Logger
@@ -53,7 +53,7 @@ func InitializeLoggerWithDevMode(logDir string, devMode bool) error {
 		if devMode {
 			chanSize = 1000 // Larger channel buffer for dev mode
 		}
-		
+
 		globalLogger = &Logger{
 			logDir:   logDir,
 			logChan:  make(chan *LogEntry, chanSize),
@@ -71,7 +71,7 @@ func InitializeLoggerWithDevMode(logDir string, devMode bool) error {
 		if err := globalLogger.openLogFile(); err != nil {
 			fmt.Printf("Warning: Failed to open log file: %v\n", err)
 		}
-		
+
 		// Start the async logging goroutine
 		globalLogger.wg.Add(1)
 		go globalLogger.logWorker()
@@ -140,37 +140,37 @@ func (l *Logger) Log(level LogLevel, message string, source string, data map[str
 // logWorker runs in a goroutine and handles async logging
 func (l *Logger) logWorker() {
 	defer l.wg.Done()
-	
+
 	ticker := time.NewTicker(100 * time.Millisecond) // Flush every 100ms in dev mode
 	if !l.devMode {
 		ticker = time.NewTicker(1 * time.Second) // Flush every second in production
 	}
 	defer ticker.Stop()
-	
+
 	var batch []*LogEntry
 	batchSize := 10
 	if l.devMode {
 		batchSize = 50 // Larger batches in dev mode
 	}
-	
+
 	for {
 		select {
 		case entry := <-l.logChan:
 			batch = append(batch, entry)
-			
+
 			// Flush batch if it's full
 			if len(batch) >= batchSize {
 				l.flushBatch(batch)
 				batch = batch[:0] // Reset slice
 			}
-			
+
 		case <-ticker.C:
 			// Flush remaining entries on timer
 			if len(batch) > 0 {
 				l.flushBatch(batch)
 				batch = batch[:0]
 			}
-			
+
 		case <-l.stopChan:
 			// Flush any remaining entries before stopping
 			if len(batch) > 0 {
@@ -184,18 +184,18 @@ func (l *Logger) logWorker() {
 func (l *Logger) flushBatch(batch []*LogEntry) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	
+
 	if l.file == nil {
 		return
 	}
-	
+
 	// Write all entries in batch
 	for _, entry := range batch {
 		if jsonData, err := json.Marshal(entry); err == nil {
 			l.file.WriteString(string(jsonData) + "\n")
 		}
 	}
-	
+
 	// Only sync once per batch for better performance
 	l.file.Sync()
 }
@@ -208,7 +208,7 @@ func (l *Logger) writeLogEntry(level LogLevel, message string, source string, da
 		Source:    source,
 		Data:      data,
 	}
-	
+
 	// Try to send to channel, drop if full (non-blocking)
 	select {
 	case l.logChan <- entry:
@@ -247,10 +247,10 @@ func (l *Logger) Shutdown() {
 		close(l.stopChan)
 		l.wg.Wait() // Wait for goroutine to finish
 	}
-	
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	
+
 	if l.file != nil {
 		l.file.Sync()
 		l.file.Close()

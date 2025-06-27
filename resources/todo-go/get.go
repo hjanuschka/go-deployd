@@ -13,12 +13,12 @@ func Run(ctx *EventContext) error {
 	} else {
 		ctx.Data["status"] = "Pending"
 	}
-	
+
 	// Format dates for better display
 	if createdAt, ok := ctx.Data["createdAt"].(time.Time); ok {
 		ctx.Data["formattedDate"] = createdAt.Format("2006-01-02 15:04")
 	}
-	
+
 	// Add priority label
 	if priority, ok := ctx.Data["priority"].(float64); ok {
 		switch int(priority) {
@@ -36,6 +36,6 @@ func Run(ctx *EventContext) error {
 			ctx.Data["priorityLabel"] = "Normal"
 		}
 	}
-	
+
 	return nil
 }

@@ -13,12 +13,12 @@ func Run(ctx *EventContext) error {
 		ctx.Cancel("Title is required", 400)
 		return nil
 	}
-	
+
 	if len(title) > 200 {
 		ctx.Cancel("Title is too long (max 200 characters)", 400)
 		return nil
 	}
-	
+
 	// Validate priority if provided
 	if priority, exists := ctx.Data["priority"]; exists {
 		if priorityNum, ok := priority.(float64); ok {
@@ -28,10 +28,10 @@ func Run(ctx *EventContext) error {
 			}
 		}
 	}
-	
+
 	// Trim whitespace from title
 	ctx.Data["title"] = strings.TrimSpace(title)
-	
+
 	fmt.Printf("Validated todo: %s\n", title)
 	return nil
 }

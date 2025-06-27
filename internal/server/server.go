@@ -168,6 +168,11 @@ func (s *Server) setupRoutes() {
 	// API documentation routes
 	s.setupSwaggerRoutes()
 
+	// Add redirect for missing trailing slash on dashboard
+	s.httpMux.HandleFunc("/_dashboard", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/_dashboard/", http.StatusMovedPermanently)
+	})
+
 	// Serve dashboard static files with authentication
 	dashboardPath := filepath.Join("web", "dashboard")
 	s.httpMux.PathPrefix("/_dashboard/").HandlerFunc(s.serveDashboardWithAuth(dashboardPath))
@@ -1202,7 +1207,7 @@ func (s *Server) handleSelfTest(w http.ResponseWriter, r *http.Request) {
 	// Enable CORS for the self-test page
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET")
-	
+
 	// Serve the self-test.html file
 	selfTestPath := filepath.Join("web", "self-test.html")
 	http.ServeFile(w, r, selfTestPath)
