@@ -338,16 +338,18 @@ function Collections() {
             {currentCollections.map((collection) => (
           <GridItem key={collection.name}>
             <Card 
-              bg={cardBg}
-              shadow="md"
+              bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+              backdropFilter="blur(20px)"
+              shadow="xl"
               borderWidth="1px"
-              borderColor={borderColor}
+              borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
               _hover={{ 
-                shadow: 'lg',
-                transform: 'translateY(-2px)',
-                borderColor: 'brand.300'
+                shadow: '2xl',
+                transform: 'translateY(-4px)',
+                borderColor: 'brand.400',
+                bg: useColorModeValue('whiteAlpha.950', 'blackAlpha.700')
               }}
-              transition="all 0.2s"
+              transition="all 0.3s"
               h="full"
             >
               <CardHeader pb={2}>

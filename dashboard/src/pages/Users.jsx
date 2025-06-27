@@ -36,6 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogContent,
   AlertDialogOverlay,
+  useColorModeValue,
 } from '@chakra-ui/react'
 import { FiPlus, FiEdit2, FiTrash2, FiUser } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
@@ -514,26 +515,65 @@ function Users() {
       <AnimatedBackground />
       <Box position="relative" zIndex={1} p={6}>
       <HStack justify="space-between" mb={6}>
-        <Heading size="lg" color="brand.500">
+        <Heading 
+          size="lg" 
+          color={useColorModeValue('gray.800', 'white')}
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          px={4}
+          py={2}
+          borderRadius="lg"
+          backdropFilter="blur(10px)"
+        >
           Users Management
         </Heading>
-        <Button leftIcon={<FiPlus />} colorScheme="brand" onClick={openCreateModal}>
+        <Button 
+          leftIcon={<FiPlus />} 
+          colorScheme="brand" 
+          onClick={openCreateModal}
+          bg="brand.500"
+          _hover={{ bg: 'brand.600', transform: 'translateY(-1px)' }}
+          boxShadow="lg"
+          transition="all 0.2s"
+        >
           Add User
         </Button>
       </HStack>
 
       {users.length === 0 ? (
-        <Box textAlign="center" py={10}>
-          <FiUser size={48} style={{ margin: '0 auto 16px' }} />
-          <Text fontSize="lg" color="gray.500">
+        <Box 
+          textAlign="center" 
+          py={10}
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <Box 
+            as={FiUser} 
+            size="48px" 
+            color={useColorModeValue('gray.400', 'whiteAlpha.600')}
+            margin="0 auto 16px" 
+          />
+          <Text fontSize="lg" color={useColorModeValue('gray.600', 'whiteAlpha.800')}>
             No users found
           </Text>
-          <Text color="gray.400" mt={2}>
+          <Text color={useColorModeValue('gray.500', 'whiteAlpha.600')} mt={2}>
             Create your first user to get started
           </Text>
         </Box>
       ) : (
-        <Box overflowX="auto">
+        <Box 
+          overflowX="auto"
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
           <Table variant="simple">
             <Thead>
               <Tr>
