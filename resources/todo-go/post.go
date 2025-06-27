@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -22,7 +21,14 @@ func Run(ctx *EventContext) error {
 	}
 
 	title, _ := ctx.Data["title"].(string)
-	fmt.Printf("Created new todo: %s\n", title)
+
+	// Log todo creation using proper logging
+	ctx.Log("Todo created successfully", map[string]interface{}{
+		"title":     title,
+		"action":    "post",
+		"completed": ctx.Data["completed"],
+		"priority":  ctx.Data["priority"],
+	})
 
 	return nil
 }

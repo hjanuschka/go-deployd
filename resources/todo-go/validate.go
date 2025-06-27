@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -32,6 +31,10 @@ func Run(ctx *EventContext) error {
 	// Trim whitespace from title
 	ctx.Data["title"] = strings.TrimSpace(title)
 
-	fmt.Printf("Validated todo: %s\n", title)
+	// Log validation success using proper logging
+	ctx.Log("Todo validation completed", map[string]interface{}{
+		"title":  title,
+		"action": "validate",
+	})
 	return nil
 }
