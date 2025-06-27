@@ -4,6 +4,7 @@ run:
   tests: true
   skip-dirs:
     - .excluded
+    - resources
   skip-files:
     - "test_event_system.go"
 
