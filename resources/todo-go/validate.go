@@ -10,18 +10,21 @@ func Run(ctx *EventContext) error {
 	// Validate title
 	title, ok := ctx.Data["title"].(string)
 	if !ok || strings.TrimSpace(title) == "" {
-		return ctx.Cancel("Title is required", 400)
+		ctx.Cancel("Title is required", 400)
+		return nil
 	}
 	
 	if len(title) > 200 {
-		return ctx.Cancel("Title is too long (max 200 characters)", 400)
+		ctx.Cancel("Title is too long (max 200 characters)", 400)
+		return nil
 	}
 	
 	// Validate priority if provided
 	if priority, exists := ctx.Data["priority"]; exists {
 		if priorityNum, ok := priority.(float64); ok {
 			if priorityNum < 1 || priorityNum > 5 {
-				return ctx.Cancel("Priority must be between 1 and 5", 400)
+				ctx.Cancel("Priority must be between 1 and 5", 400)
+				return nil
 			}
 		}
 	}
