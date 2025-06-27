@@ -49,7 +49,6 @@ import Dashboard from './pages/Dashboard'
 import Collections from './pages/Collections'
 import CollectionDetail from './pages/CollectionDetail'
 import Users from './pages/Users'
-import ApiTester from './pages/ApiTester'
 import Documentation from './pages/Documentation'
 import Logs from './pages/Logs'
 import Settings from './pages/Settings'
@@ -62,7 +61,6 @@ const menuItems = [
   { text: 'Dashboard', icon: FiHome, path: '/' },
   { text: 'Collections', icon: FiDatabase, path: '/collections' },
   { text: 'Users', icon: FiUsers, path: '/users' },
-  { text: 'API Tester', icon: FiTool, path: '/api-tester' },
   { text: 'Metrics', icon: FiActivity, path: '/metrics' },
   { text: 'Documentation', icon: FiBook, path: '/documentation' },
   { text: 'Logs', icon: FiFileText, path: '/logs' },
@@ -175,7 +173,6 @@ function AuthenticatedApp() {
             <Route path="/collections" element={<Collections />} />
             <Route path="/collections/:name" element={<CollectionDetail />} />
             <Route path="/users" element={<Users />} />
-            <Route path="/api-tester" element={<ApiTester />} />
             <Route path="/metrics" element={<Metrics />} />
             <Route path="/documentation" element={<Documentation />} />
             <Route path="/logs" element={<Logs />} />

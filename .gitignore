@@ -85,8 +85,36 @@ resources/*/
 resources/metrics.json
 
 # E2E test results
-e2e/results/*.log
-e2e/results/*.pid
+e2e/results/
+e2e/debug.db
+e2e/mysql-results/
+
+# Development/test artifacts that shouldn't be committed
+auth-test.db
+cookies.txt
+server.log
+server*.log
+mysql-test*.log
+post_response.json
+test_event_system.go.bak
+test_events.sh
+test.db*
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Temporary directories
+tmp/
+bin/
+
+# CLI binary
+deployd-cli
+
+# Coverage reports (should be generated, not committed)
+coverage/
+
+# Build logs
+*.log
 
 # Web dashboard build assets (old versions)
 web/dashboard/assets/index-*.js

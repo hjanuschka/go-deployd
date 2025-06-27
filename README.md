@@ -7,317 +7,315 @@
 > **A high-performance, modern reimagining of Deployd in Go**  
 > Build JSON APIs in seconds with zero configuration. Focus on your frontend while Go-Deployd handles the backend.
 
-[![Go Version](https://img.shields.io/badge/Go-1.19+-00ADD8?style=flat&logo=go)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![MongoDB](https://img.shields.io/badge/MongoDB-4.4+-47A248?style=flat&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-3.0+-003B57?style=flat&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![React](https://img.shields.io/badge/Dashboard-React%2018-61DAFB?style=flat&logo=react)](https://reactjs.org/)
 
 ## ✨ What is Go-Deployd?
 
-Go-Deployd is a **blazing-fast, zero-configuration backend** that transforms your MongoDB database into a full-featured REST API with a beautiful admin dashboard. Write business logic in JavaScript or Go, get instant hot-reload, and ship your app faster than ever.
-
-```bash
-# Start a full-stack app in 3 commands
-go install github.com/hjanuschka/go-deployd@latest
-go-deployd init my-app
-go-deployd dev
-# 🎉 Your API is ready at http://localhost:2403
-```
+Go-Deployd is a **blazing-fast, zero-configuration backend** that transforms a simple SQLite database into a full-featured REST API with a beautiful admin dashboard. Write business logic in JavaScript or Go, get instant hot-reload, and ship your app faster than ever.
 
 ### 🎯 **Core Philosophy**
 
-- **⚡ Zero Config** - JSON APIs in seconds, not hours
-- **🔥 Hot Reload** - JavaScript AND Go events with instant reload
+- **⚡ Zero Dependencies** - SQLite built-in, no external database required
+- **🔥 Zero Config** - JSON APIs in seconds, not hours  
 - **🎨 Beautiful Dashboard** - Professional editor with syntax highlighting
 - **📊 Production Ready** - Built for scale with Go's performance
-- **🔒 Security First** - Built-in authentication, validation, and CORS
-- **🌐 MongoDB Native** - Full MongoDB query support with `$sort`, `$limit`, `$fields`
+- **🔒 Security First** - Built-in JWT authentication, validation, and CORS
+- **🌐 Multiple Databases** - SQLite (default), MongoDB, MySQL support
 
-## Quick Start
+## 🚀 Quick Start (3 Commands)
 
-### With MongoDB (Default)
 ```bash
-# Start the server (uses MongoDB defaults: localhost:27017/deployd)
-go run cmd/deployd/main.go
+# 1. Clone the repository
+git clone https://github.com/hjanuschka/go-deployd.git
+cd go-deployd
 
-# Or with custom settings
-go run cmd/deployd/main.go -port 3000 -db-name myapp -dev
-
-# Run development server with MongoDB (recommended)
-make run
-```
-
-### With SQLite
-```bash
-# Run with SQLite database (no MongoDB required)
+# 2. Run with SQLite (no dependencies required)
 make run_sqlite
 
-# Or directly
-go run cmd/deployd/main.go -dev -db-type sqlite
+# 3. Open your browser
+# 🎉 Your API is ready at http://localhost:2403
+# 📊 Dashboard available at http://localhost:2403/_dashboard
 ```
 
-The server will start at `http://localhost:2403` with a default "todos" collection and admin dashboard at `http://localhost:2403/_dashboard/`.
+That's it! You now have:
+- ✅ A running REST API server
+- ✅ SQLite database with sample collections (`users`, `todo-js`, `todo-go`)
+- ✅ Beautiful admin dashboard
+- ✅ JWT authentication system
+- ✅ API testing interface at `/self-test.html`
 
-### 🎨 Dashboard Access
+## 📋 Sample Collections Included
 
-In development mode, visit `http://localhost:2403` and you'll be automatically redirected to the dashboard where you can:
+Your fresh installation comes with working examples:
 
-- 📊 **View server stats** and collection overview
-- 🗃️ **Manage collections** - create, edit schemas, delete
-- 📋 **Browse and edit data** - add, modify, delete documents
-- 🔧 **Test APIs** directly from the interface
-- ⚙️ **Configure settings** and view server information
+### **Users Collection** (Built-in)
+- JWT authentication ready
+- User registration and login
+- Password hashing with bcrypt
+- Email verification support
 
-## Example Usage
+### **Todo-JS Collection** (JavaScript Events)
+```javascript
+// resources/todo-js/validate.js
+if (!this.title || this.title.length < 1) {
+    cancel("Title is required", 400);
+}
+```
+
+### **Todo-Go Collection** (Go Events)
+```go
+// resources/todo-go/validate.go
+func Run(ctx *EventContext) error {
+    title, ok := ctx.Data["title"].(string)
+    if !ok || strings.TrimSpace(title) == "" {
+        ctx.Cancel("Title is required", 400)
+        return nil
+    }
+    return nil
+}
+```
+
+## 🎨 Dashboard Features
+
+Visit `http://localhost:2403/_dashboard` to access:
+
+- 📊 **Server Metrics** - Real-time performance stats
+- 🗃️ **Collection Management** - Create, edit schemas, browse data
+- 👥 **User Management** - Built-in user system with roles
+- 📝 **Event Editor** - Write JavaScript/Go events with syntax highlighting  
+- 📊 **Logs Viewer** - Real-time application logs with filtering
+- ⚙️ **Settings** - Configure security, email, and more
+
+## 💡 Example API Usage
 
 ### Create a Todo
 ```bash
-curl -X POST http://localhost:2403/todos \
+curl -X POST http://localhost:2403/todo-js \
   -H "Content-Type: application/json" \
-  -d '{"title": "Learn Go", "completed": false}'
+  -d '{"title": "Learn Go-Deployd", "completed": false, "priority": 1}'
 ```
 
 ### Get All Todos
 ```bash
-curl http://localhost:2403/todos
+curl http://localhost:2403/todo-js
 ```
 
-### Get Single Todo
+### Query with Parameters
 ```bash
-curl http://localhost:2403/todos/{id}
+# Get completed todos
+curl "http://localhost:2403/todo-js?completed=true"
+
+# Sort by priority, limit results
+curl "http://localhost:2403/todo-js?\$sort[priority]=-1&\$limit=10"
 ```
 
-### Update Todo
-```bash
-curl -X PUT http://localhost:2403/todos/{id} \
-  -H "Content-Type: application/json" \
-  -d '{"completed": true}'
-```
+## 🔧 Advanced Usage
 
-### Delete Todo
-```bash
-curl -X DELETE http://localhost:2403/todos/{id}
-```
-
-## Configuration
-
-Create a `resources/` directory with collection configurations:
+### Multiple Database Support
 
 ```bash
-mkdir -p resources/todos
+# SQLite (default, no setup required)
+make run_sqlite
+
+# MongoDB (requires MongoDB server)
+make run
+
+# MySQL (requires MySQL server and .env file)
+make run_mysql
 ```
 
-Create `resources/todos/config.json`:
+### Development with Hot Reload
+
+```bash
+# Install development tools (air for Go hot reload)
+make install-dev-tools
+
+# Start with hot reload (recommended for development)
+make dev-sqlite
+```
+
+### Custom Configuration
+
+Create collections by adding folders to `resources/`:
+
+```bash
+mkdir resources/my-collection
+```
+
+Create `resources/my-collection/config.json`:
 ```json
 {
   "properties": {
-    "title": {
-      "type": "string",
-      "required": true
-    },
-    "completed": {
-      "type": "boolean",
-      "default": false
-    },
-    "createdAt": {
-      "type": "date",
-      "default": "now"
-    },
-    "priority": {
-      "type": "number",
-      "default": 1
-    }
+    "name": { "type": "string", "required": true },
+    "email": { "type": "string", "required": true },
+    "active": { "type": "boolean", "default": true },
+    "createdAt": { "type": "date", "default": "now" }
   }
 }
 ```
 
-## Supported Data Types
+Add event handlers:
+- `resources/my-collection/validate.js` - Input validation
+- `resources/my-collection/post.js` - After creation logic
+- `resources/my-collection/get.go` - Custom response formatting
+
+## 🔐 Authentication & Security
+
+### Auto-Generated Security
+
+On first startup, Go-Deployd automatically:
+- ✅ Generates a secure master key (displayed in console)
+- ✅ Creates JWT signing keys
+- ✅ Sets up user authentication system
+- ✅ Configures secure file permissions
+
+### Master Key Authentication
+
+Use the displayed master key to access the dashboard:
+```
+🔐 Generated new master key and saved to .deployd/security.json
+   Master Key: mk_abc123...
+   Keep this key secure! It provides administrative access.
+```
+
+### JWT Authentication
+
+Users can register and login to get JWT tokens:
+```bash
+# Register a new user
+curl -X POST http://localhost:2403/users \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "email": "alice@example.com", "password": "secure123"}'
+
+# Login to get JWT token
+curl -X POST http://localhost:2403/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "password": "secure123"}'
+```
+
+## 🏗️ Supported Data Types
 
 - `string` - Text values
-- `number` - Numeric values (int/float)
-- `boolean` - true/false values  
-- `date` - ISO 8601 dates
+- `number` - Numeric values (int/float)  
+- `boolean` - true/false values
+- `date` - ISO 8601 dates (use "now" for current timestamp)
 - `array` - Lists of values
 - `object` - Nested objects
 
-## Property Options
+## 🔍 Query Features
 
-- `type` - Data type (required)
-- `required` - Must be provided (boolean)
-- `default` - Default value (use "now" for current timestamp on dates)
-
-## Query Features
-
-### Filtering
+### MongoDB-Style Operators
 ```bash
-# Get completed todos
-curl "http://localhost:2403/todos?completed=true"
-
-# Get todos with specific priority
-curl "http://localhost:2403/todos?priority=1"
-```
-
-### MongoDB Query Operators
-```bash
-# Greater than
+# Comparison operators
 curl "http://localhost:2403/todos?\$gt[priority]=1"
-
-# In array
 curl "http://localhost:2403/todos?\$in[status]=todo,done"
+
+# Sorting and pagination
+curl "http://localhost:2403/todos?\$sort[createdAt]=-1&\$limit=5&\$skip=10"
+
+# Field selection
+curl "http://localhost:2403/todos?\$fields=title,completed"
 ```
 
 ### Special Endpoints
-
 ```bash
-# Count documents (requires root session)
+# Count documents
 curl "http://localhost:2403/todos/count"
+
+# Collection list
+curl "http://localhost:2403/collections"
 ```
 
-## Authentication & Security
-
-### Master Key System
-
-Go-Deployd uses a secure master key system for administrative access and programmatic user management:
-
-- **Master key is auto-generated** on first startup and stored in `.deployd/security.json`
-- **File permissions** are set to 600 (owner read/write only) for security
-- **Dashboard access** requires master key authentication
-- **Admin API endpoints** are protected by master key validation
-
-#### Configuration Location
-
-All security settings are stored in `.deployd/security.json`:
-
-```json
-{
-  "masterKey": "mk_...",
-  "sessionTTL": 86400,
-  "tokenTTL": 2592000,
-  "allowRegistration": false
-}
-```
-
-#### Settings:
-- `masterKey` - Auto-generated cryptographically secure key (96 hex chars)
-- `sessionTTL` - Session timeout in seconds (default: 24 hours)
-- `tokenTTL` - API token timeout in seconds (default: 30 days)  
-- `allowRegistration` - Allow public user registration (default: true, set to false for admin-only user creation)
-
-#### Dashboard Authentication
-
-1. Visit `http://localhost:2403/_dashboard`
-2. You'll be redirected to the login page
-3. Enter your master key (displayed in console on first startup)
-4. Access the dashboard with full administrative privileges
-
-#### API Authentication
-
-For programmatic access, include the master key in your requests:
+## 🛠️ Available Commands
 
 ```bash
-# Via header
-curl -H "X-Master-Key: mk_your_master_key_here" http://localhost:2403/_admin/info
+# Quick start (SQLite, zero dependencies)
+make run_sqlite          # Production-ready server
 
-# Via Authorization header
-curl -H "Authorization: Bearer mk_your_master_key_here" http://localhost:2403/_admin/info
+# Development (with hot reload)
+make dev-sqlite          # Recommended for development
+make dev                 # With MongoDB
+make install-dev-tools   # Install air for hot reload
+
+# Building
+make build              # Build binary
+make dashboard-build    # Build dashboard for production
+
+# Database options
+make run                # MongoDB (requires MongoDB server)
+make run_mysql          # MySQL (requires .env config)
+
+# Testing
+make test               # Run Go tests
+make e2e-test          # End-to-end tests
+
+# Utilities
+make clean             # Clean build artifacts
+make fmt               # Format Go code
+make help              # Show all commands
 ```
 
-#### User Management
+## 📁 Project Structure
 
-When `allowRegistration` is disabled, users can only be created via master key:
+```
+go-deployd/
+├── cmd/deployd/           # Main application
+├── resources/             # Your collections and events
+│   ├── users/            # Built-in user system
+│   ├── todo-js/          # JavaScript event examples
+│   └── todo-go/          # Go event examples
+├── dashboard/            # React admin dashboard
+├── internal/             # Core Go packages
+└── web/                  # Built dashboard assets
+```
 
+## 🚀 Production Deployment
+
+1. Build the application:
 ```bash
-# Create user with master key
-curl -X POST http://localhost:2403/_admin/auth/create-user \
-  -H "Content-Type: application/json" \
-  -d '{
-    "masterKey": "mk_your_master_key_here",
-    "userData": {
-      "username": "admin",
-      "email": "admin@example.com", 
-      "password": "secure123",
-      "role": "admin"
-    }
-  }'
+make build
 ```
 
-#### Session Management
-
-The server automatically manages sessions via cookies. With master key authentication:
-- **isRoot** is automatically set to `true` for admin privileges
-- Sessions persist across requests for seamless dashboard usage
-- In development mode (`-dev` flag), additional debugging features are available
-
-## Architecture
-
-```
-cmd/deployd/          # Main application entry point
-internal/
-├── server/           # HTTP server and WebSocket handling
-├── router/           # Request routing to resources  
-├── resources/        # Resource types (Collections, etc.)
-├── database/         # MongoDB abstraction layer
-├── context/          # Request context handling
-└── sessions/         # Session management
+2. The binary includes everything needed:
+```bash
+./bin/deployd -port 80 -db-type sqlite
 ```
 
-## Differences from Original deployd
+3. For additional security, set environment variables:
+```bash
+DEPLOYD_MASTER_KEY=your-secure-key ./bin/deployd
+```
+
+## 🆚 Differences from Original Deployd
 
 ### What's the Same
-- Resource-based architecture
-- Collection CRUD operations
-- Schema validation and sanitization
-- Session management
-- Development vs production modes
+- Resource-based architecture with collections
+- Event lifecycle hooks (validate, post, get, put, delete)
+- Dashboard for managing data and events
+- Zero-configuration philosophy
 
-### What's Different  
-- Built with Go instead of Node.js
-- Uses native MongoDB driver instead of Mongoose
-- WebSocket implementation instead of Socket.IO
-- Modern Chakra UI dashboard instead of original dashboard
-- Go's type system for better performance
+### What's Better
+- **10x Faster** - Go performance vs Node.js
+- **Zero Dependencies** - SQLite built-in, no MongoDB setup required
+- **Modern Dashboard** - React 18 with Chakra UI
+- **Hot Reload** - For both JavaScript AND Go events
+- **JWT Authentication** - Modern token-based auth
+- **Multi-Database** - SQLite, MongoDB, MySQL support
+- **Production Ready** - Built for scale with proper error handling
 
-### Completed Features
-- [x] JavaScript and Go event hooks with hot reload
-- [x] Modern admin dashboard with Chakra UI
-- [x] Professional code editor with syntax highlighting  
-- [x] Comprehensive event documentation with examples
-- [x] MongoDB query operators ($sort, $limit, $skip, $fields)
-- [x] Full CRUD operations with event lifecycle hooks
-- [x] Session management and authentication support
+## 🤝 Contributing
 
-## Building
+This project aims to maintain the simplicity of the original Deployd while leveraging Go's performance and modern web technologies. Contributions welcome!
 
-```bash
-# Build everything (server + dashboard)
-make build
+## 📄 License
 
-# Run in development mode (auto-starts MongoDB + builds dashboard)
-make run
+MIT License - see [LICENSE](LICENSE) file for details.
 
-# Run with SQLite (no MongoDB required)
-make run_sqlite
+---
 
-# Run just the dashboard dev server (for dashboard development)
-make dashboard-dev
-
-# Build dashboard for production
-make dashboard-build
-
-# Build binary only
-go build -o bin/deployd cmd/deployd/main.go
-
-# Run tests
-go test ./...
-
-# Get dependencies
-go mod tidy
-```
-
-## Contributing
-
-This project aims to maintain the spirit and simplicity of the original deployd while leveraging Go's strengths. Contributions welcome!
-
-## License
-
-MIT
+<div align="center">
+  <strong>Ready to build amazing APIs? Start with <code>make run_sqlite</code> and let Go-Deployd handle the rest! 🚀</strong>
+</div>
