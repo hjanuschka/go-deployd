@@ -221,7 +221,7 @@ function App() {
     if (!loading && isAuthenticated && location.pathname === '/login') {
       navigate('/')
     }
-  }, [isAuthenticated, loading, location.pathname, navigate])
+  }, [isAuthenticated, loading, location.pathname]) // navigate is stable in React Router v6
 
   // Force login page if URL path is /login or not authenticated (but not still loading)
   if (location.pathname === '/login' || (!isAuthenticated && !loading)) {
