@@ -7,7 +7,9 @@ help:
 	@echo "🏗️  Build Commands:"
 	@echo "  make build                Build the binary"
 	@echo "  make build-all           Build for multiple platforms"
-	@echo "  make dashboard-build     Build dashboard for production"
+	@echo "  make dist                Build standalone binary with dashboard"
+	@echo "  make dashboard-build     Build dashboard for production (minified)"
+	@echo "  make dashboard-build-dev Build dashboard for development (debug symbols)"
 	@echo ""
 	@echo "▶️  Run Commands:"
 	@echo "  make run                 Run with MongoDB (requires MongoDB)"
@@ -48,6 +50,12 @@ help:
 build:
 	go build -o bin/deployd cmd/deployd/main.go
 
+# Build standalone distribution with dashboard
+dist: dashboard-build
+	@echo "🚀 Building standalone binary..."
+	go build -o bin/deployd-dist ./cmd/deployd
+	@echo "✅ Standalone binary created: bin/deployd-dist"
+
 # Start MongoDB with local data directory
 mongo-start:
 	@echo "🍃 Starting MongoDB..."
@@ -87,6 +95,12 @@ dashboard-build:
 	@echo "🏗️  Building dashboard..."
 	@cd dashboard && npm install && npm run build
 	@echo "✅ Dashboard built successfully"
+
+# Build dashboard for development (with debug symbols)
+dashboard-build-dev:
+	@echo "🏗️  Building dashboard (development mode)..."
+	@cd dashboard && npm install && npm run build:dev
+	@echo "✅ Dashboard built successfully (with debug symbols)"
 
 # Run dashboard in development mode (separate from go-deployd)
 dashboard-dev:
@@ -240,23 +254,25 @@ dev-simple:
 	@./scripts/dev-simple.sh
 
 # Development with hot reload using SQLite
-dev-sqlite:
+dev-sqlite: dashboard-build-dev
 	@echo "🔥 Starting development servers with hot reload (SQLite)..."
 	@echo "📝 Features:"
 	@echo "   • Go server hot reload with Air"
 	@echo "   • React dashboard hot reload with Vite"
 	@echo "   • SQLite database (no external dependencies)"
+	@echo "   • Dashboard built with debug symbols and sourcemaps"
 	@echo ""
 	@chmod +x scripts/dev.sh
 	@./scripts/dev.sh
 
 # Development with hot reload using MongoDB
-dev-mongo:
+dev-mongo: dashboard-build-dev
 	@echo "🔥 Starting development servers with hot reload (MongoDB)..."
 	@echo "📝 Features:"
 	@echo "   • Go server hot reload with Air"
 	@echo "   • React dashboard hot reload with Vite"
 	@echo "   • MongoDB database"
+	@echo "   • Dashboard built with debug symbols and sourcemaps"
 	@echo ""
 	@chmod +x scripts/dev-mongo.sh
 	@./scripts/dev-mongo.sh

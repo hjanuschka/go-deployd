@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   base: '/_dashboard/',
   server: {
@@ -20,6 +20,31 @@ export default defineConfig({
   },
   build: {
     outDir: '../web/dashboard',
-    emptyOutDir: true
+    emptyOutDir: true,
+    // Enhanced development build with debug symbols
+    ...(mode === 'development' && {
+      minify: false,
+      sourcemap: true,
+      rollupOptions: {
+        output: {
+          manualChunks: undefined, // Disable chunking for easier debugging
+        }
+      }
+    }),
+    // Production optimizations
+    ...(mode === 'production' && {
+      minify: 'terser',
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom'],
+            ui: ['@chakra-ui/react', '@emotion/react', '@emotion/styled'],
+            charts: ['recharts'],
+            utils: ['axios', 'date-fns']
+          }
+        }
+      }
+    })
   }
-})
+}))

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -50,6 +51,7 @@ type Server struct {
 	httpMux        *mux.Router
 	jwtManager     *auth.JWTManager
 	securityConfig *appconfig.SecurityConfig
+	dashboardFS    *embed.FS
 }
 
 func New(config *Config) (*Server, error) {
@@ -197,9 +199,8 @@ func (s *Server) setupRoutes() {
 		http.Redirect(w, r, "/_dashboard/", http.StatusMovedPermanently)
 	})
 
-	// Serve dashboard static files with authentication
-	dashboardPath := filepath.Join("web", "dashboard")
-	s.httpMux.PathPrefix("/_dashboard/").HandlerFunc(s.serveDashboardWithAuth(dashboardPath))
+	// Setup dashboard routes (embedded or filesystem based on availability)
+	s.setupDashboardRoutes()
 
 	// Serve self-test page
 	s.httpMux.HandleFunc("/self-test.html", s.handleSelfTest)
@@ -1235,4 +1236,13 @@ func (s *Server) handleSelfTest(w http.ResponseWriter, r *http.Request) {
 	// Serve the self-test.html file
 	selfTestPath := filepath.Join("web", "self-test.html")
 	http.ServeFile(w, r, selfTestPath)
+}
+
+// SetDashboardFS sets the embedded dashboard filesystem
+func (s *Server) SetDashboardFS(fs embed.FS) {
+	s.dashboardFS = &fs
+	// Re-setup dashboard routes with embedded FS
+	if s.dashboardFS != nil {
+		s.setupDashboardRoutes(*s.dashboardFS)
+	}
 }

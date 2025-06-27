@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 [build]
   args_bin = ["-dev", "-db-type", "sqlite"]
   bin = "./tmp/main"
-  cmd = "cd dashboard && npm run build && cd .. && go build -o ./tmp/main cmd/deployd/main.go"
+  cmd = "cd dashboard && npm run build:dev && cd .. && go build -o ./tmp/main cmd/deployd/main.go"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata", ".mongodb", "bin", "e2e", "js-sandbox", "node_modules", "dist"]
   exclude_file = []

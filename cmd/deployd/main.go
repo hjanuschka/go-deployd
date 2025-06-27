@@ -110,6 +110,8 @@ func main() {
 		ConfigPath:       *config,
 		Development:      *dev,
 	})
+	
+	// For now, skip embedded dashboard - will implement later
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
