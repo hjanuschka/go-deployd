@@ -7,7 +7,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -54,6 +56,9 @@ func main() {
 		fmt.Printf("   Mode: development\n")
 	}
 
+	// Ensure js-sandbox has npm modules installed for JavaScript events
+	checkJSSandboxModules()
+
 	srv, err := server.New(&server.Config{
 		Port:             *port,
 		DatabaseType:     *dbType,
@@ -98,9 +103,40 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
-	if err := srv.Close(); err != nil {
-		log.Printf("Error closing server resources: %v", err)
+	fmt.Println("✅ Server gracefully stopped")
+}
+
+// checkJSSandboxModules ensures npm modules are installed for JavaScript event handlers
+func checkJSSandboxModules() {
+	jsSandboxDir := "js-sandbox"
+	nodeModulesDir := filepath.Join(jsSandboxDir, "node_modules")
+	packageJSONPath := filepath.Join(jsSandboxDir, "package.json")
+
+	// Check if js-sandbox directory exists
+	if _, err := os.Stat(jsSandboxDir); os.IsNotExist(err) {
+		return // No js-sandbox, skip
 	}
 
-	fmt.Println("✅ Server shutdown complete")
+	// Check if package.json exists
+	if _, err := os.Stat(packageJSONPath); os.IsNotExist(err) {
+		return // No package.json, skip
+	}
+
+	// Check if node_modules exists
+	if _, err := os.Stat(nodeModulesDir); os.IsNotExist(err) {
+		fmt.Printf("📦 Installing JavaScript event handler dependencies...\n")
+		
+		// Run npm install in js-sandbox directory
+		cmd := exec.Command("npm", "install")
+		cmd.Dir = jsSandboxDir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to install js-sandbox dependencies: %v\n", err)
+			fmt.Printf("   JavaScript events may not have access to npm modules\n")
+		} else {
+			fmt.Printf("✅ JavaScript event handler dependencies installed\n")
+		}
+	}
 }

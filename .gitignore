@@ -49,6 +49,9 @@ dashboard/dist/
 dashboard/.pnpm-debug.log*
 dashboard/.yarn-integrity
 
+# JavaScript sandbox (npm modules for event handlers)
+js-sandbox/node_modules/
+
 # Compiled events
 resources/*/plugins/
 
