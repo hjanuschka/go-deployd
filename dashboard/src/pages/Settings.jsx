@@ -47,6 +47,7 @@ import {
 } from 'react-icons/fi'
 import { apiService } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function Settings() {
   const [serverInfo, setServerInfo] = useState(null)
@@ -348,7 +349,10 @@ function Settings() {
   }
 
   return (
-    <VStack align="stretch" spacing={6}>
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1}>
+        <VStack align="stretch" spacing={6}>
       <HStack justify="space-between">
         <Heading size="lg">Settings</Heading>
         <HStack>
@@ -903,7 +907,9 @@ function Settings() {
           </TabPanel>
         </TabPanels>
       </Tabs>
-    </VStack>
+        </VStack>
+      </Box>
+    </Box>
   )
 }
 

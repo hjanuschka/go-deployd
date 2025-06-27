@@ -46,6 +46,9 @@ import {
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { apiService } from '../services/api'
+import { AnimatedBackground } from '../components/AnimatedBackground'
+import { GradientStatCard } from '../components/GradientStatCard'
+import { AnimatedCard } from '../components/AnimatedCard'
 
 function Collections() {
   const [collections, setCollections] = useState([])
@@ -221,21 +224,41 @@ function Collections() {
   }
 
   return (
-    <Box>
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1}>
       <VStack spacing={6} align="stretch">
         <HStack justify="space-between">
-          <Heading size="lg">Collections</Heading>
+          <Heading 
+            size="lg"
+            color={useColorModeValue('gray.800', 'white')}
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            px={4}
+            py={2}
+            borderRadius="lg"
+            backdropFilter="blur(10px)"
+          >
+            Collections
+          </Heading>
           <HStack spacing={2}>
             <IconButton
               icon={<FiRefreshCw />}
               onClick={loadCollections}
               variant="outline"
               aria-label="Refresh collections"
+              bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+              color={useColorModeValue('gray.800', 'white')}
+              borderColor={useColorModeValue('gray.300', 'whiteAlpha.300')}
+              _hover={{ bg: useColorModeValue('whiteAlpha.800', 'whiteAlpha.300') }}
+              backdropFilter="blur(10px)"
             />
             <Button
               leftIcon={<FiPlus />}
               colorScheme="brand"
               onClick={onOpen}
+              bg="brand.500"
+              _hover={{ bg: 'brand.600' }}
+              boxShadow="lg"
             >
               Create Collection
             </Button>
@@ -253,6 +276,16 @@ function Collections() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               size="md"
+              bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+              borderColor={useColorModeValue('gray.300', 'whiteAlpha.300')}
+              color={useColorModeValue('gray.800', 'white')}
+              _placeholder={{ color: useColorModeValue('gray.500', 'whiteAlpha.600') }}
+              _hover={{ borderColor: useColorModeValue('gray.400', 'whiteAlpha.400') }}
+              _focus={{ 
+                borderColor: 'brand.400',
+                boxShadow: '0 0 0 1px var(--chakra-colors-brand-400)'
+              }}
+              backdropFilter="blur(10px)"
             />
           </InputGroup>
         </Box>
@@ -530,6 +563,7 @@ function Collections() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      </Box>
     </Box>
   )
 }

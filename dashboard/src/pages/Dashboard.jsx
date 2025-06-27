@@ -163,7 +163,15 @@ function Dashboard() {
       <AnimatedBackground />
       <Box position="relative" zIndex={1} p={6}>
         <HStack justify="space-between" mb={6}>
-          <Heading size="lg" color="white" textShadow="2px 2px 4px rgba(0,0,0,0.3)">
+          <Heading 
+            size="lg" 
+            color={useColorModeValue('gray.800', 'white')}
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            px={4}
+            py={2}
+            borderRadius="lg"
+            backdropFilter="blur(10px)"
+          >
             Dashboard Overview
           </Heading>
           <IconButton
@@ -171,10 +179,11 @@ function Dashboard() {
             onClick={loadDashboardData}
             variant="outline"
             aria-label="Refresh data"
-            bg="whiteAlpha.200"
-            color="white"
-            borderColor="whiteAlpha.300"
-            _hover={{ bg: 'whiteAlpha.300' }}
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            color={useColorModeValue('gray.800', 'white')}
+            borderColor={useColorModeValue('gray.300', 'whiteAlpha.300')}
+            _hover={{ bg: useColorModeValue('whiteAlpha.800', 'whiteAlpha.300') }}
+            backdropFilter="blur(10px)"
           />
         </HStack>
 
@@ -302,22 +311,36 @@ function Dashboard() {
 
         {/* Collections Detail Section */}
         <Box mt={8}>
-          <Card bg="whiteAlpha.100" shadow="xl" backdropFilter="blur(10px)" borderWidth="1px" borderColor="whiteAlpha.200">
+          <Card 
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')} 
+            shadow="xl" 
+            backdropFilter="blur(20px)" 
+            borderWidth="1px" 
+            borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          >
             <CardHeader>
-              <Heading size="md" color="white">Collections Detail</Heading>
+              <Heading size="md" color={useColorModeValue('gray.800', 'white')}>Collections Detail</Heading>
             </CardHeader>
             <CardBody>
               <List spacing={3}>
                 {stats.collections.map((collection) => (
                   <ListItem key={collection.name}>
-                    <HStack justify="space-between" p={4} borderRadius="lg" bg="whiteAlpha.100" _hover={{ bg: 'whiteAlpha.200' }} transition="all 0.2s">
+                    <HStack 
+                      justify="space-between" 
+                      p={4} 
+                      borderRadius="lg" 
+                      bg={useColorModeValue('whiteAlpha.700', 'whiteAlpha.100')} 
+                      _hover={{ bg: useColorModeValue('whiteAlpha.900', 'whiteAlpha.200') }} 
+                      transition="all 0.2s"
+                      backdropFilter="blur(10px)"
+                    >
                       <HStack spacing={4}>
                         <Box p={2} borderRadius="md" bg="brand.500" color="white">
                           <Icon as={FiDatabase} boxSize={5} />
                         </Box>
                         <VStack align="start" spacing={1}>
-                          <Text fontWeight="semibold" color="white">{collection.name}</Text>
-                          <Text fontSize="sm" color="whiteAlpha.700">
+                          <Text fontWeight="semibold" color={useColorModeValue('gray.800', 'white')}>{collection.name}</Text>
+                          <Text fontSize="sm" color={useColorModeValue('gray.600', 'whiteAlpha.700')}>
                             {collection.documentCount} documents
                           </Text>
                         </VStack>
@@ -326,7 +349,7 @@ function Dashboard() {
                         <Badge colorScheme="green" variant="subtle">
                           Active
                         </Badge>
-                        <Text fontSize="xs" color="whiteAlpha.600">
+                        <Text fontSize="xs" color={useColorModeValue('gray.500', 'whiteAlpha.600')}>
                           {new Date(collection.lastModified).toLocaleDateString()}
                         </Text>
                       </VStack>

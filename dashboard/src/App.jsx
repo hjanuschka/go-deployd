@@ -216,8 +216,15 @@ function App() {
     return result
   }
 
-  // Force login page if URL path is /login or not authenticated
-  if (location.pathname === '/login' || !isAuthenticated) {
+  // Handle authentication and routing
+  useEffect(() => {
+    if (!loading && isAuthenticated && location.pathname === '/login') {
+      navigate('/')
+    }
+  }, [isAuthenticated, loading, location.pathname, navigate])
+
+  // Force login page if URL path is /login or not authenticated (but not still loading)
+  if (location.pathname === '/login' || (!isAuthenticated && !loading)) {
     return <Login onLogin={handleLogin} />
   }
 
