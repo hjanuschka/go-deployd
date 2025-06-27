@@ -77,10 +77,12 @@ resources/*test/
 
 # Ignore all resources except the samples and core files
 resources/*/
-!resources/metrics.json
 !resources/users/
 !resources/todo-js/
 !resources/todo-go/
+
+# Generated metrics file should be ignored
+resources/metrics.json
 
 # E2E test results
 e2e/results/*.log
