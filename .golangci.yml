@@ -19,6 +19,14 @@ issues:
         - errcheck
         - dupl
         - gosec
+    # Exclude resources directory from all linters (plugin source files)
+    - path: "resources/"
+      linters:
+        - typecheck
+        - govet
+        - gofmt
+        - goimports
+        - misspell
     # Exclude "deployd" misspelling - it's the project name
     - text: "deployd.*is a misspelling of.*deployed"
       linters:
