@@ -41,6 +41,12 @@ jobs:
         go mod download
         cd js-sandbox && npm ci
 
+    - name: Remove sample collections before testing
+      run: |
+        echo "🧹 Removing sample collections to ensure clean test environment..."
+        rm -rf resources/todo-js resources/todo-go
+        echo "✅ Sample collections removed"
+
     - name: Run comprehensive test suite
       run: |
         echo "🧪 Running Comprehensive Test Suite..."

@@ -1,6 +1,6 @@
 {
   "masterKey": "mk_2017233e2c9a194bf0a1c526a8e64bc0e2bbc17f9ea15cc646b3990f2896441531dddac7bc8e031f9787b133725ef18d",
-  "allowRegistration": true,
+  "allowRegistration": false,
   "jwtSecret": "1f2c4223076bfc7a0c4679dc98e881f1dbc7e59a79b6a7ac5d909c8d7c7b8b37",
   "jwtExpiration": "24h",
   "requireVerification": false,

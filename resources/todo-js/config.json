@@ -8,16 +8,16 @@
       "type": "boolean",
       "default": false
     },
-    "createdAt": {
-      "type": "date",
-      "default": "now"
-    },
     "priority": {
       "type": "number",
       "default": 1
     },
     "description": {
       "type": "string"
+    },
+    "createdAt": {
+      "type": "date",
+      "default": "now"
     }
   },
   "eventConfig": {
@@ -25,16 +25,10 @@
       "runtime": "js"
     },
     "post": {
-      "runtime": "go"
-    },
-    "get": {
-      "runtime": "go"
-    },
-    "put": {
       "runtime": "js"
     },
-    "delete": {
-      "runtime": "go"
+    "get": {
+      "runtime": "js"
     }
   }
 }

@@ -103,6 +103,12 @@ jobs:
         find . -name ".plugins" -type d -exec rm -rf {} +
         echo "Cleared all .so files and .plugins directories to force fresh plugin compilation"
 
+    - name: Remove sample collections before testing
+      run: |
+        echo "🧹 Removing sample collections to ensure clean test environment..."
+        rm -rf resources/todo-js resources/todo-go
+        echo "✅ Sample collections removed"
+
     - name: Setup JavaScript sandbox dependencies
       run: |
         cd js-sandbox

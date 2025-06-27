@@ -82,8 +82,8 @@ func New(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// Initialize logging system
-	if err := logging.InitializeLogger("./logs"); err != nil {
+	// Initialize logging system with dev mode
+	if err := logging.InitializeLoggerWithDevMode("./logs", config.Development); err != nil {
 		return nil, fmt.Errorf("failed to initialize logging: %w", err)
 	}
 

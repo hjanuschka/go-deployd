@@ -4,22 +4,23 @@
       "type": "string",
       "required": true
     },
-    "description": {
-      "type": "string"
+    "completed": {
+      "type": "boolean",
+      "default": false
     },
     "priority": {
       "type": "number",
       "default": 1
     },
-    "status": {
-      "type": "string",
-      "default": "pending"
+    "description": {
+      "type": "string"
     },
-    "metadata": {
-      "type": "object"
+    "dueDate": {
+      "type": "date"
     },
-    "tags": {
-      "type": "array"
+    "createdAt": {
+      "type": "date",
+      "default": "now"
     }
   },
   "eventConfig": {
@@ -29,7 +30,7 @@
     "post": {
       "runtime": "go"
     },
-    "put": {
+    "get": {
       "runtime": "go"
     }
   }
