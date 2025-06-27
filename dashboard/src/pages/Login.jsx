@@ -37,20 +37,9 @@ function Login({ onLogin }) {
     setError('')
 
     try {
-      const response = await fetch('/_admin/auth/dashboard-login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ masterKey }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        onLogin(masterKey)
-      } else {
-        setError(data.message || 'Invalid master key')
+      const result = await onLogin(masterKey)
+      if (!result.success) {
+        setError(result.message)
       }
     } catch (err) {
       setError('Failed to connect to server')
@@ -75,7 +64,7 @@ function Login({ onLogin }) {
         <VStack spacing={4}>
           <Box boxSize="80px">
             <img 
-              src="/deployd-logo.png" 
+              src="/_dashboard/deployd-logo.png" 
               alt="Go-Deployd logo" 
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />

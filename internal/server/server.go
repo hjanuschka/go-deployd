@@ -394,8 +394,9 @@ func (s *Server) serveDashboardFile(w http.ResponseWriter, r *http.Request, dash
 	http.ServeFile(w, r, fullPath)
 }
 
-func (s *Server) handleDetailedMetrics(w http.ResponseWriter, r *http.Request) {
-	// Check for master key authentication
+// validateDashboardAuth checks both master key and JWT authentication for dashboard routes
+func (s *Server) validateDashboardAuth(r *http.Request) bool {
+	// First check master key authentication
 	masterKey := r.Header.Get("X-Master-Key")
 	if masterKey == "" {
 		if cookie, err := r.Cookie("masterKey"); err == nil {
@@ -403,10 +404,27 @@ func (s *Server) handleDetailedMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+	if s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+		return true
+	}
+
+	// Check JWT authentication with isRoot=true
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") && s.jwtManager != nil {
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if claims, err := s.jwtManager.ValidateToken(token); err == nil && claims.IsRoot {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *Server) handleDetailedMetrics(w http.ResponseWriter, r *http.Request) {
+	if !s.validateDashboardAuth(r) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Authentication required",
+			"error": "Authentication required - master key or root JWT token needed",
 		})
 		return
 	}
@@ -436,18 +454,10 @@ func (s *Server) handleDetailedMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAggregatedMetrics(w http.ResponseWriter, r *http.Request) {
-	// Check for master key authentication
-	masterKey := r.Header.Get("X-Master-Key")
-	if masterKey == "" {
-		if cookie, err := r.Cookie("masterKey"); err == nil {
-			masterKey = cookie.Value
-		}
-	}
-
-	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+	if !s.validateDashboardAuth(r) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Authentication required",
+			"error": "Authentication required - master key or root JWT token needed",
 		})
 		return
 	}
@@ -472,18 +482,10 @@ func (s *Server) handleAggregatedMetrics(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleSystemStats(w http.ResponseWriter, r *http.Request) {
-	// Check for master key authentication
-	masterKey := r.Header.Get("X-Master-Key")
-	if masterKey == "" {
-		if cookie, err := r.Cookie("masterKey"); err == nil {
-			masterKey = cookie.Value
-		}
-	}
-
-	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+	if !s.validateDashboardAuth(r) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Authentication required",
+			"error": "Authentication required - master key or root JWT token needed",
 		})
 		return
 	}
@@ -496,18 +498,10 @@ func (s *Server) handleSystemStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCollectionsList(w http.ResponseWriter, r *http.Request) {
-	// Check for master key authentication
-	masterKey := r.Header.Get("X-Master-Key")
-	if masterKey == "" {
-		if cookie, err := r.Cookie("masterKey"); err == nil {
-			masterKey = cookie.Value
-		}
-	}
-
-	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+	if !s.validateDashboardAuth(r) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Authentication required",
+			"error": "Authentication required - master key or root JWT token needed",
 		})
 		return
 	}
@@ -522,18 +516,10 @@ func (s *Server) handleCollectionsList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEventMetrics(w http.ResponseWriter, r *http.Request) {
-	// Check for master key authentication
-	masterKey := r.Header.Get("X-Master-Key")
-	if masterKey == "" {
-		if cookie, err := r.Cookie("masterKey"); err == nil {
-			masterKey = cookie.Value
-		}
-	}
-
-	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+	if !s.validateDashboardAuth(r) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Authentication required",
+			"error": "Authentication required - master key or root JWT token needed",
 		})
 		return
 	}
@@ -575,18 +561,10 @@ func (s *Server) handleEventMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePeriodsMetrics(w http.ResponseWriter, r *http.Request) {
-	// Check for master key authentication
-	masterKey := r.Header.Get("X-Master-Key")
-	if masterKey == "" {
-		if cookie, err := r.Cookie("masterKey"); err == nil {
-			masterKey = cookie.Value
-		}
-	}
-
-	if !s.adminHandler.AuthHandler.Security.ValidateMasterKey(masterKey) {
+	if !s.validateDashboardAuth(r) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Authentication required",
+			"error": "Authentication required - master key or root JWT token needed",
 		})
 		return
 	}

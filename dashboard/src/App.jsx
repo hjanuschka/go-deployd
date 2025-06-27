@@ -72,7 +72,7 @@ const menuItems = [
 function AuthenticatedApp() {
   const { isOpen, onOpen, onClose } = useDisclosure()
   const { colorMode, toggleColorMode } = useColorMode()
-  const { logout, masterKey } = useAuth()
+  const { logout, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -150,7 +150,7 @@ function AuthenticatedApp() {
               <MenuButton as={Button} rightIcon={<ChevronDownIcon />} variant="ghost" size="sm">
                 <HStack spacing={2}>
                   <FiKey />
-                  <Text>Admin</Text>
+                  <Text>{user?.username || 'Admin'}</Text>
                 </HStack>
               </MenuButton>
               <MenuList>
@@ -188,6 +188,8 @@ function AuthenticatedApp() {
 
 function App() {
   const { isAuthenticated, loading, login } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   if (loading) {
     return (
@@ -200,8 +202,18 @@ function App() {
     )
   }
 
-  if (!isAuthenticated) {
-    return <Login onLogin={login} />
+  const handleLogin = async (masterKey) => {
+    const result = await login(masterKey)
+    if (result.success) {
+      // Navigate to dashboard root after successful login
+      navigate('/')
+    }
+    return result
+  }
+
+  // Force login page if URL path is /login or not authenticated
+  if (location.pathname === '/login' || !isAuthenticated) {
+    return <Login onLogin={handleLogin} />
   }
 
   return <AuthenticatedApp />

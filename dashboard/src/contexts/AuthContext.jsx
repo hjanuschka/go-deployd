@@ -12,34 +12,39 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [masterKey, setMasterKey] = useState('')
+  const [token, setToken] = useState('')
+  const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
   // Check for existing authentication on mount
   useEffect(() => {
-    // Try to get master key from localStorage first
-    const storedMasterKey = localStorage.getItem('masterKey')
-    if (storedMasterKey) {
-      setMasterKey(storedMasterKey)
-      setIsAuthenticated(true)
-      setLoading(false)
-    } else {
-      checkAuth()
+    // Try to get JWT token from localStorage first
+    const storedToken = localStorage.getItem('authToken')
+    const storedUser = localStorage.getItem('authUser')
+    if (storedToken && storedUser) {
+      try {
+        const userData = JSON.parse(storedUser)
+        if (userData.isRoot) {
+          setToken(storedToken)
+          setUser(userData)
+          setIsAuthenticated(true)
+          setLoading(false)
+          return
+        }
+      } catch (error) {
+        // Clear invalid stored data
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('authUser')
+      }
     }
+    checkAuth()
   }, [])
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('/_admin/auth/security-info', {
-        credentials: 'include',
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        if (data.hasMasterKey) {
-          setIsAuthenticated(true)
-        }
-      }
+      // Clear any invalid stored auth data
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('authUser')
     } catch (error) {
       console.error('Auth check failed:', error)
     } finally {
@@ -49,25 +54,26 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (key) => {
     try {
-      const response = await fetch('/_admin/auth/dashboard-login', {
+      const response = await fetch('/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
         body: JSON.stringify({ masterKey: key }),
       })
 
       const data = await response.json()
 
-      if (data.success) {
+      if (data.token && data.isRoot) {
         setIsAuthenticated(true)
-        setMasterKey(key)
-        // Store master key in localStorage for persistence
-        localStorage.setItem('masterKey', key)
+        setToken(data.token)
+        setUser({ isRoot: data.isRoot, ...data.user })
+        // Store JWT token and user data in localStorage
+        localStorage.setItem('authToken', data.token)
+        localStorage.setItem('authUser', JSON.stringify({ isRoot: data.isRoot, ...data.user }))
         return { success: true }
       } else {
-        return { success: false, message: data.message || 'Invalid master key' }
+        return { success: false, message: data.error || 'Invalid master key or insufficient permissions' }
       }
     } catch (error) {
       return { success: false, message: 'Failed to connect to server' }
@@ -76,26 +82,20 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     setIsAuthenticated(false)
-    setMasterKey('')
-    // Clear master key from localStorage
-    localStorage.removeItem('masterKey')
-    // Clear cookies by making a request to logout endpoint
-    fetch('/_admin/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-    }).catch(() => {
-      // Ignore errors, just clear local state
-    })
+    setToken('')
+    setUser(null)
+    // Clear JWT token and user data from localStorage
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('authUser')
   }
 
-  // Create authenticated fetch function that includes master key
+  // Create authenticated fetch function that includes JWT token
   const authFetch = async (url, options = {}) => {
     const authOptions = {
       ...options,
-      credentials: 'include',
       headers: {
         ...options.headers,
-        ...(masterKey && { 'X-Master-Key': masterKey }),
+        ...(token && { 'Authorization': `Bearer ${token}` }),
       },
     }
 
@@ -104,7 +104,10 @@ export const AuthProvider = ({ children }) => {
     // If we get 401, user needs to re-authenticate
     if (response.status === 401) {
       setIsAuthenticated(false)
-      setMasterKey('')
+      setToken('')
+      setUser(null)
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('authUser')
     }
     
     return response
@@ -112,7 +115,8 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     isAuthenticated,
-    masterKey,
+    token,
+    user,
     loading,
     login,
     logout,
