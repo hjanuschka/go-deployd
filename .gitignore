@@ -43,6 +43,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Security files (auto-generated on first run)
+.deployd/security.json
+
 # Dashboard
 dashboard/node_modules/
 dashboard/dist/
