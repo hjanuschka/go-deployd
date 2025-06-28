@@ -32,16 +32,16 @@ cleanup() {
 # Set trap for cleanup
 trap cleanup SIGINT SIGTERM
 
-# Check if air is installed
-if ! command -v air &> /dev/null; then
-    print_error "Air is not installed. Installing air for Go hot reloading..."
-    go install github.com/air-verse/air@latest
+# Check if nodemon is available
+if ! command -v npx nodemon &> /dev/null; then
+    print_warning "Nodemon is not installed. Installing development dependencies..."
+    npm install
     if [ $? -ne 0 ]; then
-        print_error "Failed to install air. Please install it manually:"
-        print_error "go install github.com/air-verse/air@latest"
+        print_error "Failed to install nodemon. Please install it manually:"
+        print_error "npm install"
         exit 1
     fi
-    print_status "Air installed successfully!"
+    print_status "Nodemon installed successfully!"
 fi
 
 # Check if we're in the right directory
@@ -79,55 +79,21 @@ if [ ! -d "dashboard/node_modules" ]; then
     cd ..
 fi
 
-# Create tmp directory for air
+# Create tmp directory for builds
 mkdir -p tmp
 
-# Create air config for MongoDB
-cat > .air-mongo.toml << EOF
-root = "."
-testdata_dir = "testdata"
-tmp_dir = "tmp"
-
-[build]
-  args_bin = ["-dev"]
-  bin = "./tmp/main"
-  cmd = "go build -o ./tmp/main cmd/deployd/main.go"
-  delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "testdata", "dashboard", ".mongodb", "bin", "e2e", "js-sandbox", "web"]
-  exclude_file = []
-  exclude_regex = ["_test.go"]
-  exclude_unchanged = false
-  follow_symlink = false
-  full_bin = ""
-  include_dir = ["cmd", "internal", "resources"]
-  include_ext = ["go", "tpl", "tmpl", "html"]
-  include_file = []
-  kill_delay = "0s"
-  log = "build-errors.log"
-  poll = false
-  poll_interval = 0
-  rerun = false
-  rerun_delay = 500
-  send_interrupt = false
-  stop_on_root = true
-
-[color]
-  app = ""
-  build = "yellow"
-  main = "magenta"
-  runner = "green"
-  watcher = "cyan"
-
-[log]
-  main_only = false
-  time = false
-
-[misc]
-  clean_on_exit = false
-
-[screen]
-  clear_on_rebuild = false
-  keep_scroll = true
+# Create nodemon config for MongoDB
+cat > nodemon-mongo.json << EOF
+{
+  "watch": ["cmd", "internal", "resources"],
+  "ext": "go",
+  "ignore": ["dashboard/**", "web/**", "*.test.go", "testdata/**", "tmp/**"],
+  "exec": "go build -o ./tmp/main cmd/deployd/main.go && ./tmp/main -dev",
+  "delay": "1000ms",
+  "env": {
+    "GO_ENV": "development"
+  }
+}
 EOF
 
 print_status "Starting development servers..."
@@ -148,7 +114,7 @@ sleep 2
 
 # Start Go server with hot reloading
 print_status "Starting Go server with hot reloading..."
-air -c .air-mongo.toml
+npx nodemon --config nodemon-mongo.json
 
-# If we get here, air exited, so cleanup
+# If we get here, nodemon exited, so cleanup
 cleanup

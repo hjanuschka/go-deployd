@@ -133,8 +133,8 @@ make run_mysql
 ### Development with Hot Reload
 
 ```bash
-# Install development tools (air for Go hot reload)
-make install-dev-tools
+# Install development dependencies
+npm install
 
 # Start with hot reload (recommended for development)
 make dev-sqlite
@@ -263,7 +263,7 @@ make dashboard-build-dev # Build dashboard with debug symbols
 ```
 
 **Development Features:**
-- 🔥 **Go hot reload** with `air` - changes trigger automatic rebuilds
+- 🔥 **Go hot reload** with `nodemon` - changes trigger automatic rebuilds
 - 🎨 **React hot reload** with Vite - instant UI updates  
 - 🐛 **Debug symbols** - Unminified JS (3.3MB) + 7MB sourcemaps
 - ⚡ **Fast rebuilds** - Optimized for development speed

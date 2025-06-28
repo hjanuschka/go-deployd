@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// EventContext stub for compilation
+type EventContext struct {
+	Data map[string]interface{}
+}
+
+func (ctx *EventContext) Hide(field string) {}
+func (ctx *EventContext) Cancel(message string, code int) {}
+
 // Run processes todo data when retrieved
 func Run(ctx *EventContext) error {
 	// Add computed status field
