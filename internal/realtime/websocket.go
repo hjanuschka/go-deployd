@@ -110,6 +110,9 @@ func NewHub(jwtManager *auth.JWTManager, realtimeConfig *config.RealtimeConfig) 
 		})
 	}
 
+	// Start periodic cleanup of dead clients
+	go hub.startCleanupRoutine()
+
 	return hub
 }
 
@@ -430,19 +433,65 @@ func (h *Hub) EmitToRoom(room, event string, data interface{}) {
 		"roomExists":   ok,
 	})
 	
-	h.mu.RLock()
-	if clients, ok := h.rooms[room]; ok {
+	if !ok || clientCount == 0 {
+		return
+	}
+	
+	// Do emission asynchronously to prevent any blocking
+	go func() {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		
+		// Re-check after acquiring write lock
+		clients, ok := h.rooms[room]
+		if !ok {
+			return
+		}
+		
+		// Collect clients to remove during iteration
+		var deadClients []*Client
+		
 		for client := range clients {
 			select {
 			case client.Send <- message:
+				// Message sent successfully
 			default:
-				close(client.Send)
-				delete(h.clients, client)
-				delete(clients, client)
+				// Client's send channel is full or closed - mark for removal
+				deadClients = append(deadClients, client)
 			}
 		}
-	}
-	h.mu.RUnlock()
+		
+		// Clean up dead clients
+		for _, client := range deadClients {
+			logging.Debug("Removing dead client", "realtime", map[string]interface{}{
+				"client_id": client.ID,
+				"room":      room,
+			})
+			
+			// Close send channel if not already closed
+			select {
+			case <-client.Send:
+			default:
+				close(client.Send)
+			}
+			
+			// Remove from clients map
+			delete(h.clients, client)
+			
+			// Remove from room
+			delete(clients, client)
+			
+			// Remove from client's rooms
+			if client.Rooms != nil {
+				delete(client.Rooms, room)
+			}
+		}
+		
+		// Remove empty room
+		if len(clients) == 0 {
+			delete(h.rooms, room)
+		}
+	}()
 }
 
 // EmitToAll sends a message to all connected clients
@@ -453,26 +502,34 @@ func (h *Hub) EmitToAll(event string, data interface{}) {
 
 // EmitCollectionChange sends collection change notifications
 func (h *Hub) EmitCollectionChange(collection, eventType string, data interface{}) {
-	// Send to local clients
-	collectionRoom := fmt.Sprintf("collection:%s", collection)
-	
-	logging.Debug("Emitting collection change", "realtime", map[string]interface{}{
-		"collection": collection,
-		"eventType":  eventType,
-		"room":       collectionRoom,
-		"dataKeys":   getDataKeys(data),
-	})
-	
-	h.EmitToRoom(collectionRoom, eventType, data)
-	
-	// Also send to global listeners
-	h.EmitToRoom("collections", eventType, map[string]interface{}{
-		"collection": collection,
-		"data":       data,
-	})
-
-	// Publish to broker for multi-server distribution
-	h.publishToBroker(TopicCollectionChanges, MessageTypeCollectionChange, eventType, data, collectionRoom)
+	// Create message and send to broadcast channel asynchronously
+	// This completely avoids any mutex operations or room lookups
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logging.Debug("EmitCollectionChange: Recovered from panic", "realtime", map[string]interface{}{
+					"panic": r,
+				})
+			}
+		}()
+		
+		room := fmt.Sprintf("collection:%s", collection)
+		message := h.createMessage(MessageTypeEmit, eventType, data, room)
+		
+		// Use select to prevent blocking if broadcast channel is full
+		select {
+		case h.broadcast <- message:
+			logging.Debug("EmitCollectionChange: Message broadcasted", "realtime", map[string]interface{}{
+				"collection": collection,
+				"event":      eventType,
+			})
+		case <-time.After(50 * time.Millisecond):
+			logging.Debug("EmitCollectionChange: Broadcast timeout, skipped", "realtime", map[string]interface{}{
+				"collection": collection,
+				"event":      eventType,
+			})
+		}
+	}()
 }
 
 // Helper function to get keys from data for logging
@@ -596,6 +653,62 @@ func generateClientID() string {
 // generateServerID generates a unique server ID
 func generateServerID() string {
 	return fmt.Sprintf("server_%d", time.Now().UnixNano())
+}
+
+// startCleanupRoutine starts a background routine to periodically clean up dead clients
+func (h *Hub) startCleanupRoutine() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		h.cleanupDeadClients()
+	}
+}
+
+// cleanupDeadClients removes clients with closed send channels
+func (h *Hub) cleanupDeadClients() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	var deadClients []*Client
+	
+	// Check all clients for closed send channels
+	for client := range h.clients {
+		select {
+		case <-client.Send:
+			// Channel is closed
+			deadClients = append(deadClients, client)
+		default:
+			// Channel is open
+		}
+	}
+
+	// Remove dead clients
+	for _, client := range deadClients {
+		logging.Debug("Cleanup: Removing dead client", "realtime", map[string]interface{}{
+			"client_id": client.ID,
+		})
+
+		// Remove from global clients
+		delete(h.clients, client)
+
+		// Remove from all rooms
+		for room := range client.Rooms {
+			if clients, ok := h.rooms[room]; ok {
+				delete(clients, client)
+				if len(clients) == 0 {
+					delete(h.rooms, room)
+				}
+			}
+		}
+	}
+
+	if len(deadClients) > 0 {
+		logging.Debug("Cleanup completed", "realtime", map[string]interface{}{
+			"removed_clients": len(deadClients),
+			"active_clients":  len(h.clients),
+		})
+	}
 }
 
 // GetConnectedClients returns the number of connected clients

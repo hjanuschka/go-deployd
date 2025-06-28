@@ -1465,7 +1465,9 @@ if (dpd.socketReady) {
 
 logOutput('👂 Real-time listeners set up! Try creating/deleting todos in the API tab to see events.');
 
-// Test: Create a todo to trigger an event
+// Test: Create, update, and delete a todo to trigger real-time events
+let testTodoId = null;
+
 setTimeout(() => {
     logOutput('📝 Creating test todo to trigger real-time event...');
     dpd['todo-go'].post({
@@ -1477,6 +1479,36 @@ setTimeout(() => {
             logOutput('❌ Failed to create test todo: ' + err.message);
         } else {
             logOutput('✅ Test todo created: ' + result.title);
+            testTodoId = result.id;
+            
+            // Update the todo after 2 seconds
+            setTimeout(() => {
+                logOutput('📝 Updating test todo to trigger update event...');
+                dpd['todo-go'].put(testTodoId, {
+                    title: 'Updated real-time test todo',
+                    completed: true,
+                    priority: 5
+                }, (err, updated) => {
+                    if (err) {
+                        logOutput('❌ Failed to update test todo: ' + err.message);
+                    } else {
+                        logOutput('✅ Test todo updated: ' + updated.title);
+                        
+                        // Delete the todo after another 2 seconds
+                        setTimeout(() => {
+                            logOutput('🗑️ Deleting test todo to trigger delete event...');
+                            dpd['todo-go'].del(testTodoId, (err) => {
+                                if (err) {
+                                    logOutput('❌ Failed to delete test todo: ' + err.message);
+                                } else {
+                                    logOutput('✅ Test todo deleted successfully');
+                                    logOutput('🎯 Real-time event demo complete! Check the logs above for all events.');
+                                }
+                            });
+                        }, 2000);
+                    }
+                });
+            }, 2000);
         }
     });
 }, 1000);`,

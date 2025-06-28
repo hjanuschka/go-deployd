@@ -343,6 +343,7 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 			"hasEmitter": c.realtimeEmitter != nil,
 		})
 		c.realtimeEmitter.EmitCollectionChange(c.name, "created", result)
+		logging.Debug("Realtime emission completed", fmt.Sprintf("collection:%s", c.name), nil)
 	} else {
 		logging.Debug("No realtime emitter available", fmt.Sprintf("collection:%s", c.name), nil)
 	}
