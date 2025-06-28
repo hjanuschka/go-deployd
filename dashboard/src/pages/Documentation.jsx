@@ -890,6 +890,9 @@ function Documentation() {
           <Tab><HStack><FiServer /><Text>Admin API</Text></HStack></Tab>
           <Tab><HStack><FiCode /><Text>Events System</Text></HStack></Tab>
           <Tab><HStack><FiDatabase /><Text>Database Config</Text></HStack></Tab>
+          <Tab><HStack><FiServer /><Text>WebSocket & Real-time</Text></HStack></Tab>
+          <Tab><HStack><FiCode /><Text>dpd.js Client</Text></HStack></Tab>
+          <Tab><HStack><FiDatabase /><Text>Advanced Queries</Text></HStack></Tab>
         </TabList>
 
         <TabPanels>
@@ -2326,6 +2329,1397 @@ export DATABASE_URL="mongodb://localhost:27017/deployd_prod"
                         <Text>• Both support efficient indexing on collection properties</Text>
                         <Text>• Consider database-specific optimizations in your events</Text>
                       </VStack>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+            </VStack>
+          </TabPanel>
+
+          {/* WebSocket & Real-time Tab */}
+          <TabPanel>
+            <VStack spacing={6} align="stretch">
+              <TableOfContents sections={[
+                {
+                  id: 'websocket-overview',
+                  title: 'WebSocket Real-time Overview',
+                  subsections: [
+                    { id: 'realtime-features', title: 'Real-time Features' },
+                    { id: 'websocket-setup', title: 'WebSocket Setup' },
+                    { id: 'connection-scaling', title: 'Multi-Server Scaling' }
+                  ]
+                },
+                {
+                  id: 'client-events',
+                  title: 'Client-Side Events',
+                  subsections: [
+                    { id: 'javascript-websocket', title: 'JavaScript WebSocket Client' },
+                    { id: 'collection-changes', title: 'Collection Change Events' },
+                    { id: 'custom-events', title: 'Custom Events with emit()' }
+                  ]
+                },
+                {
+                  id: 'server-events',
+                  title: 'Server-Side Events',
+                  subsections: [
+                    { id: 'aftercommit-events', title: 'AfterCommit Events' },
+                    { id: 'emit-from-server', title: 'Emitting from Server Events' },
+                    { id: 'event-filtering', title: 'Event Filtering & Routing' }
+                  ]
+                }
+              ]} />
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">WebSocket Real-time Overview</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      Go-Deployd provides built-in WebSocket support for real-time applications. Automatically 
+                      broadcasts collection changes, supports custom events, and scales across multiple server instances.
+                    </Text>
+                    
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Real-time Features</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>✅ Automatic collection change broadcasting</Text>
+                        <Text>✅ Custom event emission from server events</Text>
+                        <Text>✅ Multi-server WebSocket scaling with Redis</Text>
+                        <Text>✅ Connection pooling and load balancing</Text>
+                        <Text>✅ Automatic reconnection and error handling</Text>
+                        <Text>✅ Synchronous AfterCommit events with response modification</Text>
+                      </VStack>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>WebSocket Connection</Text>
+                      <CodeBlock language="javascript" title="Connect to WebSocket">
+{`// Browser WebSocket connection
+const ws = new WebSocket('ws://localhost:2403/ws');
+
+ws.onopen = () => {
+    console.log('Connected to go-deployd WebSocket');
+};
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Real-time event:', data);
+    
+    // Handle different event types
+    switch(data.type) {
+        case 'collection_change':
+            handleCollectionChange(data);
+            break;
+        case 'custom_event':
+            handleCustomEvent(data);
+            break;
+    }
+};
+
+function handleCollectionChange(data) {
+    console.log(\`Collection: \${data.collection}, Action: \${data.action}\`);
+    console.log('Document:', data.document);
+    // Update UI accordingly
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Multi-Server Scaling</Text>
+                      <Text mb={2}>For production deployments with multiple server instances:</Text>
+                      <CodeBlock language="bash" title="Enable Redis for WebSocket scaling">
+{`# Set Redis URL for multi-server WebSocket scaling
+export REDIS_URL="redis://localhost:6379"
+
+# Start multiple server instances
+./deployd --port 2403 &
+./deployd --port 2404 &
+./deployd --port 2405 &
+
+# WebSocket events will be synchronized across all instances`}
+                      </CodeBlock>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">Collection Change Events</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      Collection changes (create, update, delete) are automatically broadcast to all connected 
+                      WebSocket clients. No additional configuration required.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Event Structure</Text>
+                      <CodeBlock language="json" title="Collection change event format">
+{`{
+  "type": "collection_change",
+  "collection": "todos",
+  "action": "created",
+  "document": {
+    "id": "doc123",
+    "title": "New Todo Item",
+    "completed": false,
+    "createdAt": "2024-06-28T10:00:00Z"
+  },
+  "timestamp": "2024-06-28T10:00:00Z",
+  "userId": "user123"
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Live Collection Monitoring</Text>
+                      <CodeBlock language="javascript" title="Monitor specific collections">
+{`// Monitor all collection changes
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    
+    if (data.type === 'collection_change') {
+        const { collection, action, document } = data;
+        
+        // Update UI based on collection and action
+        switch (collection) {
+            case 'todos':
+                updateTodoList(action, document);
+                break;
+            case 'users':
+                updateUserList(action, document);
+                break;
+        }
+    }
+};
+
+function updateTodoList(action, todo) {
+    switch (action) {
+        case 'created':
+            addTodoToUI(todo);
+            break;
+        case 'updated':
+            updateTodoInUI(todo);
+            break;
+        case 'deleted':
+            removeTodoFromUI(todo.id);
+            break;
+    }
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Testing Real-time Updates</Text>
+                      <Text mb={2}>Create a document to see real-time updates:</Text>
+                      <CodeBlock language="bash" title="Trigger real-time event" executable>
+{`curl -X POST "${serverUrl}/todos" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Master-Key: ${masterKey}" \\
+  -d '{
+    "title": "Real-time test todo",
+    "completed": false,
+    "priority": 1
+  }'`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="green.600" mt={2}>
+                        💡 Open browser console and connect to WebSocket to see this event broadcast live!
+                      </Text>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">Custom Events with emit()</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      Use the <Code>emit()</Code> function in server events to send custom real-time notifications 
+                      to connected clients. Perfect for business logic notifications, progress updates, and alerts.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Server-Side Event Emission</Text>
+                      <CodeBlock language="javascript" title="JavaScript event with emit()">
+{`// aftercommit.js - Emit custom events after successful operations
+if (this.priority >= 8) {
+    // Emit urgent task alert
+    emit('urgent_task_created', {
+        taskId: this.id,
+        title: this.title,
+        priority: this.priority,
+        createdBy: me.username,
+        timestamp: new Date()
+    });
+}
+
+if (this.status === 'completed') {
+    // Emit completion celebration
+    emit('task_completed', {
+        taskId: this.id,
+        title: this.title,
+        completedBy: me.username,
+        completionTime: new Date()
+    });
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Go Event Emission</Text>
+                      <CodeBlock language="go" title="Go event with emit()">
+{`// aftercommit.go - Emit custom events from Go
+package main
+
+type EventHandler struct{}
+
+func (h *EventHandler) Run(ctx interface{}) error {
+    eventCtx := ctx.(*EventContext)
+    
+    // Check if this is a high-priority task
+    if priority, ok := eventCtx.Data["priority"].(float64); ok && priority >= 8 {
+        // Emit urgent task alert
+        eventCtx.Emit("urgent_task_created", map[string]interface{}{
+            "taskId":    eventCtx.Data["id"],
+            "title":     eventCtx.Data["title"],
+            "priority":  priority,
+            "createdBy": eventCtx.Me["username"],
+            "timestamp": time.Now(),
+        })
+    }
+    
+    // Check if task was completed
+    if status, ok := eventCtx.Data["status"].(string); ok && status == "completed" {
+        eventCtx.Emit("task_completed", map[string]interface{}{
+            "taskId":        eventCtx.Data["id"],
+            "title":         eventCtx.Data["title"],
+            "completedBy":   eventCtx.Me["username"],
+            "completionTime": time.Now(),
+        })
+    }
+    
+    return nil
+}
+
+var EventHandler = &EventHandler{}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Client-Side Custom Event Handling</Text>
+                      <CodeBlock language="javascript" title="Handle custom events on client">
+{`// Listen for custom events from server
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    
+    if (data.type === 'custom_event') {
+        switch (data.event) {
+            case 'urgent_task_created':
+                showUrgentAlert(data.data);
+                break;
+            case 'task_completed':
+                showCompletionCelebration(data.data);
+                break;
+            case 'user_online':
+                updateUserStatus(data.data.userId, 'online');
+                break;
+        }
+    }
+};
+
+function showUrgentAlert(taskData) {
+    // Show urgent notification
+    const notification = new Notification('Urgent Task Created!', {
+        body: \`\${taskData.title} (Priority: \${taskData.priority})\`,
+        icon: '/urgent-icon.png'
+    });
+}
+
+function showCompletionCelebration(taskData) {
+    // Show completion animation
+    console.log(\`🎉 \${taskData.completedBy} completed: \${taskData.title}\`);
+    // Trigger confetti animation, etc.
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Custom Event Structure</Text>
+                      <CodeBlock language="json" title="Custom event format">
+{`{
+  "type": "custom_event",
+  "event": "urgent_task_created",
+  "data": {
+    "taskId": "doc123",
+    "title": "Critical System Alert",
+    "priority": 9,
+    "createdBy": "admin",
+    "timestamp": "2024-06-28T10:00:00Z"
+  },
+  "timestamp": "2024-06-28T10:00:00Z"
+}`}
+                      </CodeBlock>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">AfterCommit Events & Response Modification</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      AfterCommit events run synchronously and can modify the HTTP response before it's sent to the client. 
+                      This allows for real-time updates while also customizing the API response.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Response Modification Example</Text>
+                      <CodeBlock language="javascript" title="aftercommit.js - Modify response">
+{`// aftercommit.js - Runs AFTER database commit but BEFORE HTTP response
+if (this.status === 'completed') {
+    // Emit real-time event
+    emit('task_completed', {
+        taskId: this.id,
+        title: this.title,
+        completedBy: me.username
+    });
+    
+    // Modify the HTTP response to include additional data
+    setResponseData({
+        ...this,
+        message: 'Congratulations! Task completed successfully!',
+        points: calculateCompletionPoints(this.priority),
+        nextSuggestion: getNextTaskSuggestion(me.id)
+    });
+}
+
+// Add real-time notification for high-priority tasks
+if (this.priority >= 8) {
+    emit('high_priority_task', {
+        taskId: this.id,
+        title: this.title,
+        assignedTo: this.assignedTo
+    });
+    
+    // Add alert to response
+    addResponseMessage('High priority task created - notifications sent!');
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Available Response Functions</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>• <Code>setResponseData(object)</Code> - Replace the entire response data</Text>
+                        <Text>• <Code>addResponseField(key, value)</Code> - Add a field to the response</Text>
+                        <Text>• <Code>addResponseMessage(message)</Code> - Add a message to the response</Text>
+                        <Text>• <Code>setResponseStatus(code)</Code> - Change the HTTP status code</Text>
+                        <Text>• <Code>emit(event, data)</Code> - Send real-time event to WebSocket clients</Text>
+                      </VStack>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Real-time + Response Example</Text>
+                      <Text mb={2}>Test AfterCommit event with response modification:</Text>
+                      <CodeBlock language="bash" title="Create high-priority todo" executable>
+{`curl -X POST "${serverUrl}/todos" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Master-Key: ${masterKey}" \\
+  -d '{
+    "title": "Critical system maintenance",
+    "priority": 9,
+    "assignedTo": "admin"
+  }'`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="green.600" mt={2}>
+                        💡 Both WebSocket clients and the HTTP response will receive enhanced data!
+                      </Text>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+            </VStack>
+          </TabPanel>
+
+          {/* dpd.js Client Tab */}
+          <TabPanel>
+            <VStack spacing={6} align="stretch">
+              <TableOfContents sections={[
+                {
+                  id: 'dpdjs-overview',
+                  title: 'dpd.js Client Library Overview',
+                  subsections: [
+                    { id: 'installation', title: 'Installation & Setup' },
+                    { id: 'basic-usage', title: 'Basic Usage' },
+                    { id: 'authentication', title: 'Authentication' }
+                  ]
+                },
+                {
+                  id: 'collection-operations',
+                  title: 'Collection Operations',
+                  subsections: [
+                    { id: 'crud-operations', title: 'CRUD Operations' },
+                    { id: 'querying', title: 'Advanced Querying' },
+                    { id: 'real-time-collections', title: 'Real-time Collection Updates' }
+                  ]
+                },
+                {
+                  id: 'advanced-features',
+                  title: 'Advanced Features',
+                  subsections: [
+                    { id: 'file-uploads', title: 'File Uploads' },
+                    { id: 'custom-resources', title: 'Custom Resources' },
+                    { id: 'error-handling', title: 'Error Handling' }
+                  ]
+                }
+              ]} />
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">dpd.js Client Library Overview</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      dpd.js is the official JavaScript client library for go-deployd. It provides a simple, 
+                      jQuery-like API for working with collections, real-time events, and authentication.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Installation & Setup</Text>
+                      <CodeBlock language="bash" title="Install via npm">
+{`# Install dpd.js
+npm install dpd
+
+# Or include via CDN
+<script src="https://unpkg.com/dpd/dpd.js"></script>`}
+                      </CodeBlock>
+                      
+                      <CodeBlock language="javascript" title="Basic setup">
+{`// Initialize dpd client
+const dpd = require('dpd');
+
+// Set the server URL (defaults to current domain)
+dpd.setBaseURL('http://localhost:2403');
+
+// Access collections
+const todos = dpd.todos;
+const users = dpd.users;`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Authentication</Text>
+                      <CodeBlock language="javascript" title="Login with dpd.js">
+{`// Login with username/password
+dpd.users.login({
+    username: 'user@example.com',
+    password: 'password123'
+}, function(result, error) {
+    if (error) {
+        console.error('Login failed:', error);
+    } else {
+        console.log('Logged in:', result);
+        // User is now authenticated for subsequent requests
+    }
+});
+
+// Login with master key
+dpd.users.login({
+    masterKey: 'mk_your_master_key_here'
+}, function(result, error) {
+    if (error) {
+        console.error('Master key login failed:', error);
+    } else {
+        console.log('Logged in as root:', result);
+    }
+});
+
+// Check current user
+dpd.users.me(function(user) {
+    if (user) {
+        console.log('Current user:', user);
+    } else {
+        console.log('Not logged in');
+    }
+});
+
+// Logout
+dpd.users.logout();`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Browser Setup</Text>
+                      <CodeBlock language="html" title="HTML page with dpd.js">
+{`<!DOCTYPE html>
+<html>
+<head>
+    <title>Go-Deployd App</title>
+    <script src="https://unpkg.com/dpd/dpd.js"></script>
+</head>
+<body>
+    <script>
+        // dpd is available globally
+        console.log('Connected to:', dpd.baseURL);
+        
+        // Use collections
+        dpd.todos.get(function(todos) {
+            console.log('Todos:', todos);
+        });
+    </script>
+</body>
+</html>`}
+                      </CodeBlock>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">Collection Operations</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Basic CRUD Operations</Text>
+                      <CodeBlock language="javascript" title="CRUD with dpd.js">
+{`// CREATE - Add new document
+dpd.todos.post({
+    title: 'Learn go-deployd',
+    completed: false,
+    priority: 5
+}, function(result, error) {
+    if (error) {
+        console.error('Create failed:', error);
+    } else {
+        console.log('Created todo:', result);
+    }
+});
+
+// READ - Get all documents
+dpd.todos.get(function(todos, error) {
+    if (error) {
+        console.error('Get failed:', error);
+    } else {
+        console.log('All todos:', todos);
+    }
+});
+
+// READ - Get single document by ID
+dpd.todos.get('doc123', function(todo, error) {
+    if (error) {
+        console.error('Get failed:', error);
+    } else {
+        console.log('Todo:', todo);
+    }
+});
+
+// UPDATE - Update document
+dpd.todos.put('doc123', {
+    title: 'Updated title',
+    completed: true
+}, function(result, error) {
+    if (error) {
+        console.error('Update failed:', error);
+    } else {
+        console.log('Updated todo:', result);
+    }
+});
+
+// DELETE - Remove document
+dpd.todos.del('doc123', function(result, error) {
+    if (error) {
+        console.error('Delete failed:', error);
+    } else {
+        console.log('Deleted todo');
+    }
+});`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Advanced Querying</Text>
+                      <CodeBlock language="javascript" title="Query with conditions">
+{`// Simple filtering
+dpd.todos.get({
+    completed: false,
+    priority: {$gte: 5}
+}, function(todos) {
+    console.log('High priority incomplete todos:', todos);
+});
+
+// Complex queries with $or
+dpd.todos.get({
+    $or: [
+        {priority: {$gte: 8}},
+        {title: {$regex: 'urgent'}}
+    ]
+}, function(todos) {
+    console.log('Urgent todos:', todos);
+});
+
+// Sorting and pagination
+dpd.todos.get({
+    $sort: {createdAt: -1}, // Sort by created date, newest first
+    $limit: 10,             // Limit to 10 results
+    $skip: 0                // Skip 0 (for pagination)
+}, function(todos) {
+    console.log('Recent todos:', todos);
+});
+
+// Field projection
+dpd.todos.get({
+    completed: false,
+    $fields: {title: 1, priority: 1} // Only return title and priority
+}, function(todos) {
+    console.log('Minimal todo data:', todos);
+});`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Real-time Collection Updates</Text>
+                      <CodeBlock language="javascript" title="Listen for real-time changes">
+{`// Listen for real-time updates on todos collection
+dpd.todos.on('created', function(todo) {
+    console.log('New todo created:', todo);
+    addTodoToUI(todo);
+});
+
+dpd.todos.on('updated', function(todo) {
+    console.log('Todo updated:', todo);
+    updateTodoInUI(todo);
+});
+
+dpd.todos.on('deleted', function(todo) {
+    console.log('Todo deleted:', todo);
+    removeTodoFromUI(todo.id);
+});
+
+// Listen for all changes
+dpd.todos.on('changed', function(todo, action) {
+    console.log(\`Todo \${action}:\`, todo);
+    switch(action) {
+        case 'created':
+            addTodoToUI(todo);
+            break;
+        case 'updated':
+            updateTodoInUI(todo);
+            break;
+        case 'deleted':
+            removeTodoFromUI(todo.id);
+            break;
+    }
+});
+
+// Stop listening
+dpd.todos.off('created');
+dpd.todos.off(); // Remove all listeners`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Promise-based API</Text>
+                      <CodeBlock language="javascript" title="Using Promises and async/await">
+{`// dpd.js supports both callbacks and promises
+
+// Using Promises
+dpd.todos.get({completed: false})
+    .then(todos => {
+        console.log('Incomplete todos:', todos);
+        return dpd.todos.post({
+            title: 'New todo from promise',
+            completed: false
+        });
+    })
+    .then(newTodo => {
+        console.log('Created:', newTodo);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+
+// Using async/await
+async function manageTodos() {
+    try {
+        // Get all incomplete todos
+        const incompleteTodos = await dpd.todos.get({completed: false});
+        console.log('Found', incompleteTodos.length, 'incomplete todos');
+        
+        // Create a new todo
+        const newTodo = await dpd.todos.post({
+            title: 'New todo from async/await',
+            completed: false,
+            priority: 3
+        });
+        
+        console.log('Created todo:', newTodo);
+        
+        // Update it
+        const updatedTodo = await dpd.todos.put(newTodo.id, {
+            completed: true
+        });
+        
+        console.log('Completed todo:', updatedTodo);
+        
+    } catch (error) {
+        console.error('Error managing todos:', error);
+    }
+}`}
+                      </CodeBlock>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">Advanced Features</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Error Handling</Text>
+                      <CodeBlock language="javascript" title="Comprehensive error handling">
+{`// Handle validation errors
+dpd.todos.post({
+    title: '', // Invalid - too short
+    priority: 'high' // Invalid - should be number
+}, function(result, error) {
+    if (error) {
+        if (error.statusCode === 400) {
+            console.log('Validation errors:');
+            error.errors.forEach(err => {
+                console.log(\`\${err.field}: \${err.message}\`);
+            });
+        } else {
+            console.error('Unexpected error:', error);
+        }
+    }
+});
+
+// Handle authentication errors
+dpd.todos.get(function(todos, error) {
+    if (error) {
+        if (error.statusCode === 401) {
+            console.log('Authentication required');
+            // Redirect to login
+        } else if (error.statusCode === 403) {
+            console.log('Access forbidden');
+        }
+    }
+});
+
+// Global error handling
+dpd.on('error', function(error) {
+    console.error('Global dpd error:', error);
+    if (error.statusCode === 401) {
+        // Redirect to login page
+        window.location.href = '/login';
+    }
+});`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Custom Events</Text>
+                      <CodeBlock language="javascript" title="Listen for custom server events">
+{`// Listen for custom events emitted from server events
+dpd.on('urgent_task_created', function(data) {
+    console.log('Urgent task alert:', data);
+    showNotification('Urgent Task!', data.title);
+});
+
+dpd.on('task_completed', function(data) {
+    console.log('Task completed:', data);
+    showCelebration(data.title);
+});
+
+// Send custom events to server (if custom endpoint exists)
+dpd.notifications.post({
+    type: 'user_action',
+    action: 'page_view',
+    page: window.location.pathname
+});`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Complete Example App</Text>
+                      <CodeBlock language="javascript" title="Simple todo app with dpd.js">
+{`// Simple todo app using dpd.js
+class TodoApp {
+    constructor() {
+        this.todoList = document.getElementById('todo-list');
+        this.todoForm = document.getElementById('todo-form');
+        this.setupEventListeners();
+        this.loadTodos();
+    }
+    
+    setupEventListeners() {
+        // Form submission
+        this.todoForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.addTodo();
+        });
+        
+        // Real-time updates
+        dpd.todos.on('created', (todo) => {
+            this.addTodoToDOM(todo);
+        });
+        
+        dpd.todos.on('updated', (todo) => {
+            this.updateTodoInDOM(todo);
+        });
+        
+        dpd.todos.on('deleted', (todo) => {
+            this.removeTodoFromDOM(todo.id);
+        });
+    }
+    
+    async loadTodos() {
+        try {
+            const todos = await dpd.todos.get({
+                $sort: {createdAt: -1}
+            });
+            
+            this.todoList.innerHTML = '';
+            todos.forEach(todo => this.addTodoToDOM(todo));
+        } catch (error) {
+            console.error('Failed to load todos:', error);
+        }
+    }
+    
+    async addTodo() {
+        const title = document.getElementById('todo-title').value;
+        const priority = parseInt(document.getElementById('todo-priority').value);
+        
+        try {
+            await dpd.todos.post({
+                title: title,
+                completed: false,
+                priority: priority
+            });
+            
+            // Clear form
+            this.todoForm.reset();
+        } catch (error) {
+            console.error('Failed to create todo:', error);
+            this.showError(error);
+        }
+    }
+    
+    addTodoToDOM(todo) {
+        const li = document.createElement('li');
+        li.dataset.id = todo.id;
+        li.innerHTML = \`
+            <span class="title">\${todo.title}</span>
+            <span class="priority">Priority: \${todo.priority}</span>
+            <button onclick="app.toggleComplete('\${todo.id}', \${todo.completed})">
+                \${todo.completed ? 'Undo' : 'Complete'}
+            </button>
+            <button onclick="app.deleteTodo('\${todo.id}')">Delete</button>
+        \`;
+        
+        if (todo.completed) {
+            li.classList.add('completed');
+        }
+        
+        this.todoList.appendChild(li);
+    }
+    
+    async toggleComplete(id, currentStatus) {
+        try {
+            await dpd.todos.put(id, {
+                completed: !currentStatus
+            });
+        } catch (error) {
+            console.error('Failed to update todo:', error);
+        }
+    }
+    
+    async deleteTodo(id) {
+        try {
+            await dpd.todos.del(id);
+        } catch (error) {
+            console.error('Failed to delete todo:', error);
+        }
+    }
+    
+    updateTodoInDOM(todo) {
+        const li = this.todoList.querySelector(\`li[data-id="\${todo.id}"]\`);
+        if (li) {
+            li.querySelector('.title').textContent = todo.title;
+            li.querySelector('.priority').textContent = \`Priority: \${todo.priority}\`;
+            li.classList.toggle('completed', todo.completed);
+        }
+    }
+    
+    removeTodoFromDOM(id) {
+        const li = this.todoList.querySelector(\`li[data-id="\${id}"]\`);
+        if (li) {
+            li.remove();
+        }
+    }
+    
+    showError(error) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error';
+        errorDiv.textContent = error.message || 'An error occurred';
+        document.body.appendChild(errorDiv);
+        
+        setTimeout(() => errorDiv.remove(), 5000);
+    }
+}
+
+// Initialize app when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.app = new TodoApp();
+});`}
+                      </CodeBlock>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+            </VStack>
+          </TabPanel>
+
+          {/* Advanced Queries Tab */}
+          <TabPanel>
+            <VStack spacing={6} align="stretch">
+              <TableOfContents sections={[
+                {
+                  id: 'query-translation',
+                  title: 'MongoDB-to-SQL Query Translation',
+                  subsections: [
+                    { id: 'supported-operators', title: 'Supported MongoDB Operators' },
+                    { id: 'complex-queries', title: 'Complex Nested Queries' },
+                    { id: 'query-examples', title: 'Query Examples' }
+                  ]
+                },
+                {
+                  id: 'force-mongo',
+                  title: '$forceMongo Option',
+                  subsections: [
+                    { id: 'when-to-use', title: 'When to Use $forceMongo' },
+                    { id: 'force-mongo-examples', title: 'Examples with $forceMongo' },
+                    { id: 'performance-notes', title: 'Performance Considerations' }
+                  ]
+                },
+                {
+                  id: 'post-query-endpoint',
+                  title: 'POST /collection/query Endpoint',
+                  subsections: [
+                    { id: 'endpoint-overview', title: 'Overview' },
+                    { id: 'request-format', title: 'Request Format' },
+                    { id: 'response-format', title: 'Response Format' }
+                  ]
+                }
+              ]} />
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">MongoDB-to-SQL Query Translation</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      Go-Deployd automatically translates MongoDB-style queries to SQL when using SQLite or other SQL databases. 
+                      This allows you to use familiar MongoDB query syntax regardless of your backend database.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Supported MongoDB Operators</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>✅ <Code>$eq</Code> - Equal to</Text>
+                        <Text>✅ <Code>$ne</Code> - Not equal to</Text>
+                        <Text>✅ <Code>$gt</Code> - Greater than</Text>
+                        <Text>✅ <Code>$gte</Code> - Greater than or equal</Text>
+                        <Text>✅ <Code>$lt</Code> - Less than</Text>
+                        <Text>✅ <Code>$lte</Code> - Less than or equal</Text>
+                        <Text>✅ <Code>$in</Code> - Value in array</Text>
+                        <Text>✅ <Code>$nin</Code> - Value not in array</Text>
+                        <Text>✅ <Code>$regex</Code> - Regular expression (converted to LIKE)</Text>
+                        <Text>✅ <Code>$exists</Code> - Field exists (IS NOT NULL / IS NULL)</Text>
+                        <Text>✅ <Code>$or</Code> - Logical OR</Text>
+                        <Text>✅ <Code>$and</Code> - Logical AND</Text>
+                        <Text>⚠️ <Code>$nor</Code> - Not yet supported</Text>
+                      </VStack>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Simple Query Translation Examples</Text>
+                      <CodeBlock language="bash" title="Basic operators">
+{`# Equality
+curl "${serverUrl}/todos?status=active"
+# Translates to: WHERE JSON_EXTRACT(data, '$.status') = 'active'
+
+# Greater than
+curl "${serverUrl}/todos?priority[$gt]=5"
+# Translates to: WHERE JSON_EXTRACT(data, '$.priority') > 5
+
+# In array
+curl "${serverUrl}/todos?status[$in][]=active&status[$in][]=pending"
+# Translates to: WHERE JSON_EXTRACT(data, '$.status') IN ('active', 'pending')
+
+# Regular expression
+curl "${serverUrl}/todos?title[$regex]=urgent"
+# Translates to: WHERE JSON_EXTRACT(data, '$.title') LIKE '%urgent%'`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Complex Nested Queries</Text>
+                      <Text mb={2}>For complex queries, use the POST endpoint with JSON body:</Text>
+                      <CodeBlock language="bash" title="Complex OR query" executable>
+{`curl -X POST "${serverUrl}/todos/query" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Master-Key: ${masterKey}" \\
+  -d '{
+    "query": {
+      "$or": [
+        {"title": {"$regex": "urgent"}},
+        {"priority": {"$gte": 8}}
+      ]
+    },
+    "options": {
+      "$limit": 10,
+      "$sort": {"createdAt": -1}
+    }
+  }'`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Advanced Query Examples</Text>
+                      <CodeBlock language="json" title="E-commerce product search">
+{`{
+  "query": {
+    "$and": [
+      {
+        "$or": [
+          {"title": {"$regex": "laptop"}},
+          {"title": {"$regex": "computer"}}
+        ]
+      },
+      {
+        "price": {
+          "$gte": 500,
+          "$lte": 2000
+        }
+      },
+      {
+        "status": {
+          "$in": ["available", "limited"]
+        }
+      }
+    ]
+  },
+  "options": {
+    "$sort": {"price": 1},
+    "$limit": 20,
+    "$fields": {"title": 1, "price": 1, "status": 1}
+  }
+}`}
+                      </CodeBlock>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">$forceMongo Option</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      The <Code>$forceMongo</Code> option bypasses SQL translation and executes queries directly 
+                      using MongoDB-style operations. Use this when you need exact MongoDB behavior or when 
+                      the SQL translation doesn't support your specific query pattern.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>When to Use $forceMongo</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>✅ Complex aggregation pipelines</Text>
+                        <Text>✅ MongoDB-specific operators not yet translated</Text>
+                        <Text>✅ When you need exact MongoDB semantics</Text>
+                        <Text>✅ Testing queries against MongoDB directly</Text>
+                        <Text>⚠️ Only works with stores that support raw MongoDB queries</Text>
+                      </VStack>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Using $forceMongo</Text>
+                      <CodeBlock language="bash" title="Force MongoDB query execution" executable>
+{`curl -X POST "${serverUrl}/todos/query" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Master-Key: ${masterKey}" \\
+  -d '{
+    "query": {
+      "$or": [
+        {"title": {"$regex": "important"}},
+        {"tags": {"$elemMatch": {"$eq": "urgent"}}}
+      ]
+    },
+    "options": {
+      "$limit": 5,
+      "$forceMongo": true
+    }
+  }'`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="blue.600" mt={2}>
+                        💡 With $forceMongo: true, the query bypasses SQL translation and runs as pure MongoDB
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Comparison: Translation vs Force Mongo</Text>
+                      <CodeBlock language="javascript" title="Same query, different execution">
+{`// With SQL translation (default)
+{
+  "query": {
+    "title": {"$regex": "urgent"},
+    "priority": {"$gte": 5}
+  }
+}
+// Executes as: WHERE JSON_EXTRACT(data, '$.title') LIKE '%urgent%' 
+//              AND JSON_EXTRACT(data, '$.priority') >= 5
+
+// With $forceMongo: true
+{
+  "query": {
+    "title": {"$regex": "urgent"},
+    "priority": {"$gte": 5}
+  },
+  "options": {
+    "$forceMongo": true
+  }
+}
+// Executes as native MongoDB query: 
+// db.collection.find({title: {$regex: "urgent"}, priority: {$gte: 5}})`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Advanced MongoDB Features</Text>
+                      <CodeBlock language="json" title="Complex MongoDB-only operations">
+{`{
+  "query": {
+    "$expr": {
+      "$gt": [
+        {"$multiply": ["$price", "$quantity"]},
+        1000
+      ]
+    }
+  },
+  "options": {
+    "$forceMongo": true,
+    "$limit": 10
+  }
+}
+
+// Array operations that work better with native MongoDB
+{
+  "query": {
+    "tags": {
+      "$elemMatch": {
+        "$and": [
+          {"$gte": "2024-01-01"},
+          {"$lte": "2024-12-31"}
+        ]
+      }
+    }
+  },
+  "options": {
+    "$forceMongo": true
+  }
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={2}>Performance Considerations</Text>
+                      <VStack spacing={1} align="stretch">
+                        <Text>• <Code>$forceMongo</Code> requires store support for raw MongoDB queries</Text>
+                        <Text>• SQL translation is often faster for simple queries</Text>
+                        <Text>• Use $forceMongo for complex operations that don't translate well</Text>
+                        <Text>• Consider indexing strategy when using raw MongoDB queries</Text>
+                      </VStack>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Heading size="md">POST /collection/query Endpoint</Heading>
+                </CardHeader>
+                <CardBody>
+                  <VStack spacing={4} align="stretch">
+                    <Text>
+                      The <Code>POST /{"{collection}"}/query</Code> endpoint accepts complex MongoDB-style queries 
+                      in the request body, supporting features that can't be expressed in URL query parameters.
+                    </Text>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Request Format</Text>
+                      <CodeBlock language="json" title="Complete request structure">
+{`{
+  "query": {
+    // MongoDB-style query object
+    "$and": [
+      {"status": "active"},
+      {"priority": {"$gte": 5}}
+    ]
+  },
+  "options": {
+    // Query options
+    "$sort": {"createdAt": -1},
+    "$limit": 20,
+    "$skip": 0,
+    "$fields": {"title": 1, "status": 1, "priority": 1},
+    "$forceMongo": false,
+    "$skipEvents": true
+  }
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Frontend Integration</Text>
+                      <CodeBlock language="javascript" title="Using from JavaScript">
+{`// Simple query
+const simpleQuery = {
+  query: {
+    completed: false,
+    priority: {$gte: 5}
+  },
+  options: {
+    $limit: 10,
+    $sort: {createdAt: -1}
+  }
+};
+
+const response = await fetch('/todos/query', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': \`Bearer \${token}\`
+  },
+  body: JSON.stringify(simpleQuery)
+});
+
+const todos = await response.json();
+
+// Complex query with OR conditions
+const complexQuery = {
+  query: {
+    $or: [
+      {title: {$regex: 'urgent'}},
+      {priority: {$gte: 8}},
+      {dueDate: {$lt: new Date()}}
+    ]
+  },
+  options: {
+    $sort: {priority: -1, dueDate: 1},
+    $limit: 50
+  }
+};
+
+// With dpd.js (if available)
+dpd.todos.query(complexQuery, function(results, error) {
+  if (error) {
+    console.error('Query failed:', error);
+  } else {
+    console.log('Query results:', results);
+  }
+});`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Response Format</Text>
+                      <CodeBlock language="json" title="Query response">
+{`// Success response
+[
+  {
+    "id": "doc123",
+    "title": "Urgent task",
+    "priority": 9,
+    "status": "active",
+    "createdAt": "2024-06-28T10:00:00Z",
+    "updatedAt": "2024-06-28T10:00:00Z"
+  },
+  {
+    "id": "doc124",
+    "title": "High priority item",
+    "priority": 8,
+    "status": "active",
+    "createdAt": "2024-06-28T09:00:00Z",
+    "updatedAt": "2024-06-28T09:00:00Z"
+  }
+]
+
+// Error response
+{
+  "error": "Query validation failed",
+  "details": "Invalid operator: $invalidOp",
+  "statusCode": 400
+}`}
+                      </CodeBlock>
+                    </Box>
+
+                    <Box>
+                      <Text fontWeight="bold" mb={3}>Complete Example: Advanced Search</Text>
+                      <CodeBlock language="bash" title="Product search with multiple criteria" executable>
+{`curl -X POST "${serverUrl}/todos/query" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Master-Key: ${masterKey}" \\
+  -d '{
+    "query": {
+      "$and": [
+        {
+          "$or": [
+            {"title": {"$regex": "important"}},
+            {"description": {"$regex": "critical"}}
+          ]
+        },
+        {
+          "priority": {"$gte": 5}
+        },
+        {
+          "status": {"$in": ["active", "pending"]}
+        }
+      ]
+    },
+    "options": {
+      "$sort": {"priority": -1, "createdAt": -1},
+      "$limit": 15,
+      "$fields": {
+        "title": 1,
+        "priority": 1,
+        "status": 1,
+        "createdAt": 1
+      }
+    }
+  }'`}
+                      </CodeBlock>
+                      <Text fontSize="sm" color="green.600" mt={2}>
+                        💡 This query finds important/critical todos with priority ≥ 5, sorted by priority and date
+                      </Text>
                     </Box>
                   </VStack>
                 </CardBody>
