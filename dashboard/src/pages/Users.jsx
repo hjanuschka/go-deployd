@@ -54,7 +54,7 @@ function Users() {
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure()
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure()
   
-  const { masterKey } = useAuth()
+  const { authFetch } = useAuth()
   const toast = useToast()
   const cancelRef = React.useRef()
 
@@ -66,12 +66,7 @@ function Users() {
   const fetchUserSchema = async () => {
     try {
       setSchemaLoading(true)
-      const response = await fetch('/_admin/collections/users', {
-        headers: {
-          'X-Master-Key': masterKey,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await authFetch('/_admin/collections/users')
 
       if (response.ok) {
         const data = await response.json()
@@ -134,12 +129,7 @@ function Users() {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/users', {
-        headers: {
-          'X-Master-Key': masterKey,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await authFetch('/users')
 
       if (response.ok) {
         const data = await response.json()
@@ -163,10 +153,9 @@ function Users() {
 
   const handleCreate = async () => {
     try {
-      const response = await fetch('/users', {
+      const response = await authFetch('/users', {
         method: 'POST',
         headers: {
-          'X-Master-Key': masterKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(formData)
@@ -207,10 +196,9 @@ function Users() {
         delete updateData.password
       }
 
-      const response = await fetch(`/users/${selectedUser.id}`, {
+      const response = await authFetch(`/users/${selectedUser.id}`, {
         method: 'PUT',
         headers: {
-          'X-Master-Key': masterKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(updateData)
@@ -245,12 +233,8 @@ function Users() {
     if (!selectedUser) return
 
     try {
-      const response = await fetch(`/users/${selectedUser.id}`, {
-        method: 'DELETE',
-        headers: {
-          'X-Master-Key': masterKey,
-          'Content-Type': 'application/json'
-        }
+      const response = await authFetch(`/users/${selectedUser.id}`, {
+        method: 'DELETE'
       })
 
       if (response.ok) {
@@ -600,14 +584,15 @@ function Users() {
                         icon={<FiEdit2 />}
                         onClick={() => openEditModal(user)}
                         aria-label="Edit user"
-                        variant="ghost"
+                        variant="outline"
+                        colorScheme="blue"
                       />
                       <IconButton
                         size="sm"
                         icon={<FiTrash2 />}
                         onClick={() => openDeleteModal(user)}
                         aria-label="Delete user"
-                        variant="ghost"
+                        variant="outline"
                         colorScheme="red"
                       />
                     </HStack>

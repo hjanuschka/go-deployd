@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Grid,
@@ -45,12 +46,14 @@ import { SkeletonGrid } from '../components/SkeletonCard'
 import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function Dashboard() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [stats, setStats] = useState({
     collections: [],
     totalDocuments: 0,
-    serverInfo: null
+    serverInfo: null,
+    metricsData: null
   })
 
   const cardBg = useColorModeValue('white', 'gray.700')
@@ -62,14 +65,19 @@ function Dashboard() {
       setError(null)
       
       // Get real data from API
-      const [collectionsData, serverInfoData] = await Promise.all([
+      const [collectionsData, serverInfoData, metricsData] = await Promise.all([
         apiService.getCollections().catch(() => []),
         apiService.getServerInfo().catch(() => ({
           version: '1.0.0',
           goVersion: '1.21',
           uptime: '2h 15m',
           database: 'Connected'
-        }))
+        })),
+        fetch('/_dashboard/api/metrics/system', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          }
+        }).then(res => res.ok ? res.json() : null).catch(() => null)
       ])
 
       // Get document counts for each collection
@@ -106,7 +114,8 @@ function Dashboard() {
       setStats({
         collections: collectionsWithCounts,
         totalDocuments: collectionsWithCounts.reduce((sum, col) => sum + (col.documentCount || 0), 0),
-        serverInfo: serverInfoData
+        serverInfo: serverInfoData,
+        metricsData: metricsData
       })
     } catch (err) {
       setError(err.message)
@@ -196,6 +205,7 @@ function Dashboard() {
               icon={FiDatabase}
               gradient="brand"
               subtitle="Active collections"
+              onClick={() => navigate('/collections')}
             />
           </GridItem>
           <GridItem>
@@ -205,6 +215,7 @@ function Dashboard() {
               icon={FiFile}
               gradient="success"
               subtitle="Total documents"
+              onClick={() => navigate('/collections')}
             />
           </GridItem>
           <GridItem>
@@ -214,6 +225,7 @@ function Dashboard() {
               icon={FiClock}
               gradient="warning"
               subtitle="System uptime"
+              onClick={() => navigate('/metrics')}
             />
           </GridItem>
           <GridItem>
@@ -223,6 +235,7 @@ function Dashboard() {
               icon={FiActivity}
               gradient="success"
               subtitle={stats.serverInfo?.database || 'Connected'}
+              onClick={() => navigate('/metrics')}
             />
           </GridItem>
         </Grid>
@@ -232,13 +245,13 @@ function Dashboard() {
           {/* Metrics Chart */}
           <GridItem>
             <MetricsChart
-              title="Performance Metrics"
-              subtitle="Real-time system performance and usage statistics"
+              title="System Overview"
+              subtitle="Current system statistics and collection overview"
               data={[
                 { name: 'Collections', value: stats.collections.length },
                 { name: 'Documents', value: stats.totalDocuments },
-                { name: 'Requests/min', value: Math.floor(Math.random() * 100) + 50 },
-                { name: 'Response Time', value: Math.floor(Math.random() * 50) + 10 }
+                { name: 'Uptime (hrs)', value: stats.metricsData?.uptime_hours || 0 },
+                { name: 'Total Metrics', value: stats.metricsData?.total_metrics || 0 }
               ]}
             />
           </GridItem>
@@ -246,63 +259,20 @@ function Dashboard() {
           {/* Activity Feed */}
           <GridItem>
             <ActivityFeed
-              title="Recent Activity"
-              activities={[
-                ...stats.collections.slice(0, 3).map(col => ({
-                  type: 'collection',
-                  message: `Collection "${col.name}" updated`,
-                  timestamp: new Date(col.lastModified),
-                  user: 'System'
-                })),
-                {
-                  type: 'system',
-                  message: 'Server started successfully',
-                  timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-                  user: 'System'
-                },
-                {
-                  type: 'auth',
-                  message: 'Dashboard access granted',
-                  timestamp: new Date(),
-                  user: 'Admin'
-                }
-              ]}
+              title="Collections Status"
+              activities={stats.collections.slice(0, 5).map(col => ({
+                type: 'collection',
+                message: `${col.name} (${col.documentCount} documents)`,
+                timestamp: new Date(col.lastModified),
+                user: 'Data'
+              }))}
             />
           </GridItem>
         </Grid>
 
         {/* Quick Actions */}
         <QuickActions
-          actions={[
-            {
-              title: 'Manage Collections',
-              description: 'View and manage database collections',
-              icon: FiDatabase,
-              gradient: 'brand',
-              onClick: () => console.log('Navigate to collections')
-            },
-            {
-              title: 'Server Settings',
-              description: 'Configure server parameters',
-              icon: FiSettings,
-              gradient: 'success',
-              onClick: () => console.log('Navigate to settings')
-            },
-            {
-              title: 'View Analytics',
-              description: 'Performance and usage analytics',
-              icon: FiTrendingUp,
-              gradient: 'warning',
-              onClick: () => console.log('Navigate to analytics')
-            },
-            {
-              title: 'User Management',
-              description: 'Manage user accounts and permissions',
-              icon: FiUsers,
-              gradient: 'danger',
-              onClick: () => console.log('Navigate to users')
-            }
-          ]}
+          onActionClick={(path) => navigate(path)}
         />
 
         {/* Collections Detail Section */}
@@ -326,9 +296,11 @@ function Dashboard() {
                       p={4} 
                       borderRadius="lg" 
                       bg={useColorModeValue('whiteAlpha.700', 'whiteAlpha.100')} 
-                      _hover={{ bg: useColorModeValue('whiteAlpha.900', 'whiteAlpha.200') }} 
+                      _hover={{ bg: useColorModeValue('whiteAlpha.900', 'whiteAlpha.200'), transform: 'translateY(-2px)' }} 
                       transition="all 0.2s"
                       backdropFilter="blur(10px)"
+                      cursor="pointer"
+                      onClick={() => navigate(`/collections/${collection.name}`)}
                     >
                       <HStack spacing={4}>
                         <Box p={2} borderRadius="md" bg="brand.500" color="white">

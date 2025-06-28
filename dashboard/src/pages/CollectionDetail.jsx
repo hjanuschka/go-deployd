@@ -71,7 +71,6 @@ function CollectionDetail() {
   const { isOpen, onOpen, onClose } = useDisclosure()
   const toast = useToast()
 
-  const cardBg = useColorModeValue('white', 'gray.700')
   const borderColor = useColorModeValue('gray.200', 'gray.600')
 
   // Mock collection data
@@ -364,8 +363,18 @@ function CollectionDetail() {
       <Box position="relative" zIndex={1} p={6}>
       <HStack justify="space-between" mb={6}>
         <VStack align="start" spacing={1}>
-          <Heading size="lg">{collection.name}</Heading>
-          <Text color="gray.500">{documents.length} documents</Text>
+          <Heading 
+            size="lg"
+            color={useColorModeValue('gray.800', 'white')}
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            px={4}
+            py={2}
+            borderRadius="lg"
+            backdropFilter="blur(10px)"
+          >
+            {collection.name}
+          </Heading>
+          <Text color={useColorModeValue('gray.600', 'whiteAlpha.800')} ml={4}>{documents.length} documents</Text>
         </VStack>
         <IconButton
           icon={<FiRefreshCw />}
@@ -375,7 +384,15 @@ function CollectionDetail() {
         />
       </HStack>
 
-      <Card bg={cardBg} shadow="md">
+      <Box
+        bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+        borderRadius="xl"
+        p={6}
+        backdropFilter="blur(20px)"
+        borderWidth="1px"
+        borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+        boxShadow="xl"
+      >
         <Tabs index={tabIndex} onChange={handleTabChange}>
           <TabList>
             <Tab>Data</Tab>
@@ -456,6 +473,7 @@ function CollectionDetail() {
                                 size="sm"
                                 icon={<FiEdit />}
                                 variant="outline"
+                                colorScheme="blue"
                                 onClick={() => handleEditDocument(document)}
                                 aria-label="Edit document"
                               />
@@ -604,7 +622,7 @@ curl -X PUT http://localhost:2403/${name}/{id} \\
             </TabPanel>
           </TabPanels>
         </Tabs>
-      </Card>
+      </Box>
 
       {/* Document Modal */}
       <DocumentModal

@@ -24,7 +24,9 @@ export const GradientStatCard = ({
   gradient = 'brand',
   delay = 0,
   trend = null,
-  isLoading = false
+  isLoading = false,
+  onClick,
+  subtitle
 }) => {
   const textColor = useColorModeValue('white', 'white')
   const bg = useColorModeValue('white', 'gray.800')
@@ -39,6 +41,8 @@ export const GradientStatCard = ({
         boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.25)'
       }}
       whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      cursor={onClick ? 'pointer' : 'default'}
     >
       <Box
         position="relative"
@@ -104,13 +108,13 @@ export const GradientStatCard = ({
                   />
                 ) : value}
               </Text>
-              {helpText && (
+              {(helpText || subtitle) && (
                 <Text 
                   fontSize="xs" 
                   color="rgba(255,255,255,0.7)"
                   fontWeight="medium"
                 >
-                  {helpText}
+                  {helpText || subtitle}
                 </Text>
               )}
               {trend && (

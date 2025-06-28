@@ -63,8 +63,6 @@ function Collections() {
   const navigate = useNavigate()
   const toast = useToast()
   
-  const cardBg = useColorModeValue('white', 'gray.700')
-  const borderColor = useColorModeValue('gray.200', 'gray.600')
 
 
   useEffect(() => {
@@ -226,7 +224,7 @@ function Collections() {
   return (
     <Box position="relative" minH="100vh">
       <AnimatedBackground />
-      <Box position="relative" zIndex={1}>
+      <Box position="relative" zIndex={1} p={6}>
       <VStack spacing={6} align="stretch">
         <HStack justify="space-between">
           <Heading 
@@ -334,9 +332,18 @@ function Collections() {
             )}
           </HStack>
 
-          <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }} gap={6}>
-            {currentCollections.map((collection) => (
-          <GridItem key={collection.name}>
+          <Box
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            borderRadius="xl"
+            p={6}
+            backdropFilter="blur(20px)"
+            borderWidth="1px"
+            borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+            boxShadow="xl"
+          >
+            <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }} gap={6}>
+              {currentCollections.map((collection) => (
+            <GridItem key={collection.name}>
             <Card 
               bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
               backdropFilter="blur(20px)"
@@ -426,16 +433,18 @@ function Collections() {
             {currentPage === 1 && (
               <GridItem>
                 <Card 
-                  bg={cardBg}
-                  shadow="md"
+                  bg={useColorModeValue('whiteAlpha.700', 'blackAlpha.400')}
+                  backdropFilter="blur(10px)"
+                  shadow="lg"
                   borderWidth="2px"
                   borderStyle="dashed"
-                  borderColor="brand.300"
+                  borderColor={useColorModeValue('brand.300', 'brand.400')}
                   _hover={{ 
                     borderColor: 'brand.500',
-                    bg: useColorModeValue('brand.50', 'gray.600')
+                    bg: useColorModeValue('whiteAlpha.900', 'blackAlpha.600'),
+                    transform: 'translateY(-2px)'
                   }}
-                  transition="all 0.2s"
+                  transition="all 0.3s"
                   h="full"
                   cursor="pointer"
                   onClick={onOpen}
@@ -470,6 +479,7 @@ function Collections() {
               </GridItem>
             )}
           </Grid>
+          </Box>
         </VStack>
       )}
 

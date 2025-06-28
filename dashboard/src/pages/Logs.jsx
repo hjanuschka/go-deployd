@@ -48,7 +48,6 @@ function Logs() {
   
   const { authFetch } = useAuth()
   const toast = useToast()
-  const cardBg = useColorModeValue('white', 'gray.700')
   const codeBg = useColorModeValue('gray.50', 'gray.800')
 
   useEffect(() => {
@@ -177,7 +176,17 @@ function Logs() {
       <HStack justify="space-between">
         <HStack>
           <FiFileText />
-          <Heading size="lg">Application Logs</Heading>
+          <Heading 
+            size="lg" 
+            color={useColorModeValue('gray.800', 'white')}
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            px={4}
+            py={2}
+            borderRadius="lg"
+            backdropFilter="blur(10px)"
+          >
+            Application Logs
+          </Heading>
         </HStack>
         <HStack spacing={2}>
           <Tooltip label="Refresh logs">
@@ -201,14 +210,25 @@ function Logs() {
       </HStack>
 
 
-      <Card bg={cardBg}>
-        <CardHeader>
+      <Box
+        bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+        borderRadius="xl"
+        p={6}
+        backdropFilter="blur(20px)"
+        borderWidth="1px"
+        borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+        boxShadow="xl"
+      >
+        <VStack align="stretch" spacing={4}>
           <HStack justify="space-between">
-            <Heading size="md">Filter Logs</Heading>
+            <Heading 
+              size="md"
+              color={useColorModeValue('gray.800', 'white')}
+            >
+              Filter Logs
+            </Heading>
             <Badge colorScheme="blue">{logs.length} entries</Badge>
           </HStack>
-        </CardHeader>
-        <CardBody>
           <HStack spacing={4}>
             <FormControl maxW="200px">
               <FormLabel>Log Level</FormLabel>
@@ -233,17 +253,28 @@ function Logs() {
               </Select>
             </FormControl>
           </HStack>
-        </CardBody>
-      </Card>
+        </VStack>
+      </Box>
 
-      <Card bg={cardBg}>
-        <CardHeader>
+      <Box
+        bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+        borderRadius="xl"
+        p={6}
+        backdropFilter="blur(20px)"
+        borderWidth="1px"
+        borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+        boxShadow="xl"
+      >
+        <VStack align="stretch" spacing={4}>
           <HStack>
             <FiClock />
-            <Heading size="md">Log Entries</Heading>
+            <Heading 
+              size="md"
+              color={useColorModeValue('gray.800', 'white')}
+            >
+              Log Entries
+            </Heading>
           </HStack>
-        </CardHeader>
-        <CardBody>
           {loading ? (
             <Center py={8}>
               <VStack>
@@ -305,8 +336,8 @@ function Logs() {
               ))}
             </VStack>
           )}
-        </CardBody>
-      </Card>
+        </VStack>
+      </Box>
         </VStack>
       </Box>
     </Box>
