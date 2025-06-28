@@ -1,20 +1,4 @@
-//go:build ignore
-// +build ignore
-
-package main
-
-import (
-	"strings"
-)
-
-// EventContext stub for compilation
-type EventContext struct {
-	Data map[string]interface{}
-}
-
-func (ctx *EventContext) Hide(field string) {}
-func (ctx *EventContext) Cancel(message string, code int) {}
-func (ctx *EventContext) Log(message string, data map[string]interface{}) {}
+import "strings"
 
 // Run validates todo data before saving
 func Run(ctx *EventContext) error {
