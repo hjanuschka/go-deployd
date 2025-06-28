@@ -57,7 +57,7 @@ const generateMockActivity = () => {
   return activities.map((activity, index) => ({ ...activity, id: index }))
 }
 
-export const ActivityFeed = ({ title, activities: propActivities = [], isLoading = false }) => {
+export const ActivityFeed = ({ title, activities: propActivities = [], isLoading = false, onActivityClick }) => {
   const [activities, setActivities] = useState([])
   const [isUpdating, setIsUpdating] = useState(false)
   
@@ -182,10 +182,13 @@ export const ActivityFeed = ({ title, activities: propActivities = [], isLoading
                 _hover={{
                   borderLeftColor: `${colorScheme}.500`,
                   bg: useColorModeValue('whiteAlpha.900', 'whiteAlpha.200'),
-                  boxShadow: 'md'
+                  boxShadow: 'md',
+                  transform: 'translateY(-1px)'
                 }}
                 transition="all 0.2s"
                 backdropFilter="blur(10px)"
+                cursor={onActivityClick ? 'pointer' : 'default'}
+                onClick={() => onActivityClick && activity.collection && onActivityClick(activity.collection)}
               >
                 <Circle size="40px" bg={`${colorScheme}.100`} color={`${colorScheme}.600`}>
                   <Icon size={18} />

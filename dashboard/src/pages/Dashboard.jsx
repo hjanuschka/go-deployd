@@ -245,13 +245,13 @@ function Dashboard() {
           {/* Metrics Chart */}
           <GridItem>
             <MetricsChart
-              title="System Overview"
-              subtitle="Current system statistics and collection overview"
+              title="Performance Metrics"
+              subtitle="Real-time system performance and usage statistics"
               data={[
                 { name: 'Collections', value: stats.collections.length },
                 { name: 'Documents', value: stats.totalDocuments },
-                { name: 'Uptime (hrs)', value: stats.metricsData?.uptime_hours || 0 },
-                { name: 'Total Metrics', value: stats.metricsData?.total_metrics || 0 }
+                { name: 'Requests/hour', value: stats.metricsData?.hourly_requests || 0 },
+                { name: 'Error Rate %', value: stats.metricsData?.hourly_error_rate ? parseFloat(stats.metricsData.hourly_error_rate.toFixed(1)) : 0 }
               ]}
             />
           </GridItem>
@@ -264,8 +264,10 @@ function Dashboard() {
                 type: 'collection',
                 message: `${col.name} (${col.documentCount} documents)`,
                 timestamp: new Date(col.lastModified),
-                user: 'Data'
+                user: 'Data',
+                collection: col.name
               }))}
+              onActivityClick={(collectionName) => navigate(`/collections/${collectionName}`)}
             />
           </GridItem>
         </Grid>
@@ -275,59 +277,6 @@ function Dashboard() {
           onActionClick={(path) => navigate(path)}
         />
 
-        {/* Collections Detail Section */}
-        <Box mt={8}>
-          <Card 
-            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')} 
-            shadow="xl" 
-            backdropFilter="blur(20px)" 
-            borderWidth="1px" 
-            borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
-          >
-            <CardHeader>
-              <Heading size="md" color={useColorModeValue('gray.800', 'white')}>Collections Detail</Heading>
-            </CardHeader>
-            <CardBody>
-              <List spacing={3}>
-                {stats.collections.map((collection) => (
-                  <ListItem key={collection.name}>
-                    <HStack 
-                      justify="space-between" 
-                      p={4} 
-                      borderRadius="lg" 
-                      bg={useColorModeValue('whiteAlpha.700', 'whiteAlpha.100')} 
-                      _hover={{ bg: useColorModeValue('whiteAlpha.900', 'whiteAlpha.200'), transform: 'translateY(-2px)' }} 
-                      transition="all 0.2s"
-                      backdropFilter="blur(10px)"
-                      cursor="pointer"
-                      onClick={() => navigate(`/collections/${collection.name}`)}
-                    >
-                      <HStack spacing={4}>
-                        <Box p={2} borderRadius="md" bg="brand.500" color="white">
-                          <Icon as={FiDatabase} boxSize={5} />
-                        </Box>
-                        <VStack align="start" spacing={1}>
-                          <Text fontWeight="semibold" color={useColorModeValue('gray.800', 'white')}>{collection.name}</Text>
-                          <Text fontSize="sm" color={useColorModeValue('gray.600', 'whiteAlpha.700')}>
-                            {collection.documentCount} documents
-                          </Text>
-                        </VStack>
-                      </HStack>
-                      <VStack align="end" spacing={1}>
-                        <Badge colorScheme="green" variant="subtle">
-                          Active
-                        </Badge>
-                        <Text fontSize="xs" color={useColorModeValue('gray.500', 'whiteAlpha.600')}>
-                          {new Date(collection.lastModified).toLocaleDateString()}
-                        </Text>
-                      </VStack>
-                    </HStack>
-                  </ListItem>
-                ))}
-              </List>
-            </CardBody>
-          </Card>
-        </Box>
       </Box>
     </Box>
   )
