@@ -133,15 +133,34 @@ export const apiService = {
   // MongoDB-style query execution
   queryCollection: async (collection, mongoQuery, options = {}) => {
     // Add $skipEvents for admin dashboard to bypass event validation
-    // Flatten the mongoQuery and options into query parameters
-    const requestParams = {
-      ...mongoQuery,  // Spread the query conditions directly as parameters
-      ...options,     // Add options like $sort, $limit, $skip, $fields
-      $skipEvents: true
-    }
     
-    const response = await api.get(`/${collection}`, { params: requestParams })
-    return response.data
+    // Check if this is a complex query that needs POST with JSON body
+    const isComplexQuery = JSON.stringify(mongoQuery).includes('$or') || 
+                          JSON.stringify(mongoQuery).includes('$and') || 
+                          JSON.stringify(mongoQuery).includes('$nor') ||
+                          JSON.stringify(options).includes('$or') ||
+                          JSON.stringify(options).includes('$and')
+
+    if (isComplexQuery) {
+      // Use POST request with JSON body for complex queries
+      const requestData = {
+        query: mongoQuery,
+        options: { ...options, $skipEvents: true }
+      }
+      console.log('Complex query - using POST:', requestData)
+      const response = await api.post(`/${collection}/query`, requestData)
+      return response.data
+    } else {
+      // Use GET with query parameters for simple queries
+      const requestParams = {
+        ...mongoQuery,  // Spread the query conditions directly as parameters
+        ...options,     // Add options like $sort, $limit, $skip, $fields
+        $skipEvents: true
+      }
+      console.log('Simple query - using GET:', requestParams)
+      const response = await api.get(`/${collection}`, { params: requestParams })
+      return response.data
+    }
   },
 
   // Server info

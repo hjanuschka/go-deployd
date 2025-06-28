@@ -122,6 +122,13 @@ func LoadCollectionFromConfigWithEmitter(name, configPath string, db database.Da
 }
 
 func (c *Collection) Handle(ctx *appcontext.Context) error {
+	id := ctx.GetID()
+	
+	// Handle special endpoints for POST requests
+	if ctx.Method == "POST" && id == "query" {
+		return c.handleQuery(ctx)
+	}
+	
 	switch ctx.Method {
 	case "GET":
 		return c.handleGet(ctx)
@@ -575,6 +582,201 @@ func (c *Collection) handleCount(ctx *appcontext.Context) error {
 	})
 }
 
+func (c *Collection) handleQuery(ctx *appcontext.Context) error {
+	// Run BeforeRequest event
+	if err := c.runBeforeRequestEvent(ctx, "QUERY"); err != nil {
+		if scriptErr, ok := err.(*events.ScriptError); ok {
+			return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+		}
+		return ctx.WriteError(500, err.Error())
+	}
+
+	// Parse the complex query from request body
+	queryData, exists := ctx.Body["query"]
+	if !exists {
+		return ctx.WriteError(400, "Query object required in request body")
+	}
+
+	queryMap, ok := queryData.(map[string]interface{})
+	if !ok {
+		return ctx.WriteError(400, "Query must be an object")
+	}
+
+	// Extract query options from body (if provided)
+	var opts database.QueryOptions
+	if optsData, exists := ctx.Body["options"]; exists {
+		if optsMap, ok := optsData.(map[string]interface{}); ok {
+			opts = c.parseQueryOptions(optsMap)
+		}
+	} else {
+		// Set default options
+		opts = database.QueryOptions{
+			Sort:   make(map[string]int),
+			Fields: make(map[string]int),
+		}
+		defaultLimit := int64(50)
+		opts.Limit = &defaultLimit
+	}
+
+	// Check for $skipEvents parameter to bypass events
+	skipEvents := false
+	if val, exists := ctx.Body["$skipEvents"]; exists {
+		if skip, ok := val.(bool); ok && skip {
+			skipEvents = true
+		}
+	}
+	if optsData, exists := ctx.Body["options"]; exists {
+		if optsMap, ok := optsData.(map[string]interface{}); ok {
+			if val, exists := optsMap["$skipEvents"]; exists {
+				if skip, ok := val.(bool); ok && skip {
+					skipEvents = true
+				}
+			}
+		}
+	}
+
+	// Check for $forceMongo parameter to use direct MongoDB queries (bypass SQL translation)
+	forceMongo := false
+	if val, exists := ctx.Body["$forceMongo"]; exists {
+		if force, ok := val.(bool); ok && force {
+			forceMongo = true
+		}
+	}
+	if optsData, exists := ctx.Body["options"]; exists {
+		if optsMap, ok := optsData.(map[string]interface{}); ok {
+			if val, exists := optsMap["$forceMongo"]; exists {
+				if force, ok := val.(bool); ok && force {
+					forceMongo = true
+				}
+			}
+		}
+	}
+
+	// Debug logging
+	fmt.Printf("DEBUG: Collection.handleQuery - Original query: %+v\n", queryMap)
+	fmt.Printf("DEBUG: Collection.handleQuery - Query options: %+v\n", opts)
+	fmt.Printf("DEBUG: Collection.handleQuery - forceMongo: %v\n", forceMongo)
+
+	var docs []map[string]interface{}
+	var err error
+
+	if forceMongo {
+		// Use direct MongoDB-style query execution (bypassing SQL translation)
+		fmt.Printf("DEBUG: Collection.handleQuery - Using direct MongoDB query\n")
+		
+		// Check if store supports raw query interface
+		if rawQueryStore, ok := c.store.(interface {
+			FindWithRawQuery(ctx context.Context, mongoQuery interface{}, options map[string]interface{}) ([]map[string]interface{}, error)
+		}); ok {
+			// Convert QueryOptions to map for raw query interface
+			optsMap := make(map[string]interface{})
+			if opts.Limit != nil {
+				optsMap["$limit"] = *opts.Limit
+			}
+			if opts.Skip != nil {
+				optsMap["$skip"] = *opts.Skip
+			}
+			if len(opts.Sort) > 0 {
+				optsMap["$sort"] = opts.Sort
+			}
+			if len(opts.Fields) > 0 {
+				optsMap["$fields"] = opts.Fields
+			}
+			
+			docs, err = rawQueryStore.FindWithRawQuery(ctx.Context(), queryMap, optsMap)
+		} else {
+			return ctx.WriteError(500, "Raw MongoDB queries not supported by this store implementation")
+		}
+	} else {
+		// Use standard SQL translation
+		fmt.Printf("DEBUG: Collection.handleQuery - Using SQL translation\n")
+		
+		// Sanitize and convert the query
+		sanitizedQuery := c.sanitizeQuery(queryMap)
+		fmt.Printf("DEBUG: Collection.handleQuery - Sanitized query: %+v\n", sanitizedQuery)
+		
+		query := c.mapToQueryBuilder(sanitizedQuery)
+		fmt.Printf("DEBUG: Collection.handleQuery - QueryBuilder created, calling store.Find\n")
+
+		// Execute the query
+		docs, err = c.store.Find(ctx.Context(), query, opts)
+	}
+	if err != nil {
+		return ctx.WriteError(500, err.Error())
+	}
+
+	// Run Get event for each document (skip if $skipEvents is true)
+	filteredDocs := make([]map[string]interface{}, 0)
+	for _, doc := range docs {
+		if !skipEvents {
+			eventDoc := make(map[string]interface{})
+			for k, v := range doc {
+				eventDoc[k] = v
+			}
+
+			if err := c.runGetEvent(ctx, eventDoc); err != nil {
+				continue // Skip documents that fail the Get event
+			}
+
+			filteredDocs = append(filteredDocs, eventDoc)
+		} else {
+			filteredDocs = append(filteredDocs, doc)
+		}
+	}
+
+	return ctx.WriteJSON(filteredDocs)
+}
+
+// Helper method to parse query options from request body
+func (c *Collection) parseQueryOptions(optsMap map[string]interface{}) database.QueryOptions {
+	opts := database.QueryOptions{
+		Sort:   make(map[string]int),
+		Fields: make(map[string]int),
+	}
+
+	if sortData, exists := optsMap["$sort"]; exists {
+		if sortMap, ok := sortData.(map[string]interface{}); ok {
+			for k, v := range sortMap {
+				if sortDir, ok := v.(float64); ok {
+					opts.Sort[k] = int(sortDir)
+				}
+			}
+		}
+	}
+
+	if limitData, exists := optsMap["$limit"]; exists {
+		if limit, ok := limitData.(float64); ok {
+			limitInt := int64(limit)
+			opts.Limit = &limitInt
+		}
+	}
+
+	if skipData, exists := optsMap["$skip"]; exists {
+		if skip, ok := skipData.(float64); ok {
+			skipInt := int64(skip)
+			opts.Skip = &skipInt
+		}
+	}
+
+	if fieldsData, exists := optsMap["$fields"]; exists {
+		if fieldsMap, ok := fieldsData.(map[string]interface{}); ok {
+			for k, v := range fieldsMap {
+				if include, ok := v.(float64); ok {
+					opts.Fields[k] = int(include)
+				}
+			}
+		}
+	}
+
+	// Apply default pagination if no limit was specified
+	if opts.Limit == nil {
+		defaultLimit := int64(50)
+		opts.Limit = &defaultLimit
+	}
+
+	return opts
+}
+
 func (c *Collection) validate(data map[string]interface{}, isCreate bool) error {
 	if c.config == nil || c.config.Properties == nil {
 		return nil
@@ -707,7 +909,7 @@ func (c *Collection) sanitizeQuery(query map[string]interface{}) map[string]inte
 	for key, value := range query {
 		// Allow MongoDB operators and id field
 		if strings.HasPrefix(key, "$") || key == "id" {
-			sanitized[key] = value
+			sanitized[key] = c.sanitizeQueryValue(value)
 			continue
 		}
 
@@ -743,6 +945,32 @@ func (c *Collection) sanitizeQuery(query map[string]interface{}) map[string]inte
 	}
 
 	return sanitized
+}
+
+// sanitizeQueryValue recursively sanitizes complex query values like $or arrays
+func (c *Collection) sanitizeQueryValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		// Recursively sanitize nested objects
+		result := make(map[string]interface{})
+		for k, val := range v {
+			result[k] = c.sanitizeQueryValue(val)
+		}
+		return result
+	case []interface{}:
+		// Handle arrays (like $or conditions)
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				result[i] = c.sanitizeQuery(itemMap)
+			} else {
+				result[i] = item
+			}
+		}
+		return result
+	default:
+		return value
+	}
 }
 
 func (c *Collection) extractQueryOptions(query map[string]interface{}) (database.QueryOptions, map[string]interface{}) {
@@ -827,6 +1055,38 @@ func (c *Collection) mapToQueryBuilder(query map[string]interface{}) database.Qu
 	for field, value := range query {
 		if strings.HasPrefix(field, "$") {
 			// Handle special MongoDB operators at root level
+			switch field {
+			case "$or":
+				if orConditions, ok := value.([]interface{}); ok {
+					var orBuilders []database.QueryBuilder
+					for _, condition := range orConditions {
+						if condMap, ok := condition.(map[string]interface{}); ok {
+							orBuilder := c.mapToQueryBuilder(condMap)
+							orBuilders = append(orBuilders, orBuilder)
+						}
+					}
+					if len(orBuilders) > 0 {
+						builder.Or(orBuilders...)
+					}
+				}
+			case "$and":
+				if andConditions, ok := value.([]interface{}); ok {
+					var andBuilders []database.QueryBuilder
+					for _, condition := range andConditions {
+						if condMap, ok := condition.(map[string]interface{}); ok {
+							andBuilder := c.mapToQueryBuilder(condMap)
+							andBuilders = append(andBuilders, andBuilder)
+						}
+					}
+					if len(andBuilders) > 0 {
+						builder.And(andBuilders...)
+					}
+				}
+			case "$nor":
+				// $nor is not supported in the current QueryBuilder interface
+				// For now, log a warning and skip
+				fmt.Printf("WARNING: $nor operator is not yet supported, skipping\n")
+			}
 			continue
 		}
 
@@ -842,6 +1102,17 @@ func (c *Collection) mapToQueryBuilder(query map[string]interface{}) database.Qu
 					if values, ok := opValue.([]interface{}); ok {
 						builder.WhereNotIn(field, values)
 					}
+				case "$exists":
+					// Handle $exists operator - for now, treat as basic field presence check
+					if exists, ok := opValue.(bool); ok {
+						if exists {
+							builder.WhereNotNull(field)
+						} else {
+							builder.WhereNull(field)
+						}
+					}
+				case "$ne":
+					builder.Where(field, "$ne", opValue)
 				default:
 					builder.Where(field, op, opValue)
 				}
