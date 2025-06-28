@@ -46,6 +46,9 @@ Thumbs.db
 # Security files (auto-generated on first run)
 .deployd/security.json
 
+# Node.js dependencies
+node_modules/
+
 # Dashboard
 dashboard/node_modules/
 dashboard/dist/
