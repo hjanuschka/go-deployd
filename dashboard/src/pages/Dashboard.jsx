@@ -250,8 +250,8 @@ function Dashboard() {
               data={[
                 { name: 'Collections', value: stats.collections.length },
                 { name: 'Documents', value: stats.totalDocuments },
-                { name: 'Requests/hour', value: stats.metricsData?.hourly_requests || 0 },
-                { name: 'Error Rate %', value: stats.metricsData?.hourly_error_rate ? parseFloat(stats.metricsData.hourly_error_rate.toFixed(1)) : 0 }
+                { name: 'Requests/hr', value: stats.metricsData?.hourly_requests || 0 },
+                { name: 'Total Metrics', value: stats.metricsData?.total_metrics || 0 }
               ]}
             />
           </GridItem>
