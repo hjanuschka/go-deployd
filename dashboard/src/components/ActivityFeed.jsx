@@ -48,24 +48,16 @@ const getActivityColor = (type) => {
   }
 }
 
-// Mock activity data generator
+// Mock activity data generator - fallback for when no real data is provided
 const generateMockActivity = () => {
   const activities = [
-    { type: 'create', action: 'Created new document', collection: 'users', user: 'admin', timestamp: new Date(Date.now() - Math.random() * 3600000) },
-    { type: 'update', action: 'Updated document', collection: 'products', user: 'admin', timestamp: new Date(Date.now() - Math.random() * 3600000) },
-    { type: 'delete', action: 'Deleted document', collection: 'todos', user: 'admin', timestamp: new Date(Date.now() - Math.random() * 3600000) },
-    { type: 'login', action: 'Admin logged in', collection: null, user: 'admin', timestamp: new Date(Date.now() - Math.random() * 3600000) },
-    { type: 'request', action: 'API request', collection: 'users', user: 'system', timestamp: new Date(Date.now() - Math.random() * 3600000) },
-    { type: 'error', action: 'Failed to connect to database', collection: null, user: 'system', timestamp: new Date(Date.now() - Math.random() * 3600000) },
+    { type: 'collection', action: 'No recent activity', collection: null, user: 'System', timestamp: new Date() },
   ]
   
-  return activities
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, 8)
-    .map((activity, index) => ({ ...activity, id: index }))
+  return activities.map((activity, index) => ({ ...activity, id: index }))
 }
 
-export const ActivityFeed = ({ isLoading = false }) => {
+export const ActivityFeed = ({ title, activities: propActivities = [], isLoading = false }) => {
   const [activities, setActivities] = useState([])
   const [isUpdating, setIsUpdating] = useState(false)
   
@@ -73,20 +65,19 @@ export const ActivityFeed = ({ isLoading = false }) => {
   const borderColor = useColorModeValue('gray.200', 'gray.600')
   
   useEffect(() => {
-    // Initial load
-    setActivities(generateMockActivity())
-    
-    // Simulate real-time updates
-    const interval = setInterval(() => {
-      setIsUpdating(true)
-      setTimeout(() => {
-        setActivities(generateMockActivity())
-        setIsUpdating(false)
-      }, 500)
-    }, 10000) // Update every 10 seconds
-    
-    return () => clearInterval(interval)
-  }, [])
+    if (propActivities.length > 0) {
+      // Use real activities passed as props
+      setActivities(propActivities.map((activity, index) => ({
+        ...activity,
+        id: index,
+        action: activity.message,
+        type: activity.type || 'collection'
+      })))
+    } else {
+      // Fallback to mock data only if no real data provided
+      setActivities(generateMockActivity())
+    }
+  }, [propActivities])
   
   const formatTime = (date) => {
     const now = new Date()
@@ -128,21 +119,42 @@ export const ActivityFeed = ({ isLoading = false }) => {
   }
   
   return (
-    <VStack spacing={3} align="stretch" position="relative">
-      {isUpdating && (
-        <MotionBox
-          position="absolute"
-          top={-2}
-          right={-2}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          exit={{ scale: 0 }}
+    <Box
+      bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+      borderRadius="xl"
+      p={6}
+      backdropFilter="blur(20px)"
+      borderWidth="1px"
+      borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+      boxShadow="xl"
+      position="relative"
+    >
+      {title && (
+        <Text
+          fontSize="lg"
+          fontWeight="bold"
+          mb={4}
+          color={useColorModeValue('gray.800', 'white')}
         >
-          <Circle size="20px" bg="blue.500">
-            <Spinner size="xs" color="white" />
-          </Circle>
-        </MotionBox>
+          {title}
+        </Text>
       )}
+      
+      <VStack spacing={3} align="stretch" position="relative">
+        {isUpdating && (
+          <MotionBox
+            position="absolute"
+            top={-2}
+            right={-2}
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0 }}
+          >
+            <Circle size="20px" bg="blue.500">
+              <Spinner size="xs" color="white" />
+            </Circle>
+          </MotionBox>
+        )}
       
       <AnimatePresence>
         {activities.map((activity, index) => {
@@ -161,17 +173,19 @@ export const ActivityFeed = ({ isLoading = false }) => {
               <HStack
                 spacing={3}
                 p={4}
-                bg={bgColor}
+                bg={useColorModeValue('whiteAlpha.700', 'whiteAlpha.100')}
                 borderRadius="lg"
                 borderWidth="1px"
-                borderColor={borderColor}
+                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
                 borderLeftWidth="4px"
                 borderLeftColor={`${colorScheme}.400`}
                 _hover={{
                   borderLeftColor: `${colorScheme}.500`,
+                  bg: useColorModeValue('whiteAlpha.900', 'whiteAlpha.200'),
                   boxShadow: 'md'
                 }}
                 transition="all 0.2s"
+                backdropFilter="blur(10px)"
               >
                 <Circle size="40px" bg={`${colorScheme}.100`} color={`${colorScheme}.600`}>
                   <Icon size={18} />
@@ -200,7 +214,8 @@ export const ActivityFeed = ({ isLoading = false }) => {
           )
         })}
       </AnimatePresence>
-    </VStack>
+      </VStack>
+    </Box>
   )
 }
 
