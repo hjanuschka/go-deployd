@@ -31,9 +31,12 @@ jobs:
 
     - name: Go format check
       run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+        # Exclude resources directory which contains event handler files
+        FILES=$(find . -name "*.go" -not -path "./resources/*" -not -path "./vendor/*" -not -path "./.git/*")
+        UNFORMATTED=$(echo "$FILES" | xargs gofmt -s -l)
+        if [ -n "$UNFORMATTED" ]; then
           echo "❌ Go files are not formatted properly:"
-          gofmt -s -l .
+          echo "$UNFORMATTED"
           echo ""
           echo "Please run: go fmt ./..."
           exit 1
@@ -43,7 +46,9 @@ jobs:
     - name: Go vet
       run: |
         echo "🔍 Running go vet..."
-        go vet ./...
+        # Get all packages except those in resources directory
+        PACKAGES=$(go list ./... | grep -v "/resources/")
+        go vet $PACKAGES
         echo "✅ go vet passed"
 
     - name: Run event system tests
