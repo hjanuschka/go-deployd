@@ -22,6 +22,7 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/metrics"
+	"github.com/hjanuschka/go-deployd/internal/realtime"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 	"github.com/hjanuschka/go-deployd/internal/router"
 	"github.com/hjanuschka/go-deployd/internal/swagger"
@@ -43,15 +44,17 @@ type Config struct {
 }
 
 type Server struct {
-	config         *Config
-	db             database.DatabaseInterface
-	router         *router.Router
-	adminHandler   *admin.AdminHandler
-	upgrader       websocket.Upgrader
-	httpMux        *mux.Router
-	jwtManager     *auth.JWTManager
-	securityConfig *appconfig.SecurityConfig
-	dashboardFS    *embed.FS
+	config          *Config
+	db              database.DatabaseInterface
+	router          *router.Router
+	adminHandler    *admin.AdminHandler
+	upgrader        websocket.Upgrader
+	httpMux         *mux.Router
+	jwtManager      *auth.JWTManager
+	securityConfig  *appconfig.SecurityConfig
+	realtimeConfig  *appconfig.RealtimeConfig
+	realtimeHub     *realtime.Hub
+	dashboardFS     *embed.FS
 }
 
 func New(config *Config) (*Server, error) {
@@ -132,11 +135,20 @@ func New(config *Config) (*Server, error) {
 	// Create JWT manager
 	jwtManager := auth.NewJWTManager(securityConfig.JWTSecret, jwtDuration)
 
+	// Load realtime configuration
+	realtimeConfig, err := appconfig.LoadRealtimeConfig(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load realtime config: %w", err)
+	}
+
 	// Log server startup
 	logging.Info("Starting go-deployd server", "server", map[string]interface{}{
-		"port":        config.Port,
-		"database":    config.DatabaseType,
-		"development": config.Development,
+		"port":              config.Port,
+		"database":          config.DatabaseType,
+		"development":       config.Development,
+		"websocket_enabled": realtimeConfig.Enabled,
+		"broker_type":       realtimeConfig.Broker.Type,
+		"multi_server":      realtimeConfig.IsMultiServerMode(),
 	})
 
 	s := &Server{
@@ -147,9 +159,19 @@ func New(config *Config) (*Server, error) {
 				return true // TODO: Implement proper origin checking
 			},
 		},
-		httpMux:        mux.NewRouter(),
-		jwtManager:     jwtManager,
-		securityConfig: securityConfig,
+		httpMux:         mux.NewRouter(),
+		jwtManager:      jwtManager,
+		securityConfig:  securityConfig,
+		realtimeConfig:  realtimeConfig,
+	}
+
+	// Initialize realtime hub if WebSocket is enabled
+	if realtimeConfig.Enabled {
+		s.realtimeHub = realtime.NewHub(jwtManager, realtimeConfig)
+		go s.realtimeHub.Run()
+		logging.Info("WebSocket hub initialized and running", "realtime", nil)
+	} else {
+		logging.Info("WebSocket disabled in configuration", "realtime", nil)
 	}
 
 	s.router = router.New(s.db, config.Development, config.ConfigPath)
@@ -277,29 +299,14 @@ func (s *Server) setupRootRoute() {
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := s.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("WebSocket upgrade failed: %v", err)
+	// Check if WebSocket is enabled
+	if !s.realtimeConfig.Enabled || s.realtimeHub == nil {
+		http.Error(w, "WebSocket not enabled", http.StatusServiceUnavailable)
 		return
 	}
-	defer conn.Close()
 
-	// Handle WebSocket connection
-	// TODO: Implement full Socket.IO compatibility
-	for {
-		messageType, p, err := conn.ReadMessage()
-		if err != nil {
-			log.Printf("WebSocket read error: %v", err)
-			break
-		}
-
-		log.Printf("WebSocket message received: %s", p)
-
-		if err := conn.WriteMessage(messageType, p); err != nil {
-			log.Printf("WebSocket write error: %v", err)
-			break
-		}
-	}
+	// Delegate to the realtime hub
+	s.realtimeHub.HandleWebSocket(w, r)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
