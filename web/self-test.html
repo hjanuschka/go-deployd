@@ -396,6 +396,9 @@
                 <button class="main-tab-button" onclick="selectMainTab('dpdjs')">
                     🚀 dpd.js Editor
                 </button>
+                <button class="main-tab-button" onclick="selectMainTab('performance')">
+                    ⚡ Performance
+                </button>
             </div>
 
             <!-- API Testing Tab -->
@@ -552,7 +555,8 @@
                                 <option value="update">Update Document</option>
                                 <option value="delete">Delete Document</option>
                                 <option value="realtime">Real-time Events</option>
-                                <option value="auth">Authentication</option>
+                                <option value="auth-masterkey">Auth: Master Key</option>
+                                <option value="auth-userpass">Auth: Username/Password</option>
                             </select>
                             <button onclick="runDpdCode()" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Run Code</button>
                         </div>
@@ -578,6 +582,87 @@
                 </div>
             </div>
             </div>
+
+            <!-- Performance Testing Tab -->
+            <div id="performanceTab" class="main-tab-content">
+                <h2 style="color: #4CAF50; margin-bottom: 20px;">⚡ Performance & Load Testing</h2>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- WebSocket Stress Test -->
+                    <div style="background: #242424; padding: 20px; border-radius: 8px; border: 1px solid #333;">
+                        <h3 style="color: #4CAF50; margin-bottom: 15px;">🔥 WebSocket Stress Test</h3>
+                        <div class="form-group">
+                            <label>Concurrent Connections</label>
+                            <input type="number" id="stressConnections" value="100" min="1" max="1000">
+                        </div>
+                        <div class="form-group">
+                            <label>Messages per Second</label>
+                            <input type="number" id="stressMessagesPerSec" value="10" min="1" max="1000">
+                        </div>
+                        <div class="form-group">
+                            <label>Duration (seconds)</label>
+                            <input type="number" id="stressDuration" value="30" min="5" max="300">
+                        </div>
+                        <button onclick="startStressTest()" id="stressTestBtn" style="width: 100%; margin-bottom: 10px;">Start Stress Test</button>
+                        <button onclick="stopStressTest()" id="stopStressBtn" style="width: 100%; background: #f44336;" disabled>Stop Test</button>
+                        
+                        <div id="stressResults" style="margin-top: 15px; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                    
+                    <!-- API Performance Test -->
+                    <div style="background: #242424; padding: 20px; border-radius: 8px; border: 1px solid #333;">
+                        <h3 style="color: #4CAF50; margin-bottom: 15px;">🚀 API Performance Test</h3>
+                        <div class="form-group">
+                            <label>Endpoint</label>
+                            <input type="text" id="perfEndpoint" value="/todo-go" placeholder="/endpoint">
+                        </div>
+                        <div class="form-group">
+                            <label>Concurrent Requests</label>
+                            <input type="number" id="perfConcurrency" value="10" min="1" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Total Requests</label>
+                            <input type="number" id="perfTotal" value="100" min="10" max="10000">
+                        </div>
+                        <div class="form-group">
+                            <label>Request Method</label>
+                            <select id="perfMethod">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                        </div>
+                        <button onclick="startAPIPerformanceTest()" id="apiPerfBtn" style="width: 100%; margin-bottom: 10px;">Start API Test</button>
+                        
+                        <div id="apiPerfResults" style="margin-top: 15px; background: #2a2a2a; padding: 15px; border-radius: 4px; min-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+                
+                <!-- Performance Charts -->
+                <div style="margin-top: 20px; background: #242424; padding: 20px; border-radius: 8px; border: 1px solid #333;">
+                    <h3 style="color: #4CAF50; margin-bottom: 15px;">📈 Performance Metrics</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div style="background: #2a2a2a; padding: 15px; border-radius: 4px; text-align: center;">
+                            <div style="color: #4CAF50; font-size: 2em; font-weight: bold;" id="metricLatency">-</div>
+                            <div style="color: #b0b0b0; font-size: 0.9em;">Avg Latency (ms)</div>
+                        </div>
+                        <div style="background: #2a2a2a; padding: 15px; border-radius: 4px; text-align: center;">
+                            <div style="color: #2196F3; font-size: 2em; font-weight: bold;" id="metricThroughput">-</div>
+                            <div style="color: #b0b0b0; font-size: 0.9em;">Requests/sec</div>
+                        </div>
+                        <div style="background: #2a2a2a; padding: 15px; border-radius: 4px; text-align: center;">
+                            <div style="color: #ff9800; font-size: 2em; font-weight: bold;" id="metricErrors">-</div>
+                            <div style="color: #b0b0b0; font-size: 0.9em;">Error Rate (%)</div>
+                        </div>
+                        <div style="background: #2a2a2a; padding: 15px; border-radius: 4px; text-align: center;">
+                            <div style="color: #9c27b0; font-size: 2em; font-weight: bold;" id="metricConnections">-</div>
+                            <div style="color: #b0b0b0; font-size: 0.9em;">Active Connections</div>
+                        </div>
+                    </div>
+                    <div id="performanceChart" style="height: 300px; background: #2a2a2a; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #666;">Performance charts will appear here during testing</div>
+                </div>
+            </div>
+
         </div>
 
         <!-- Request History Section -->
@@ -633,7 +718,7 @@
         // Main Tab Functions
         function selectMainTab(tabName) {
             // Hide all tab contents
-            const tabs = ['api', 'websocket', 'dpdjs'];
+            const tabs = ['api', 'websocket', 'dpdjs', 'performance'];
             tabs.forEach(tab => {
                 const tabContent = document.getElementById(tab + 'Tab');
                 const tabButton = document.querySelector(`[onclick="selectMainTab('${tab}')"]`);
@@ -1127,8 +1212,14 @@
                     try {
                         const message = JSON.parse(event.data);
                         addMessage(`Received: ${JSON.stringify(message, null, 2)}`, 'received');
+                        
+                        // 📊 Track real message for dashboard metrics
+                        trackMessage();
                     } catch (e) {
                         addMessage(`Received (raw): ${event.data}`, 'received');
+                        
+                        // 📊 Track real message for dashboard metrics
+                        trackMessage();
                     }
                 };
 
@@ -1153,6 +1244,9 @@
                 const messageStr = JSON.stringify(message);
                 ws.send(messageStr);
                 addMessage(`Sent: ${JSON.stringify(message, null, 2)}`, 'sent');
+                
+                // 📊 Track real message for dashboard metrics
+                trackMessage();
             } catch (error) {
                 showError('Failed to send message: ' + error.message);
             }
@@ -1253,6 +1347,207 @@
         function clearMessages() {
             const messagesContainer = document.getElementById('wsMessages');
             messagesContainer.innerHTML = '<div style="color: #666;">No messages yet...</div>';
+        }
+        
+        // 🚀 KICK-ASS PERFORMANCE TESTING FUNCTIONS
+        let stressTestConnections = [];
+        let stressTestActive = false;
+        let performanceMetrics = { latency: [], errors: 0 };
+
+        function startStressTest() {
+            const connections = parseInt(document.getElementById('stressConnections').value);
+            const messagesPerSec = parseInt(document.getElementById('stressMessagesPerSec').value);
+            const duration = parseInt(document.getElementById('stressDuration').value);
+            
+            stressTestActive = true;
+            document.getElementById('stressTestBtn').disabled = true;
+            document.getElementById('stopStressBtn').disabled = false;
+            
+            const resultsDiv = document.getElementById('stressResults');
+            resultsDiv.innerHTML = '<div style="color: #4CAF50;">🚀 Starting stress test...</div>';
+            
+            performanceMetrics = { latency: [], errors: 0 };
+            
+            for (let i = 0; i < connections; i++) {
+                setTimeout(() => {
+                    if (!stressTestActive) return;
+                    createStressTestConnection(i, messagesPerSec);
+                }, i * 10);
+            }
+            
+            setTimeout(() => {
+                if (stressTestActive) stopStressTest();
+            }, duration * 1000);
+        }
+
+        function createStressTestConnection(connectionId, messagesPerSec) {
+            try {
+                const ws = new WebSocket('ws://localhost:2403/socket.io/');
+                let messageCount = 0;
+                
+                ws.onopen = function() {
+                    stressTestConnections.push(ws);
+                    updateStressResults(`✅ Connection ${connectionId} established`);
+                    
+                    const messageInterval = setInterval(() => {
+                        if (!stressTestActive || ws.readyState !== WebSocket.OPEN) {
+                            clearInterval(messageInterval);
+                            return;
+                        }
+                        
+                        const startTime = performance.now();
+                        ws.send(JSON.stringify({
+                            type: 'emit',
+                            event: 'stress-test',
+                            data: { connectionId, messageId: messageCount++, timestamp: Date.now() }
+                        }));
+                        
+                        const latency = performance.now() - startTime;
+                        performanceMetrics.latency.push(latency);
+                        updatePerformanceMetrics();
+                        
+                        // 📊 Track stress test messages
+                        trackMessage();
+                    }, 1000 / messagesPerSec);
+                };
+                
+                ws.onclose = () => updateStressResults(`❌ Connection ${connectionId} closed`);
+                ws.onerror = () => {
+                    performanceMetrics.errors++;
+                    updateStressResults(`⚠️ Connection ${connectionId} error`);
+                };
+                
+            } catch (error) {
+                updateStressResults(`💥 Failed to create connection ${connectionId}: ${error.message}`);
+            }
+        }
+
+        function stopStressTest() {
+            stressTestActive = false;
+            document.getElementById('stressTestBtn').disabled = false;
+            document.getElementById('stopStressBtn').disabled = true;
+            
+            stressTestConnections.forEach(ws => {
+                if (ws.readyState === WebSocket.OPEN) ws.close();
+            });
+            stressTestConnections = [];
+            
+            updateStressResults('🏁 Stress test completed');
+            generateStressReport();
+        }
+
+        function updateStressResults(message) {
+            const resultsDiv = document.getElementById('stressResults');
+            const timestamp = new Date().toLocaleTimeString();
+            resultsDiv.innerHTML += `<div style="margin-bottom: 3px; color: #e0e0e0; font-size: 0.85em;">[${timestamp}] ${message}</div>`;
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        function generateStressReport() {
+            const avgLatency = performanceMetrics.latency.length > 0 
+                ? (performanceMetrics.latency.reduce((a, b) => a + b, 0) / performanceMetrics.latency.length).toFixed(2) : 0;
+            const maxLatency = performanceMetrics.latency.length > 0 ? Math.max(...performanceMetrics.latency).toFixed(2) : 0;
+                
+            const report = `
+                <div style="background: #1a1a1a; padding: 15px; border-radius: 4px; margin-top: 10px; border-left: 4px solid #4CAF50;">
+                    <h4 style="color: #4CAF50; margin-bottom: 10px;">🔥 Stress Test Report</h4>
+                    <div style="color: #e0e0e0; line-height: 1.6;">
+                        <div>📊 Messages Sent: ${performanceMetrics.latency.length}</div>
+                        <div>⚡ Average Latency: ${avgLatency}ms</div>
+                        <div>🏎️ Max Latency: ${maxLatency}ms</div>
+                        <div>❌ Errors: ${performanceMetrics.errors}</div>
+                        <div>✅ Success Rate: ${((1 - performanceMetrics.errors / Math.max(1, performanceMetrics.latency.length)) * 100).toFixed(1)}%</div>
+                    </div>
+                </div>`;
+            
+            document.getElementById('stressResults').innerHTML += report;
+        }
+
+        function updatePerformanceMetrics() {
+            if (performanceMetrics.latency.length > 0) {
+                const avgLatency = (performanceMetrics.latency.reduce((a, b) => a + b, 0) / performanceMetrics.latency.length).toFixed(1);
+                document.getElementById('metricLatency').textContent = avgLatency;
+                document.getElementById('metricThroughput').textContent = performanceMetrics.latency.length;
+                document.getElementById('metricErrors').textContent = ((performanceMetrics.errors / Math.max(1, performanceMetrics.latency.length)) * 100).toFixed(1);
+                document.getElementById('metricConnections').textContent = stressTestConnections.length;
+            }
+        }
+
+
+        // 🎯 API PERFORMANCE TESTING
+        async function startAPIPerformanceTest() {
+            const endpoint = document.getElementById('perfEndpoint').value;
+            const concurrency = parseInt(document.getElementById('perfConcurrency').value);
+            const total = parseInt(document.getElementById('perfTotal').value);
+            const method = document.getElementById('perfMethod').value;
+            
+            document.getElementById('apiPerfBtn').disabled = true;
+            const resultsDiv = document.getElementById('apiPerfResults');
+            resultsDiv.innerHTML = '<div style="color: #4CAF50;">🚀 Starting API performance test...</div>';
+            
+            const startTime = Date.now();
+            let completed = 0;
+            let errors = 0;
+            const latencies = [];
+            
+            const requestsPerWorker = Math.ceil(total / concurrency);
+            const workers = [];
+            
+            for (let i = 0; i < concurrency; i++) {
+                workers.push(runAPIWorker(endpoint, method, requestsPerWorker, (latency, error) => {
+                    completed++;
+                    if (error) errors++;
+                    else latencies.push(latency);
+                    
+                    if (completed >= total) {
+                        const duration = Date.now() - startTime;
+                        generateAPIReport(duration, latencies, errors, total);
+                        document.getElementById('apiPerfBtn').disabled = false;
+                    }
+                }));
+            }
+        }
+
+        async function runAPIWorker(endpoint, method, requests, callback) {
+            for (let i = 0; i < requests; i++) {
+                try {
+                    const startTime = performance.now();
+                    
+                    const options = { method };
+                    if (currentToken) {
+                        options.headers = { 'Authorization': `Bearer ${currentToken}` };
+                    }
+                    
+                    const response = await fetch(endpoint, options);
+                    const latency = performance.now() - startTime;
+                    
+                    callback(latency, !response.ok);
+                } catch (error) {
+                    callback(0, true);
+                }
+            }
+        }
+
+        function generateAPIReport(duration, latencies, errors, total) {
+            const avgLatency = latencies.length > 0 
+                ? (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2) : 0;
+            const throughput = ((total - errors) / (duration / 1000)).toFixed(1);
+            const errorRate = ((errors / total) * 100).toFixed(1);
+            
+            const report = `
+                <div style="background: #1a1a1a; padding: 15px; border-radius: 4px; margin-top: 10px; border-left: 4px solid #2196F3;">
+                    <h4 style="color: #2196F3; margin-bottom: 10px;">🎯 API Performance Report</h4>
+                    <div style="color: #e0e0e0; line-height: 1.6;">
+                        <div>📊 Total Requests: ${total}</div>
+                        <div>⏱️ Duration: ${(duration / 1000).toFixed(1)}s</div>
+                        <div>🚀 Throughput: ${throughput} req/s</div>
+                        <div>⚡ Average Latency: ${avgLatency}ms</div>
+                        <div>❌ Errors: ${errors}</div>
+                        <div>📈 Success Rate: ${(100 - parseFloat(errorRate)).toFixed(1)}%</div>
+                    </div>
+                </div>`;
+            
+            document.getElementById('apiPerfResults').innerHTML += report;
         }
     </script>
 
@@ -1510,38 +1805,179 @@ setTimeout(() => {
                 });
             }, 2000);
         }
-    });
-}, 1000);`,
-                auth: `// Authentication examples
-// Login via HTTP POST to /auth/login
+}, 1000);
+`,
+                'auth-masterkey': `// 🔑 Master Key Authentication Flow
+logOutput('🔑 Starting Master Key Authentication...');
+
+// Replace 'your-master-key-here' with your actual master key
+const masterKey = 'your-master-key-here';
+
+if (!masterKey || masterKey === 'your-master-key-here') {
+    logOutput('❌ Please replace "your-master-key-here" with your actual master key');
+    logOutput('💡 Tip: Check your deployd configuration for the master key');
+    return;
+}
+
+// Authenticate with master key
 dpd.request('POST', '/auth/login', {
-    username: 'admin',
-    password: 'password'
+    masterKey: masterKey
 }, (err, response) => {
     if (err) {
-        logOutput('Login error: ' + err.message);
+        logOutput('❌ Master key authentication failed: ' + err.message);
+        logOutput('💡 Check if your master key is correct and the server is running');
         return;
     }
-    logOutput('Logged in as: ' + response.user.username);
-    logOutput('JWT Token: ' + response.token.substring(0, 20) + '...');
     
-    // Set the auth token for future requests
-    dpd.setAuthToken(response.token);
+    logOutput('✅ Master key authentication successful!');
+    logOutput('👤 Authenticated as: ' + (response.user ? response.user.username || 'Master' : 'Master'));
+    logOutput('🎫 JWT Token received: ' + response.token.substring(0, 30) + '...');
+    
+    // Set the JWT token for all future requests
+    dpd.setToken(response.token);
+    logOutput('🔒 JWT token configured for dpd.js - all requests will now include authentication');
+    
+    // Test authenticated request
+    setTimeout(() => {
+        logOutput('🧪 Testing authenticated request...');
+        dpd.request('GET', '/_admin/info', (err, info) => {
+            if (err) {
+                logOutput('❌ Admin info request failed: ' + err.message);
+            } else {
+                logOutput('✅ Admin info retrieved successfully:');
+                logOutput('   📊 Collections: ' + (info.collections ? info.collections.length : 'N/A'));
+                logOutput('   🏃 Server: ' + (info.version || 'go-deployd'));
+            }
+        });
+    }, 500);
+    
+    // Test collection access with authentication
+    setTimeout(() => {
+        logOutput('🧪 Testing authenticated collection access...');
+        dpd['todo-go'].get({}, (err, todos) => {
+            if (err) {
+                logOutput('❌ Collection access failed: ' + err.message);
+            } else {
+                logOutput('✅ Collection access successful: ' + todos.length + ' todos found');
+            }
+        });
+    }, 1000);
 });
 
-// Get current user info
-dpd.request('GET', '/auth/me', (err, user) => {
+logOutput('⏳ Attempting master key authentication...');`,
+
+                'auth-userpass': `// 👤 Username/Password Authentication Flow
+logOutput('👤 Starting Username/Password Authentication...');
+
+// Replace these with actual user credentials
+const credentials = {
+    username: 'admin',  // Replace with actual username/email
+    password: 'password123'  // Replace with actual password
+};
+
+if (credentials.username === 'admin' && credentials.password === 'password123') {
+    logOutput('⚠️ Using default credentials - replace with actual username and password');
+    logOutput('💡 Edit the credentials object above with real user data');
+}
+
+// Step 1: Login with username and password
+logOutput('🔐 Attempting login with username: ' + credentials.username);
+
+dpd.request('POST', '/auth/login', credentials, (err, response) => {
     if (err) {
-        logOutput('Not authenticated: ' + err.message);
-    } else {
-        logOutput('Current user: ' + user.username);
+        logOutput('❌ Login failed: ' + err.message);
+        logOutput('💡 Possible issues:');
+        logOutput('   • Incorrect username/password');
+        logOutput('   • User does not exist');
+        logOutput('   • Authentication not configured');
+        return;
     }
-});`
+    
+    logOutput('✅ Login successful!');
+    logOutput('👤 Logged in as: ' + response.user.username);
+    logOutput('📧 Email: ' + (response.user.email || 'Not provided'));
+    logOutput('🎫 JWT Token: ' + response.token.substring(0, 30) + '...');
+    
+    // Step 2: Set the JWT token for future requests
+    dpd.setToken(response.token);
+    logOutput('🔒 JWT token configured - all requests will now be authenticated');
+    
+    // Step 3: Test the authenticated session
+    setTimeout(() => {
+        logOutput('🧪 Testing authenticated session...');
+        dpd.request('GET', '/auth/me', (err, user) => {
+            if (err) {
+                logOutput('❌ Session check failed: ' + err.message);
+            } else {
+                logOutput('✅ Session verified:');
+                logOutput('   👤 Username: ' + user.username);
+                logOutput('   📧 Email: ' + (user.email || 'Not set'));
+                logOutput('   🆔 User ID: ' + user.id);
+                logOutput('   ⏰ Last login: ' + (user.lastLogin || 'Not recorded'));
+            }
+        });
+    }, 500);
+    
+    // Step 4: Test authenticated collection operations
+    setTimeout(() => {
+        logOutput('🧪 Testing authenticated collection operations...');
+        
+        // Try to access a collection that might require authentication
+        dpd['todo-go'].get({}, (err, todos) => {
+            if (err) {
+                logOutput('❌ Collection access error: ' + err.message);
+            } else {
+                logOutput('✅ Collection access successful: ' + todos.length + ' todos retrieved');
+                
+                // Try to create a todo as the authenticated user
+                dpd['todo-go'].post({
+                    title: 'Authenticated todo from ' + response.user.username,
+                    completed: false,
+                    createdBy: response.user.id
+                }, (err, newTodo) => {
+                    if (err) {
+                        logOutput('❌ Create todo error: ' + err.message);
+                    } else {
+                        logOutput('✅ Todo created successfully: ' + newTodo.title);
+                        logOutput('   🆔 ID: ' + newTodo.id);
+                    }
+                });
+            }
+        });
+    }, 1000);
+});
+
+// Step 5: Logout function (uncomment to test)
+/*
+setTimeout(() => {
+    logOutput('🚪 Testing logout...');
+    dpd.request('POST', '/auth/logout', (err, result) => {
+        if (err) {
+            logOutput('❌ Logout error: ' + err.message);
+        } else {
+            logOutput('✅ Logged out successfully');
+            dpd.setToken(null); // Clear the token
+            logOutput('🔓 JWT token cleared');
+        }
+    });
+}, 5000);
+*/
+
+logOutput('⏳ Attempting username/password authentication...');`
             };
             
             if (examples[example]) {
                 dpdEditor.setValue(examples[example]);
             }
+        }
+    </script>
+    <script>
+        // 📊 REAL MESSAGE TRACKING FUNCTION
+        function trackMessage() {
+            if (!window.messageTracker) {
+                window.messageTracker = { count: 0, lastReset: Date.now(), messagesPerSec: 0 };
+            }
+            window.messageTracker.count++;
         }
     </script>
 </body>

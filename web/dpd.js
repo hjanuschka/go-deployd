@@ -273,6 +273,13 @@
         }
 
         /**
+         * Set JWT token (alias for setAuthToken)
+         */
+        setToken(token) {
+            return this.setAuthToken(token);
+        }
+
+        /**
          * HTTP request helper
          */
         request(method, path, data, callback) {

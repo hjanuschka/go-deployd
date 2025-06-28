@@ -1,0 +1,88 @@
+// Real-time event listeners
+logOutput('🔗 Setting up real-time events...');
+
+// Check WebSocket connection status
+logOutput('WebSocket Ready: ' + (dpd.socketReady ? 'Yes' : 'No'));
+
+// Set up real-time event listeners (these work even if WebSocket connects later)
+dpd['todo-go'].on('created', (todo) => {
+    logOutput('🆕 Real-time: Created - ' + todo.title);
+});
+
+dpd['todo-go'].on('updated', (todo) => {
+    logOutput('📝 Real-time: Updated - ' + todo.title);
+});
+
+dpd['todo-go'].on('deleted', (todo) => {
+    logOutput('🗑️ Real-time: Deleted - ' + todo.title);
+});
+
+// Listen for WebSocket connection events
+dpd.on('connect', () => {
+    logOutput('✅ WebSocket connected!');
+});
+
+dpd.on('disconnect', () => {
+    logOutput('❌ WebSocket disconnected');
+});
+
+// Manually join collection room to ensure we get events
+if (dpd.socketReady) {
+    dpd.join('collection:todo-go');
+    logOutput('🏠 Joined collection:todo-go room');
+} else {
+    dpd.once('connect', () => {
+        dpd.join('collection:todo-go');
+        logOutput('🏠 Joined collection:todo-go room');
+    });
+}
+
+logOutput('👂 Real-time listeners set up! Try creating/deleting todos in the API tab to see events.');
+
+// Test: Create, update, and delete a todo to trigger real-time events
+let testTodoId = null;
+
+setTimeout(() => {
+    logOutput('📝 Creating test todo to trigger real-time event...');
+    dpd['todo-go'].post({
+        title: 'Real-time test todo',
+        completed: false,
+        priority: 1
+    }, (err, result) => {
+        if (err) {
+            logOutput('❌ Failed to create test todo: ' + err.message);
+        } else {
+            logOutput('✅ Test todo created: ' + result.title);
+            testTodoId = result.id;
+            
+            // Update the todo after 2 seconds
+            setTimeout(() => {
+                logOutput('📝 Updating test todo to trigger update event...');
+                dpd['todo-go'].put(testTodoId, {
+                    title: 'Updated real-time test todo',
+                    completed: true,
+                    priority: 5
+                }, (err, updated) => {
+                    if (err) {
+                        logOutput('❌ Failed to update test todo: ' + err.message);
+                    } else {
+                        logOutput('✅ Test todo updated: ' + updated.title);
+                        
+                        // Delete the todo after another 2 seconds
+                        setTimeout(() => {
+                            logOutput('🗑️ Deleting test todo to trigger delete event...');
+                            dpd['todo-go'].del(testTodoId, (err) => {
+                                if (err) {
+                                    logOutput('❌ Failed to delete test todo: ' + err.message);
+                                } else {
+                                    logOutput('✅ Test todo deleted successfully');
+                                    logOutput('🎯 Real-time event demo complete! Check the logs above for all events.');
+                                }
+                            });
+                        }, 2000);
+                    }
+                });
+            }, 2000);
+        }
+});
+}, 1000);
