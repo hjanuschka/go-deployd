@@ -1,0 +1,16 @@
+{
+  "name": "go-deployd",
+  "version": "1.0.0",
+  "description": "Go-based deployment and API server with dashboard",
+  "scripts": {
+    "dev": "concurrently \"nodemon\" \"cd dashboard && npm run dev\"",
+    "dev:go": "nodemon",
+    "dev:dashboard": "cd dashboard && npm run dev",
+    "build": "cd dashboard && npm run build",
+    "build:dev": "cd dashboard && npm run build:dev"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "concurrently": "^8.2.2"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "watch": ["cmd", "internal", "resources"],
+  "ext": "go",
+  "ignore": ["dashboard/**", "web/**", "*.test.go", "testdata/**", "tmp/**"],
+  "exec": "go build -o ./tmp/main cmd/deployd/main.go && ./tmp/main -dev -db-type sqlite",
+  "delay": "1000ms",
+  "env": {
+    "GO_ENV": "development"
+  }
+}
