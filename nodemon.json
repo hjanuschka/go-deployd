@@ -2,9 +2,15 @@
   "watch": ["cmd", "internal", "resources"],
   "ext": "go",
   "ignore": ["dashboard/**", "web/**", "*.test.go", "testdata/**", "tmp/**"],
-  "exec": "go build -o ./tmp/main cmd/deployd/main.go && ./tmp/main -dev -db-type sqlite",
+  "exec": "./scripts/dev-server.sh",
   "delay": "1000ms",
+  "signal": "SIGTERM",
+  "verbose": true,
   "env": {
     "GO_ENV": "development"
+  },
+  "events": {
+    "restart": "echo 'go-deployd restarting due to file changes...'",
+    "crash": "echo 'go-deployd crashed - waiting for file changes before restart...'"
   }
 }

@@ -15,18 +15,24 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/database"
+	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 )
 
 type Router struct {
-	resources   []resources.Resource
-	db          database.DatabaseInterface
-	development bool
-	configPath  string
-	jwtManager  *auth.JWTManager
+	resources       []resources.Resource
+	db              database.DatabaseInterface
+	development     bool
+	configPath      string
+	jwtManager      *auth.JWTManager
+	realtimeEmitter events.RealtimeEmitter
 }
 
 func New(db database.DatabaseInterface, development bool, configPath string) *Router {
+	return NewWithEmitter(db, development, configPath, nil)
+}
+
+func NewWithEmitter(db database.DatabaseInterface, development bool, configPath string, emitter events.RealtimeEmitter) *Router {
 	// Load security config to set up JWT
 	var jwtManager *auth.JWTManager
 	securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
@@ -39,10 +45,11 @@ func New(db database.DatabaseInterface, development bool, configPath string) *Ro
 	}
 
 	r := &Router{
-		db:          db,
-		development: development,
-		configPath:  configPath,
-		jwtManager:  jwtManager,
+		db:              db,
+		development:     development,
+		configPath:      configPath,
+		jwtManager:      jwtManager,
+		realtimeEmitter: emitter,
 	}
 
 	r.loadResources()
@@ -78,6 +85,11 @@ func (r *Router) loadResources() {
 			},
 		}, r.db)
 
+		// Set the realtime emitter if available
+		if r.realtimeEmitter != nil {
+			todosCollection.SetRealtimeEmitter(r.realtimeEmitter)
+		}
+
 		r.resources = append(r.resources, todosCollection)
 		return
 	}
@@ -94,8 +106,8 @@ func (r *Router) loadResources() {
 			configFile := filepath.Join(path, "config.json")
 
 			if _, err := os.Stat(configFile); err == nil {
-				// Load collection resource
-				collection, err := resources.LoadCollectionFromConfig(resourceName, path, r.db)
+				// Load collection resource with emitter
+				collection, err := resources.LoadCollectionFromConfigWithEmitter(resourceName, path, r.db, r.realtimeEmitter)
 				if err != nil {
 					log.Printf("Failed to load collection %s: %v", resourceName, err)
 					return nil
@@ -334,6 +346,11 @@ func (r *Router) createBuiltinUsersCollection() {
 
 	// CRITICAL: Set the configPath and load event scripts for built-in users collection
 	usersCollection.Collection.SetConfigPath(usersConfigPath)
+
+	// Set the realtime emitter if available
+	if r.realtimeEmitter != nil {
+		usersCollection.Collection.SetRealtimeEmitter(r.realtimeEmitter)
+	}
 
 	// Load event scripts if the users directory exists
 	if _, err := os.Stat(usersConfigPath); err == nil {

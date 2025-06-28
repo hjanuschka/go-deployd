@@ -1,0 +1,37 @@
+{
+  "enabled": true,
+  "messageTTL": 3600,
+  "broker": {
+    "type": "memory",
+    "enabled": false,
+    "redis": {
+      "host": "localhost",
+      "port": 6379,
+      "password": "",
+      "database": 0,
+      "prefix": "deployd:"
+    },
+    "rabbitmq": {
+      "host": "localhost",
+      "port": 5672,
+      "username": "guest",
+      "password": "guest",
+      "vhost": "/",
+      "exchange": "deployd"
+    },
+    "nats": {
+      "host": "localhost",
+      "port": 4222,
+      "username": "",
+      "password": "",
+      "subject": "deployd"
+    }
+  },
+  "limits": {
+    "maxConnections": 10000,
+    "maxRoomsPerClient": 100,
+    "messageRateLimit": 100,
+    "pingInterval": 54,
+    "pongTimeout": 10
+  }
+}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -390,6 +389,12 @@ func (h *Hub) addToRoom(client *Client, room string) {
 	}
 	h.rooms[room][client] = true
 	client.Rooms[room] = true
+	
+	logging.Debug("Client added to room", "realtime", map[string]interface{}{
+		"client_id": client.ID,
+		"room":      room,
+		"room_size": len(h.rooms[room]),
+	})
 }
 
 // removeFromRoom removes a client from a room
@@ -409,6 +414,21 @@ func (h *Hub) removeFromRoom(client *Client, room string) {
 // EmitToRoom sends a message to all clients in a specific room
 func (h *Hub) EmitToRoom(room, event string, data interface{}) {
 	message := h.createMessage(MessageTypeEmit, event, data, room)
+	
+	h.mu.RLock()
+	clients, ok := h.rooms[room]
+	clientCount := 0
+	if ok {
+		clientCount = len(clients)
+	}
+	h.mu.RUnlock()
+	
+	logging.Debug("Emitting to room", "realtime", map[string]interface{}{
+		"room":         room,
+		"event":        event,
+		"clientCount":  clientCount,
+		"roomExists":   ok,
+	})
 	
 	h.mu.RLock()
 	if clients, ok := h.rooms[room]; ok {
@@ -435,6 +455,14 @@ func (h *Hub) EmitToAll(event string, data interface{}) {
 func (h *Hub) EmitCollectionChange(collection, eventType string, data interface{}) {
 	// Send to local clients
 	collectionRoom := fmt.Sprintf("collection:%s", collection)
+	
+	logging.Debug("Emitting collection change", "realtime", map[string]interface{}{
+		"collection": collection,
+		"eventType":  eventType,
+		"room":       collectionRoom,
+		"dataKeys":   getDataKeys(data),
+	})
+	
 	h.EmitToRoom(collectionRoom, eventType, data)
 	
 	// Also send to global listeners
@@ -445,6 +473,18 @@ func (h *Hub) EmitCollectionChange(collection, eventType string, data interface{
 
 	// Publish to broker for multi-server distribution
 	h.publishToBroker(TopicCollectionChanges, MessageTypeCollectionChange, eventType, data, collectionRoom)
+}
+
+// Helper function to get keys from data for logging
+func getDataKeys(data interface{}) []string {
+	if m, ok := data.(map[string]interface{}); ok {
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		return keys
+	}
+	return nil
 }
 
 // createMessage creates a WebSocket message

@@ -136,8 +136,57 @@
             gap: 30px;
         }
 
-        .request-section {
+        .main-tabs {
             background: #1a1a1a;
+            border-radius: 8px;
+            border: 1px solid #333;
+            margin-top: 30px;
+        }
+
+        .main-tab-buttons {
+            display: flex;
+            background: #2a2a2a;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .main-tab-button {
+            background: transparent;
+            color: #b0b0b0;
+            border: none;
+            padding: 15px 25px;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.3s;
+            font-size: 1em;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .main-tab-button:hover {
+            background: #3a3a3a;
+            color: #e0e0e0;
+        }
+
+        .main-tab-button.active {
+            background: #1a1a1a;
+            color: #4CAF50;
+            border-bottom: 1px solid #1a1a1a;
+        }
+
+        .main-tab-content {
+            display: none;
+            padding: 25px;
+        }
+
+        .main-tab-content.active {
+            display: block;
+        }
+
+        .request-section {
+            background: #242424;
             padding: 20px;
             border-radius: 8px;
             border: 1px solid #333;
@@ -168,7 +217,7 @@
         }
 
         .response-section {
-            background: #1a1a1a;
+            background: #242424;
             padding: 20px;
             border-radius: 8px;
             border: 1px solid #333;
@@ -335,8 +384,23 @@
             </div>
         </div>
 
-        <!-- Main Content Grid -->
-        <div class="main-grid">
+        <!-- Main Tabbed Interface -->
+        <div class="main-tabs">
+            <div class="main-tab-buttons">
+                <button class="main-tab-button active" onclick="selectMainTab('api')">
+                    📤 API Testing
+                </button>
+                <button class="main-tab-button" onclick="selectMainTab('websocket')">
+                    🔌 WebSocket
+                </button>
+                <button class="main-tab-button" onclick="selectMainTab('dpdjs')">
+                    🚀 dpd.js Editor
+                </button>
+            </div>
+
+            <!-- API Testing Tab -->
+            <div id="apiTab" class="main-tab-content active">
+                <div class="main-grid">
             <!-- Request Section -->
             <div class="request-section">
                 <h2>📤 Request</h2>
@@ -422,6 +486,98 @@
                     </div>
                 </div>
             </div>
+                </div>
+            </div>
+
+            <!-- WebSocket Tab -->
+            <div id="websocketTab" class="main-tab-content">
+                <h2 style="color: #4CAF50; margin-bottom: 20px;">🔌 WebSocket Connection</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <!-- Connection Controls -->
+                <div>
+                    <div class="form-group">
+                        <label>WebSocket URL</label>
+                        <input type="text" id="wsUrl" value="ws://localhost:2403/socket.io/" placeholder="ws://localhost:2403/socket.io/">
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button onclick="connectWebSocket()" id="connectBtn" style="background: #4CAF50;">Connect</button>
+                        <button onclick="disconnectWebSocket()" id="disconnectBtn" style="background: #f44336;" disabled>Disconnect</button>
+                    </div>
+                    <div class="form-group">
+                        <label>Room to Join (optional)</label>
+                        <input type="text" id="roomName" placeholder="collection:todos">
+                        <button onclick="joinRoom()" style="margin-top: 5px; width: 100%;">Join Room</button>
+                    </div>
+                    <div class="form-group">
+                        <label>Event Name</label>
+                        <input type="text" id="eventName" placeholder="test-event" value="test-event">
+                    </div>
+                    <div class="form-group">
+                        <label>Event Data (JSON)</label>
+                        <textarea id="eventData" rows="3" placeholder='{"message": "Hello WebSocket!"}'>{"message": "Hello WebSocket!"}</textarea>
+                    </div>
+                    <button onclick="sendEvent()" style="width: 100%;">Send Event</button>
+                </div>
+                
+                <!-- Connection Status & Messages -->
+                <div>
+                    <div style="margin-bottom: 15px;">
+                        <h4 style="color: #4CAF50; margin-bottom: 10px;">Connection Status</h4>
+                        <div id="wsStatus" style="padding: 10px; background: #2a2a2a; border-radius: 4px; color: #f44336;">Disconnected</div>
+                    </div>
+                    <div>
+                        <h4 style="color: #4CAF50; margin-bottom: 10px;">Messages</h4>
+                        <div id="wsMessages" style="height: 200px; overflow-y: auto; background: #2a2a2a; border-radius: 4px; padding: 10px; font-family: monospace; font-size: 0.8em; line-height: 1.4;">
+                            <div style="color: #666;">No messages yet...</div>
+                        </div>
+                        <button onclick="clearMessages()" style="margin-top: 10px; width: 100%; background: #666;">Clear Messages</button>
+                    </div>
+                </div>
+            </div>
+            </div>
+
+            <!-- dpd.js Editor Tab -->
+            <div id="dpdjsTab" class="main-tab-content">
+                <h2 style="color: #4CAF50; margin-bottom: 20px;">🚀 dpd.js Code Editor</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 500px;">
+                <!-- Code Editor -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="color: #4CAF50; margin: 0;">JavaScript Code</h4>
+                        <div style="display: flex; gap: 10px;">
+                            <select onchange="insertDpdExample(this.value)" style="padding: 5px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 3px;">
+                                <option value="">Load Example...</option>
+                                <option value="get">Get Documents</option>
+                                <option value="create">Create Document</option>
+                                <option value="update">Update Document</option>
+                                <option value="delete">Delete Document</option>
+                                <option value="realtime">Real-time Events</option>
+                                <option value="auth">Authentication</option>
+                            </select>
+                            <button onclick="runDpdCode()" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Run Code</button>
+                        </div>
+                    </div>
+                    <div id="dpdCodeEditor" style="height: 400px; border: 1px solid #444; border-radius: 4px;"></div>
+                    <div style="margin-top: 10px; font-size: 0.8em; color: #666;">
+                        💡 The <code>dpd</code> instance is available globally. Use <code>logOutput(message)</code> to display results.
+                    </div>
+                </div>
+                
+                <!-- Output Panel -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="color: #4CAF50; margin: 0;">Output</h4>
+                        <button onclick="clearDpdOutput()" style="background: #666; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Clear</button>
+                    </div>
+                    <div id="dpdOutput" style="height: 400px; overflow-y: auto; background: #2a2a2a; border: 1px solid #444; border-radius: 4px; padding: 15px; font-family: monospace; font-size: 0.9em; line-height: 1.4;">
+                        <div style="color: #666;">Run some dpd.js code to see output...</div>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 0.8em; color: #666;">
+                        ℹ️ Real-time events will appear here automatically. Check browser console for detailed logs.
+                    </div>
+                </div>
+            </div>
+            </div>
         </div>
 
         <!-- Request History Section -->
@@ -456,6 +612,7 @@
         let currentToken = null;
         let currentMethod = 'GET';
         let currentTab = 'body';
+        let currentMainTab = 'api';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -472,6 +629,35 @@
             // Load request history
             loadRequestHistory();
         });
+
+        // Main Tab Functions
+        function selectMainTab(tabName) {
+            // Hide all tab contents
+            const tabs = ['api', 'websocket', 'dpdjs'];
+            tabs.forEach(tab => {
+                const tabContent = document.getElementById(tab + 'Tab');
+                const tabButton = document.querySelector(`[onclick="selectMainTab('${tab}')"]`);
+                
+                if (tabContent) tabContent.classList.remove('active');
+                if (tabButton) tabButton.classList.remove('active');
+            });
+            
+            // Show selected tab
+            const selectedTab = document.getElementById(tabName + 'Tab');
+            const selectedButton = document.querySelector(`[onclick="selectMainTab('${tabName}')"]`);
+            
+            if (selectedTab) selectedTab.classList.add('active');
+            if (selectedButton) selectedButton.classList.add('active');
+            
+            currentMainTab = tabName;
+            
+            // Trigger Monaco editor resize if switching to dpd.js tab
+            if (tabName === 'dpdjs' && window.dpdEditor) {
+                setTimeout(() => {
+                    window.dpdEditor.layout();
+                }, 100);
+            }
+        }
 
         // Authentication Functions
         async function loginWithMasterKey() {
@@ -892,6 +1078,437 @@
             if (confirm('Are you sure you want to clear the request history?')) {
                 localStorage.removeItem('deployd-request-history');
                 updateHistoryDisplay();
+            }
+        }
+
+        // WebSocket Functions
+        let ws = null;
+        let wsConnected = false;
+
+        function connectWebSocket() {
+            const wsUrl = document.getElementById('wsUrl').value;
+            if (!wsUrl) {
+                showError('Please enter WebSocket URL');
+                return;
+            }
+
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function(event) {
+                    wsConnected = true;
+                    updateConnectionStatus('Connected', '#4CAF50');
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+                    addMessage('Connected to WebSocket', 'info');
+                    
+                    // Authenticate if we have a token
+                    if (currentToken) {
+                        sendWebSocketMessage({
+                            type: 'auth',
+                            token: currentToken
+                        });
+                    }
+                };
+
+                ws.onclose = function(event) {
+                    wsConnected = false;
+                    updateConnectionStatus('Disconnected', '#f44336');
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('disconnectBtn').disabled = true;
+                    addMessage(`Disconnected: ${event.code} ${event.reason}`, 'warning');
+                };
+
+                ws.onerror = function(error) {
+                    addMessage(`WebSocket error: ${error}`, 'error');
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const message = JSON.parse(event.data);
+                        addMessage(`Received: ${JSON.stringify(message, null, 2)}`, 'received');
+                    } catch (e) {
+                        addMessage(`Received (raw): ${event.data}`, 'received');
+                    }
+                };
+
+            } catch (error) {
+                showError('Failed to connect: ' + error.message);
+            }
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendWebSocketMessage(message) {
+            if (!ws || !wsConnected) {
+                showError('WebSocket not connected');
+                return;
+            }
+
+            try {
+                const messageStr = JSON.stringify(message);
+                ws.send(messageStr);
+                addMessage(`Sent: ${JSON.stringify(message, null, 2)}`, 'sent');
+            } catch (error) {
+                showError('Failed to send message: ' + error.message);
+            }
+        }
+
+        function joinRoom() {
+            const roomName = document.getElementById('roomName').value;
+            if (!roomName) {
+                showError('Please enter room name');
+                return;
+            }
+
+            sendWebSocketMessage({
+                type: 'join',
+                room: roomName
+            });
+        }
+
+        function sendEvent() {
+            const eventName = document.getElementById('eventName').value;
+            const eventDataStr = document.getElementById('eventData').value;
+            
+            if (!eventName) {
+                showError('Please enter event name');
+                return;
+            }
+
+            let eventData;
+            try {
+                eventData = eventDataStr ? JSON.parse(eventDataStr) : {};
+            } catch (error) {
+                showError('Invalid event data JSON');
+                return;
+            }
+
+            const roomName = document.getElementById('roomName').value;
+            const message = {
+                type: 'emit',
+                event: eventName,
+                data: eventData
+            };
+
+            if (roomName) {
+                message.room = roomName;
+            }
+
+            sendWebSocketMessage(message);
+        }
+
+        function updateConnectionStatus(status, color) {
+            const statusElement = document.getElementById('wsStatus');
+            statusElement.textContent = status;
+            statusElement.style.color = color;
+        }
+
+        function addMessage(message, type) {
+            const messagesContainer = document.getElementById('wsMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.style.marginBottom = '5px';
+            messageDiv.style.padding = '5px';
+            messageDiv.style.borderRadius = '3px';
+            
+            const timestamp = new Date().toLocaleTimeString();
+            
+            switch (type) {
+                case 'info':
+                    messageDiv.style.color = '#4CAF50';
+                    break;
+                case 'warning':
+                    messageDiv.style.color = '#ff9800';
+                    break;
+                case 'error':
+                    messageDiv.style.color = '#f44336';
+                    break;
+                case 'sent':
+                    messageDiv.style.color = '#2196F3';
+                    messageDiv.style.backgroundColor = '#1a2332';
+                    break;
+                case 'received':
+                    messageDiv.style.color = '#4CAF50';
+                    messageDiv.style.backgroundColor = '#1a321a';
+                    break;
+                default:
+                    messageDiv.style.color = '#e0e0e0';
+            }
+            
+            messageDiv.innerHTML = `<span style="color: #666;">[${timestamp}]</span> ${message}`;
+            
+            // Remove placeholder message
+            if (messagesContainer.children.length === 1 && messagesContainer.children[0].style.color === 'rgb(102, 102, 102)') {
+                messagesContainer.innerHTML = '';
+            }
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function clearMessages() {
+            const messagesContainer = document.getElementById('wsMessages');
+            messagesContainer.innerHTML = '<div style="color: #666;">No messages yet...</div>';
+        }
+    </script>
+
+    <!-- Load dpd.js -->
+    <script src="/dpd.js"></script>
+    <!-- Load Monaco Editor -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs/loader.js"></script>
+    <script>
+        let dpdEditor;
+        let dpdInstance;
+
+        // Initialize dpd.js instance
+        document.addEventListener('DOMContentLoaded', function() {
+            // The dpd.js library automatically creates a global dpd instance
+            // But let's ensure it's available and create one if needed
+            if (!window.dpd) {
+                window.dpd = new Deployd();
+            }
+            dpdInstance = window.dpd;
+            console.log('dpd.js initialized:', dpdInstance);
+            
+            // Wait a moment for WebSocket connection
+            setTimeout(() => {
+                const output = document.getElementById('dpdOutput');
+                if (output) {
+                    output.innerHTML += '<div style="color: #4CAF50; margin-bottom: 5px;">dpd.js ready! You can now run the example code.</div>';
+                }
+            }, 1000);
+        });
+
+        // Add global error handler for Monaco keyboard events
+        window.addEventListener('error', function(e) {
+            if (e.message && e.message.includes('getModifierState')) {
+                console.warn('Monaco keyboard event error suppressed:', e.message);
+                e.preventDefault();
+                return true;
+            }
+        });
+
+        // Initialize Monaco Editor
+        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            try {
+                dpdEditor = monaco.editor.create(document.getElementById('dpdCodeEditor'), {
+                value: `// Test dpd.js functionality
+// dpd instance is available globally
+
+// Example 1: Get all todos
+dpd['todo-go'].get({}, (err, todos) => {
+    if (err) {
+        console.error('Error:', err);
+        return;
+    }
+    console.log('Todos:', todos);
+    logOutput('Got ' + todos.length + ' todos');
+});
+
+// Example 2: Listen for real-time events
+dpd['todo-go'].on('created', (todo) => {
+    console.log('New todo created:', todo);
+    logOutput('Real-time: New todo created - ' + todo.title);
+});
+
+dpd['todo-go'].on('updated', (todo) => {
+    console.log('Todo updated:', todo);
+    logOutput('Real-time: Todo updated - ' + todo.title);
+});
+
+dpd['todo-go'].on('deleted', (todo) => {
+    console.log('Todo deleted:', todo);
+    logOutput('Real-time: Todo deleted - ' + todo.title);
+});
+
+// Example 3: Create a new todo
+dpd['todo-go'].post({
+    title: 'Test from dpd.js',
+    completed: false,
+    priority: 5
+}, (err, result) => {
+    if (err) {
+        console.error('Error creating todo:', err);
+        logOutput('Error: ' + err.message);
+        return;
+    }
+    console.log('Created todo:', result);
+    logOutput('Created todo: ' + result.title + ' (ID: ' + result.id + ')');
+});
+
+// Helper function to output to the results panel
+function logOutput(message) {
+    const output = document.getElementById('dpdOutput');
+    const timestamp = new Date().toLocaleTimeString();
+    output.innerHTML += '<div style="margin-bottom: 5px;"><span style="color: #666;">[' + timestamp + ']</span> ' + message + '</div>';
+    output.scrollTop = output.scrollHeight;
+}`,
+                language: 'javascript',
+                theme: 'vs-dark',
+                fontSize: 14,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                automaticLayout: true
+            });
+            } catch (error) {
+                console.error('Monaco Editor initialization error:', error);
+                document.getElementById('dpdCodeEditor').innerHTML = '<div style="color: #f44336; padding: 20px;">Failed to load Monaco Editor. Please refresh the page.</div>';
+            }
+        });
+
+        function runDpdCode() {
+            const code = dpdEditor.getValue();
+            
+            // Clear output
+            document.getElementById('dpdOutput').innerHTML = '';
+            
+            // Ensure dpd instance is available
+            if (!window.dpd) {
+                const output = document.getElementById('dpdOutput');
+                output.innerHTML += '<div style="color: #f44336; margin-bottom: 5px;">Error: dpd.js not loaded yet. Please wait and try again.</div>';
+                return;
+            }
+            
+            try {
+                // Create a function with the code and execute it in global context
+                const func = new Function('dpd', 'logOutput', code);
+                func(window.dpd, function(message) {
+                    const output = document.getElementById('dpdOutput');
+                    const timestamp = new Date().toLocaleTimeString();
+                    output.innerHTML += '<div style="margin-bottom: 5px;"><span style="color: #666;">[' + timestamp + ']</span> ' + message + '</div>';
+                    output.scrollTop = output.scrollHeight;
+                });
+            } catch (error) {
+                const output = document.getElementById('dpdOutput');
+                output.innerHTML += '<div style="color: #f44336; margin-bottom: 5px;">Error: ' + error.message + '</div>';
+            }
+        }
+
+        function clearDpdOutput() {
+            document.getElementById('dpdOutput').innerHTML = '';
+        }
+
+        function insertDpdExample(example) {
+            const examples = {
+                get: `// Get documents with query
+dpd['todo-go'].get({ completed: false }, (err, todos) => {
+    if (err) return logOutput('Error: ' + err.message);
+    logOutput('Found ' + todos.length + ' incomplete todos');
+    todos.forEach(todo => logOutput('- ' + todo.title));
+});`,
+                create: `// Create a new document
+dpd['todo-go'].post({
+    title: 'New task from dpd.js',
+    completed: false,
+    priority: Math.floor(Math.random() * 10) + 1
+}, (err, todo) => {
+    if (err) return logOutput('Error: ' + err.message);
+    logOutput('Created: ' + todo.title + ' (ID: ' + todo.id + ')');
+});`,
+                update: `// Update a document (replace ID with actual one)
+dpd['todo-go'].put('DOCUMENT_ID_HERE', {
+    completed: true,
+    priority: 10
+}, (err, todo) => {
+    if (err) return logOutput('Error: ' + err.message);
+    logOutput('Updated: ' + todo.title);
+});`,
+                delete: `// Delete a document (replace ID with actual one)
+dpd['todo-go'].del('DOCUMENT_ID_HERE', (err) => {
+    if (err) return logOutput('Error: ' + err.message);
+    logOutput('Document deleted successfully');
+});`,
+                realtime: `// Real-time event listeners
+logOutput('🔗 Setting up real-time events...');
+
+// Check WebSocket connection status
+logOutput('WebSocket Ready: ' + (dpd.socketReady ? 'Yes' : 'No'));
+
+// Set up real-time event listeners (these work even if WebSocket connects later)
+dpd['todo-go'].on('created', (todo) => {
+    logOutput('🆕 Real-time: Created - ' + todo.title);
+});
+
+dpd['todo-go'].on('updated', (todo) => {
+    logOutput('📝 Real-time: Updated - ' + todo.title);
+});
+
+dpd['todo-go'].on('deleted', (todo) => {
+    logOutput('🗑️ Real-time: Deleted - ' + todo.title);
+});
+
+// Listen for WebSocket connection events
+dpd.on('connect', () => {
+    logOutput('✅ WebSocket connected!');
+});
+
+dpd.on('disconnect', () => {
+    logOutput('❌ WebSocket disconnected');
+});
+
+// Manually join collection room to ensure we get events
+if (dpd.socketReady) {
+    dpd.join('collection:todo-go');
+    logOutput('🏠 Joined collection:todo-go room');
+} else {
+    dpd.once('connect', () => {
+        dpd.join('collection:todo-go');
+        logOutput('🏠 Joined collection:todo-go room');
+    });
+}
+
+logOutput('👂 Real-time listeners set up! Try creating/deleting todos in the API tab to see events.');
+
+// Test: Create a todo to trigger an event
+setTimeout(() => {
+    logOutput('📝 Creating test todo to trigger real-time event...');
+    dpd['todo-go'].post({
+        title: 'Real-time test todo',
+        completed: false,
+        priority: 1
+    }, (err, result) => {
+        if (err) {
+            logOutput('❌ Failed to create test todo: ' + err.message);
+        } else {
+            logOutput('✅ Test todo created: ' + result.title);
+        }
+    });
+}, 1000);`,
+                auth: `// Authentication examples
+// Login via HTTP POST to /auth/login
+dpd.request('POST', '/auth/login', {
+    username: 'admin',
+    password: 'password'
+}, (err, response) => {
+    if (err) {
+        logOutput('Login error: ' + err.message);
+        return;
+    }
+    logOutput('Logged in as: ' + response.user.username);
+    logOutput('JWT Token: ' + response.token.substring(0, 20) + '...');
+    
+    // Set the auth token for future requests
+    dpd.setAuthToken(response.token);
+});
+
+// Get current user info
+dpd.request('GET', '/auth/me', (err, user) => {
+    if (err) {
+        logOutput('Not authenticated: ' + err.message);
+    } else {
+        logOutput('Current user: ' + user.username);
+    }
+});`
+            };
+            
+            if (examples[example]) {
+                dpdEditor.setValue(examples[example]);
             }
         }
     </script>

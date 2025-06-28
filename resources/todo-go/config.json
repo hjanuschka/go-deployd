@@ -14,6 +14,10 @@
       "type": "string",
       "order": 4
     },
+    "dfssdffds": {
+      "type": "string",
+      "order": 7
+    },
     "dueDate": {
       "type": "date",
       "order": 5
@@ -27,6 +31,11 @@
       "type": "string",
       "required": true,
       "order": 1
+    }
+  },
+  "eventConfig": {
+    "aftercommit": {
+      "runtime": "go"
     }
   }
 }

@@ -28,6 +28,7 @@ type EventContext struct {
 	Errors     map[string]string
 	Cancel     func(message string, statusCode int)
 	Log        func(message string, data ...map[string]interface{})
+	Emit       func(event string, data interface{}, room ...string) // Real-time event emission
 	Resource   interface{ GetName() string }
 	hideFields []string
 }
@@ -192,8 +193,20 @@ golang.org/x/crypto v0.39.0/go.mod h1:L+Xg3Wf6HoL4Bn4238Z6ft6KfEpN0tJGo53AAPC632
 
 // createGoWrapper is defined in compile_wrapper.go
 
+// RealtimeEmitter provides access to real-time event emission
+type RealtimeEmitter interface {
+	EmitToAll(event string, data interface{})
+	EmitToRoom(room, event string, data interface{})
+	EmitCollectionChange(collection, eventType string, data interface{})
+}
+
 // RunGoPlugin loads and executes a Go plugin
 func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interface{}) error {
+	return RunGoPluginWithEmitter(pluginPath, ctx, data, nil)
+}
+
+// RunGoPluginWithEmitter loads and executes a Go plugin with real-time emit capability
+func RunGoPluginWithEmitter(pluginPath string, ctx *context.Context, data map[string]interface{}, emitter RealtimeEmitter) error {
 	startTime := time.Now()
 
 	// Load the plugin
@@ -263,6 +276,37 @@ func RunGoPlugin(pluginPath string, ctx *context.Context, data map[string]interf
 
 		// Log to structured logging system with user-generated level
 		logging.UserGenerated(message, source, logData)
+	}
+
+	// Set up emit function for real-time events
+	eventCtx.Emit = func(event string, data interface{}, room ...string) {
+		if emitter == nil {
+			// Log a debug message if real-time is not available
+			logging.Debug("Emit called but real-time not available", "go-plugin", map[string]interface{}{
+				"event": event,
+				"room":  room,
+			})
+			return
+		}
+
+		if len(room) > 0 && room[0] != "" {
+			// Emit to specific room
+			emitter.EmitToRoom(room[0], event, data)
+		} else {
+			// Emit to all clients
+			emitter.EmitToAll(event, data)
+		}
+
+		logging.Debug("Event emitted from Go script", "go-plugin", map[string]interface{}{
+			"event":      event,
+			"room":       room,
+			"collection": func() string {
+				if eventCtx.Resource != nil {
+					return eventCtx.Resource.GetName()
+				}
+				return "unknown"
+			}(),
+		})
 	}
 
 	// Use reflection to call the Run method

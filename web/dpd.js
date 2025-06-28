@@ -136,7 +136,12 @@
                     break;
                     
                 case 'emit':
-                    this.emit(event, data, room);
+                    // Handle collection events from emit messages
+                    if (room && room.startsWith('collection:')) {
+                        this.handleCollectionChange(room, event, data);
+                    } else {
+                        this.emit(event, data, room);
+                    }
                     break;
                     
                 case 'collection:change':

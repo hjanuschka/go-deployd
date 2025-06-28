@@ -31,6 +31,7 @@ type Collection struct {
 	scriptManager    *events.UniversalScriptManager
 	hotReloadManager *events.HotReloadGoManager
 	configPath       string
+	realtimeEmitter  events.RealtimeEmitter
 }
 
 func NewCollection(name string, config *CollectionConfig, db database.DatabaseInterface) *Collection {
@@ -61,10 +62,15 @@ func NewCollection(name string, config *CollectionConfig, db database.DatabaseIn
 		db:               db,
 		scriptManager:    events.NewUniversalScriptManager(),
 		hotReloadManager: nil, // Will be initialized when needed
+		realtimeEmitter:  nil, // Will be set when available
 	}
 }
 
 func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInterface) (Resource, error) {
+	return LoadCollectionFromConfigWithEmitter(name, configPath, db, nil)
+}
+
+func LoadCollectionFromConfigWithEmitter(name, configPath string, db database.DatabaseInterface, emitter events.RealtimeEmitter) (Resource, error) {
 	configFile := filepath.Join(configPath, "config.json")
 	data, err := os.ReadFile(configFile)
 	if err != nil {
@@ -81,6 +87,12 @@ func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInter
 		userCollection := NewUserCollection(name, &config, db)
 		userCollection.configPath = configPath
 
+		// Set the realtime emitter if provided
+		if emitter != nil {
+			userCollection.scriptManager.SetRealtimeEmitter(emitter)
+			userCollection.realtimeEmitter = emitter
+		}
+
 		// Load event scripts with configuration
 		if err := userCollection.scriptManager.LoadScriptsWithConfig(configPath, config.EventConfig); err != nil {
 			// Scripts are optional, so don't fail if they don't exist
@@ -93,6 +105,12 @@ func LoadCollectionFromConfig(name, configPath string, db database.DatabaseInter
 	// Regular collection
 	collection := NewCollection(name, &config, db)
 	collection.configPath = configPath
+
+	// Set the realtime emitter if provided
+	if emitter != nil {
+		collection.scriptManager.SetRealtimeEmitter(emitter)
+		collection.realtimeEmitter = emitter
+	}
 
 	// Load event scripts with configuration
 	if err := collection.scriptManager.LoadScriptsWithConfig(configPath, config.EventConfig); err != nil {
@@ -318,9 +336,22 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 		"fields":     len(sanitized),
 	})
 
-	// Run AfterCommit event
+	// Emit collection change event for real-time updates
+	if c.realtimeEmitter != nil {
+		logging.Debug("Emitting collection change event", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"event": "created",
+			"hasEmitter": c.realtimeEmitter != nil,
+		})
+		c.realtimeEmitter.EmitCollectionChange(c.name, "created", result)
+	} else {
+		logging.Debug("No realtime emitter available", fmt.Sprintf("collection:%s", c.name), nil)
+	}
+
+	// Run AfterCommit event synchronously (can modify the response document)
 	if resultDoc, ok := result.(map[string]interface{}); ok {
-		go c.runAfterCommitEvent(ctx, resultDoc, "POST")
+		c.runAfterCommitEvent(ctx, resultDoc, "POST")
+		// Use the potentially modified resultDoc for the response
+		return ctx.WriteJSON(resultDoc)
 	}
 
 	return ctx.WriteJSON(result)
@@ -448,8 +479,13 @@ func (c *Collection) handlePut(ctx *appcontext.Context) error {
 		return ctx.WriteError(500, err.Error())
 	}
 
-	// Run AfterCommit event
-	go c.runAfterCommitEvent(ctx, doc, "PUT")
+	// Emit collection change event for real-time updates
+	if c.realtimeEmitter != nil {
+		c.realtimeEmitter.EmitCollectionChange(c.name, "updated", doc)
+	}
+
+	// Run AfterCommit event synchronously (can modify the response document)
+	c.runAfterCommitEvent(ctx, doc, "PUT")
 
 	return ctx.WriteJSON(doc)
 }
@@ -497,8 +533,13 @@ func (c *Collection) handleDelete(ctx *appcontext.Context) error {
 		return ctx.WriteError(404, "Document not found")
 	}
 
-	// Run AfterCommit event
-	go c.runAfterCommitEvent(ctx, doc, "DELETE")
+	// Emit collection change event for real-time updates
+	if c.realtimeEmitter != nil {
+		c.realtimeEmitter.EmitCollectionChange(c.name, "deleted", doc)
+	}
+
+	// Run AfterCommit event synchronously (blocks HTTP response until complete)
+	c.runAfterCommitEvent(ctx, doc, "DELETE")
 
 	return ctx.WriteJSON(map[string]interface{}{
 		"deleted": result.DeletedCount(),
@@ -868,7 +909,22 @@ func (c *Collection) runDeleteEvent(ctx *appcontext.Context, data map[string]int
 
 func (c *Collection) runAfterCommitEvent(ctx *appcontext.Context, data map[string]interface{}, event string) {
 	// AfterCommit runs asynchronously and errors are ignored
-	c.scriptManager.RunEvent(events.EventAfterCommit, ctx, data)
+	logging.Debug("Running AfterCommit event", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+		"event": event,
+		"hasData": data != nil,
+	})
+	
+	err := c.scriptManager.RunEvent(events.EventAfterCommit, ctx, data)
+	if err != nil {
+		logging.Debug("AfterCommit event completed with error (ignored)", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"event": event,
+			"error": err.Error(),
+		})
+	} else {
+		logging.Debug("AfterCommit event completed successfully", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"event": event,
+		})
+	}
 }
 
 // Hot-reload methods
@@ -902,6 +958,14 @@ func (c *Collection) GetScriptManager() *events.UniversalScriptManager {
 
 func (c *Collection) ReloadScripts() error {
 	return c.scriptManager.LoadScripts(c.configPath)
+}
+
+// SetRealtimeEmitter sets the realtime emitter for the collection
+func (c *Collection) SetRealtimeEmitter(emitter events.RealtimeEmitter) {
+	c.realtimeEmitter = emitter
+	if c.scriptManager != nil {
+		c.scriptManager.SetRealtimeEmitter(emitter)
+	}
 }
 
 // isMongoCommand checks if the request body contains MongoDB operators
@@ -987,8 +1051,8 @@ func (c *Collection) handleMongoCommand(ctx *appcontext.Context, id string) erro
 		return ctx.WriteError(500, err.Error())
 	}
 
-	// Run AfterCommit event
-	go c.runAfterCommitEvent(ctx, doc, "PUT")
+	// Run AfterCommit event synchronously (can modify the response document)
+	c.runAfterCommitEvent(ctx, doc, "PUT")
 
 	return ctx.WriteJSON(doc)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/metrics"
 )
 
+
 // UniversalScriptManager manages both JavaScript and Go event scripts
 type UniversalScriptManager struct {
 	jsScripts        map[EventType]*Script
@@ -20,6 +21,7 @@ type UniversalScriptManager struct {
 	scriptTypes      map[EventType]ScriptType
 	configPath       string
 	v8Pool           *V8Pool
+	realtimeEmitter  RealtimeEmitter
 	mu               sync.RWMutex
 }
 
@@ -54,6 +56,7 @@ func NewUniversalScriptManager() *UniversalScriptManager {
 		scriptTypes:      make(map[EventType]ScriptType),
 		hotReloadManager: nil, // Will be initialized when needed
 		v8Pool:           v8Pool,
+		realtimeEmitter:  nil, // Will be set by collections when available
 	}
 }
 
@@ -265,7 +268,7 @@ func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Co
 
 		// Use compiled plugin for Go scripts
 		if goScript != nil {
-			err = RunGoPlugin(goScript.PluginPath, ctx, data)
+			err = RunGoPluginWithEmitter(goScript.PluginPath, ctx, data, usm.realtimeEmitter)
 			logging.Debug("🔧 GO PLUGIN EXECUTION RESULT", "event", map[string]interface{}{
 				"eventType": string(eventType),
 				"error":     err,
@@ -331,7 +334,7 @@ func (usm *UniversalScriptManager) RunEvent(eventType EventType, ctx *context.Co
 
 // runGoPlugin executes a Go plugin
 func (usm *UniversalScriptManager) runGoPlugin(script *CompiledGoScript, ctx *context.Context, data map[string]interface{}) error {
-	return RunGoPlugin(script.PluginPath, ctx, data)
+	return RunGoPluginWithEmitter(script.PluginPath, ctx, data, usm.realtimeEmitter)
 }
 
 // runJSScript executes a JavaScript script
@@ -444,4 +447,11 @@ func (usm *UniversalScriptManager) GetHotReloadInfo() map[string]interface{} {
 		return usm.hotReloadManager.GetScriptInfo()
 	}
 	return make(map[string]interface{})
+}
+
+// SetRealtimeEmitter sets the real-time emitter for event scripts
+func (usm *UniversalScriptManager) SetRealtimeEmitter(emitter RealtimeEmitter) {
+	usm.mu.Lock()
+	defer usm.mu.Unlock()
+	usm.realtimeEmitter = emitter
 }

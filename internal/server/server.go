@@ -174,7 +174,7 @@ func New(config *Config) (*Server, error) {
 		logging.Info("WebSocket disabled in configuration", "realtime", nil)
 	}
 
-	s.router = router.New(s.db, config.Development, config.ConfigPath)
+	s.router = router.NewWithEmitter(s.db, config.Development, config.ConfigPath, s.realtimeHub)
 
 	// Create admin handler
 	adminConfig := &admin.Config{
@@ -226,6 +226,9 @@ func (s *Server) setupRoutes() {
 
 	// Serve self-test page
 	s.httpMux.HandleFunc("/self-test.html", s.handleSelfTest)
+
+	// Serve dpd.js client library
+	s.httpMux.HandleFunc("/dpd.js", s.handleDpdJS)
 
 	// Root route handling
 	s.setupRootRoute()
@@ -314,15 +317,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Close() error {
+	logging.Info("Starting server shutdown", "server", nil)
+
+	// Close WebSocket hub if it exists
+	if s.realtimeHub != nil {
+		// Note: We would implement a Close() method on the Hub
+		// For now, we just log the shutdown
+		logging.Info("Closing WebSocket hub", "server", nil)
+	}
+
 	// Shutdown V8 pool for JavaScript events
 	if v8Pool := events.GetV8Pool(); v8Pool != nil {
 		v8Pool.Shutdown()
 		logging.Info("V8 pool shut down", "server", nil)
 	}
 
+	// Close database connection
 	if s.db != nil {
-		return s.db.Close()
+		if err := s.db.Close(); err != nil {
+			logging.Error("Failed to close database", "server", map[string]interface{}{
+				"error": err.Error(),
+			})
+			return err
+		}
+		logging.Info("Database connection closed", "server", nil)
 	}
+
+	logging.Info("Server shutdown complete", "server", nil)
 	return nil
 }
 
@@ -1221,6 +1242,18 @@ func (s *Server) handleSelfTest(w http.ResponseWriter, r *http.Request) {
 	// Serve the self-test.html file
 	selfTestPath := filepath.Join("web", "self-test.html")
 	http.ServeFile(w, r, selfTestPath)
+}
+
+// handleDpdJS serves the dpd.js client library
+func (s *Server) handleDpdJS(w http.ResponseWriter, r *http.Request) {
+	// Enable CORS
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
+	w.Header().Set("Content-Type", "application/javascript")
+
+	// Serve the dpd.js file
+	dpdJSPath := filepath.Join("web", "dpd.js")
+	http.ServeFile(w, r, dpdJSPath)
 }
 
 // SetDashboardFS sets the embedded dashboard filesystem

@@ -1,7 +1,9 @@
 package metrics
 
 import (
+	"bufio"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -32,6 +34,29 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	n, err := rw.ResponseWriter.Write(b)
 	rw.written += int64(n)
 	return n, err
+}
+
+// Hijack implements the http.Hijacker interface
+func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hijacker, ok := rw.ResponseWriter.(http.Hijacker); ok {
+		return hijacker.Hijack()
+	}
+	return nil, nil, fmt.Errorf("responseWriter does not support hijacking")
+}
+
+// Flush implements the http.Flusher interface
+func (rw *responseWriter) Flush() {
+	if flusher, ok := rw.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// CloseNotify implements the http.CloseNotifier interface (deprecated but sometimes still needed)
+func (rw *responseWriter) CloseNotify() <-chan bool {
+	if notifier, ok := rw.ResponseWriter.(http.CloseNotifier); ok {
+		return notifier.CloseNotify()
+	}
+	return make(chan bool)
 }
 
 func HTTPMiddleware(next http.Handler) http.Handler {
