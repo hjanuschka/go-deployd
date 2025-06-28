@@ -694,6 +694,232 @@ func (s *MySQLStore) documentsEqual(a, b map[string]interface{}) bool {
 	return string(aJSON) == string(bJSON)
 }
 
+// Enhanced MongoDB-style query methods
+func (s *MySQLStore) FindWithRawQuery(ctx context.Context, mongoQuery interface{}, options map[string]interface{}) ([]map[string]interface{}, error) {
+	// Parse the MongoDB query
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the query translator to convert MongoDB query to SQL
+	translator := NewQueryTranslator("mysql")
+	whereClause, args, err := translator.TranslateQuery(parsedQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to translate query: %w", err)
+	}
+
+	// Build the SQL query
+	query := fmt.Sprintf("SELECT * FROM %s", s.quotedTableName())
+	if whereClause != "" {
+		query += " WHERE " + whereClause
+	}
+
+	// Add sorting
+	if sort, exists := options["$sort"]; exists {
+		if sortMap, ok := sort.(map[string]interface{}); ok {
+			orderBy, err := translator.TranslateSort(sortMap)
+			if err == nil && orderBy != "" {
+				query += " ORDER BY " + orderBy
+			}
+		}
+	}
+
+	// Add limit and offset
+	if limit, exists := options["$limit"]; exists {
+		if limitInt, ok := limit.(int); ok {
+			query += fmt.Sprintf(" LIMIT %d", limitInt)
+		}
+	}
+
+	if skip, exists := options["$skip"]; exists {
+		if skipInt, ok := skip.(int); ok {
+			query += fmt.Sprintf(" OFFSET %d", skipInt)
+		}
+	}
+
+	// Execute query
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Get column names
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		// Create a slice to hold the column values
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		// Scan the row
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, err
+		}
+
+		// Create a map for this row
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+			if b, ok := val.([]byte); ok {
+				// Try to parse JSON fields
+				var jsonVal interface{}
+				if err := json.Unmarshal(b, &jsonVal); err == nil {
+					row[col] = jsonVal
+				} else {
+					row[col] = string(b)
+				}
+			} else {
+				row[col] = val
+			}
+		}
+
+		// Apply field projection if specified
+		if fields, exists := options["$fields"]; exists {
+			if fieldsMap, ok := fields.(map[string]interface{}); ok {
+				projectedRow := make(map[string]interface{})
+				for field, include := range fieldsMap {
+					if include == 1 || include == true {
+						if val, exists := row[field]; exists {
+							projectedRow[field] = val
+						}
+					}
+				}
+				// Always include _id if not explicitly excluded
+				if _, excluded := fieldsMap["id"]; !excluded {
+					if id, exists := row["id"]; exists {
+						projectedRow["id"] = id
+					}
+				}
+				row = projectedRow
+			}
+		}
+
+		results = append(results, row)
+	}
+
+	return results, rows.Err()
+}
+
+func (s *MySQLStore) CountWithRawQuery(ctx context.Context, mongoQuery interface{}) (int64, error) {
+	// Parse the MongoDB query
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return 0, err
+	}
+
+	// Use the query translator to convert MongoDB query to SQL
+	translator := NewQueryTranslator("mysql")
+	whereClause, args, err := translator.TranslateQuery(parsedQuery)
+	if err != nil {
+		return 0, fmt.Errorf("failed to translate query: %w", err)
+	}
+
+	// Build the count query
+	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", s.quotedTableName())
+	if whereClause != "" {
+		query += " WHERE " + whereClause
+	}
+
+	var count int64
+	err = s.db.QueryRowContext(ctx, query, args...).Scan(&count)
+	return count, err
+}
+
+func (s *MySQLStore) UpdateWithRawQuery(ctx context.Context, mongoQuery interface{}, mongoUpdate interface{}) (UpdateResult, error) {
+	// Parse the MongoDB query and update
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedUpdate, err := ParseMongoQuery(mongoUpdate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the query translator to convert MongoDB query to SQL
+	translator := NewQueryTranslator("mysql")
+	whereClause, args, err := translator.TranslateQuery(parsedQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to translate query: %w", err)
+	}
+
+	// Build the update query
+	var setParts []string
+	var updateArgs []interface{}
+
+	// Handle $set operations
+	if setOps, exists := parsedUpdate["$set"]; exists {
+		if setMap, ok := setOps.(map[string]interface{}); ok {
+			for field, value := range setMap {
+				setParts = append(setParts, fmt.Sprintf("`%s` = ?", field))
+				// Convert complex types to JSON
+				if jsonData, err := json.Marshal(value); err == nil && (fmt.Sprintf("%T", value) == "map[string]interface {}" || fmt.Sprintf("%T", value) == "[]interface {}") {
+					updateArgs = append(updateArgs, string(jsonData))
+				} else {
+					updateArgs = append(updateArgs, value)
+				}
+			}
+		}
+	}
+
+	if len(setParts) == 0 {
+		return &MySQLUpdateResult{}, nil
+	}
+
+	query := fmt.Sprintf("UPDATE %s SET %s", s.quotedTableName(), strings.Join(setParts, ", "))
+	if whereClause != "" {
+		query += " WHERE " + whereClause
+		updateArgs = append(updateArgs, args...)
+	}
+
+	result, err := s.db.ExecContext(ctx, query, updateArgs...)
+	if err != nil {
+		return nil, err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	return &MySQLUpdateResult{modifiedCount: rowsAffected}, nil
+}
+
+func (s *MySQLStore) RemoveWithRawQuery(ctx context.Context, mongoQuery interface{}) (DeleteResult, error) {
+	// Parse the MongoDB query
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the query translator to convert MongoDB query to SQL
+	translator := NewQueryTranslator("mysql")
+	whereClause, args, err := translator.TranslateQuery(parsedQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to translate query: %w", err)
+	}
+
+	// Build the delete query
+	query := fmt.Sprintf("DELETE FROM %s", s.quotedTableName())
+	if whereClause != "" {
+		query += " WHERE " + whereClause
+	}
+
+	result, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	return &MySQLDeleteResult{deletedCount: rowsAffected}, nil
+}
+
 // Register MySQL database factory
 func init() {
 	RegisterDatabaseFactory(DatabaseTypeMySQL, NewMySQLDatabase)

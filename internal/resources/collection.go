@@ -206,9 +206,18 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 	// First extract query options like $sort, $limit, $skip
 	opts, cleanQuery := c.extractQueryOptions(ctx.Query)
 
+	// Debug logging
+	fmt.Printf("DEBUG: Collection.handleGet - Original query: %+v\n", ctx.Query)
+	fmt.Printf("DEBUG: Collection.handleGet - Clean query: %+v\n", cleanQuery)
+	fmt.Printf("DEBUG: Collection.handleGet - Query options: %+v\n", opts)
+
 	// Then sanitize the remaining query and convert to QueryBuilder
 	sanitizedQuery := c.sanitizeQuery(cleanQuery)
+	fmt.Printf("DEBUG: Collection.handleGet - Sanitized query: %+v\n", sanitizedQuery)
+	
 	query := c.mapToQueryBuilder(sanitizedQuery)
+	fmt.Printf("DEBUG: Collection.handleGet - QueryBuilder created, calling store.Find\n")
+	fmt.Printf("DEBUG: Collection.handleGet - Store type: %T\n", c.store)
 
 	docs, err := c.store.Find(ctx.Context(), query, opts)
 	if err != nil {
@@ -699,6 +708,31 @@ func (c *Collection) sanitizeQuery(query map[string]interface{}) map[string]inte
 		// Allow MongoDB operators and id field
 		if strings.HasPrefix(key, "$") || key == "id" {
 			sanitized[key] = value
+			continue
+		}
+
+		// Handle field[operator] pattern (e.g., "title[$regex]")
+		if strings.Contains(key, "[") && strings.HasSuffix(key, "]") {
+			// Extract field name and operator
+			parts := strings.SplitN(key, "[", 2)
+			if len(parts) == 2 {
+				fieldName := parts[0]
+				operator := strings.TrimSuffix(parts[1], "]")
+				
+				// Check if the field exists in properties
+				if prop, exists := c.config.Properties[fieldName]; exists {
+					// Create nested structure: field: {operator: value}
+					if existing, hasExisting := sanitized[fieldName]; hasExisting {
+						if existingMap, ok := existing.(map[string]interface{}); ok {
+							existingMap[operator] = c.coerceType(value, prop.Type)
+						} else {
+							sanitized[fieldName] = map[string]interface{}{operator: c.coerceType(value, prop.Type)}
+						}
+					} else {
+						sanitized[fieldName] = map[string]interface{}{operator: c.coerceType(value, prop.Type)}
+					}
+				}
+			}
 			continue
 		}
 

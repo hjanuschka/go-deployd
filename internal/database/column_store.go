@@ -381,6 +381,14 @@ func (s *ColumnStore) buildWhereClause(query QueryBuilder) (string, []interface{
 	}
 
 	sqlBuilder := NewSQLQueryBuilder()
+	// Set the column checker so the SQLQueryBuilder knows which fields are columns
+	sqlBuilder.SetColumnChecker(s.hasColumn)
+	
+	// Debug logging
+	fmt.Printf("DEBUG: ColumnStore processing query: %+v\n", queryMap)
+	fmt.Printf("DEBUG: ColumnStore schema columns: %+v\n", s.schema.Columns)
+	fmt.Printf("DEBUG: ColumnStore UseColumns: %v\n", s.schema.UseColumns)
+	
 	s.convertMapToColumnSQL(queryMap, sqlBuilder)
 	return sqlBuilder.ToSQL()
 }
@@ -394,6 +402,7 @@ func (s *ColumnStore) convertMapToColumnSQL(queryMap map[string]interface{}, bui
 				var orBuilders []QueryBuilder
 				for _, orCond := range orConditions {
 					orBuilder := NewSQLQueryBuilder()
+					orBuilder.SetColumnChecker(s.hasColumn)
 					s.convertMapToColumnSQL(orCond, orBuilder)
 					orBuilders = append(orBuilders, orBuilder)
 				}
@@ -419,19 +428,9 @@ func (s *ColumnStore) convertMapToColumnSQL(queryMap map[string]interface{}, bui
 
 // addColumnCondition adds a condition using column-aware field access
 func (s *ColumnStore) addColumnCondition(builder *SQLQueryBuilder, field, op string, value interface{}) {
-	if s.hasColumn(field) {
-		// Use direct column access
-		builder.Where(field, op, value)
-	} else {
-		// Use JSON extraction from data column
-		jsonPath := fmt.Sprintf("$.%s", field)
-		switch s.database.GetType() {
-		case DatabaseTypeSQLite:
-			builder.WhereRaw(fmt.Sprintf("JSON_EXTRACT(data, ?) %s ?", s.mongoOpToSQL(op)), jsonPath, value)
-		case DatabaseTypeMySQL:
-			builder.WhereRaw(fmt.Sprintf("JSON_EXTRACT(data, ?) %s ?", s.mongoOpToSQL(op)), jsonPath, value)
-		}
-	}
+	// The SQLQueryBuilder now handles column vs JSON decision automatically
+	// based on the column checker we set
+	builder.Where(field, op, value)
 }
 
 // mongoOpToSQL converts MongoDB operators to SQL operators
@@ -922,4 +921,133 @@ func (s *ColumnStore) Aggregate(ctx context.Context, pipeline []map[string]inter
 	// Basic aggregation support
 	query := NewQueryBuilder()
 	return s.Find(ctx, query, QueryOptions{})
+}
+
+// Enhanced MongoDB-style query methods
+func (s *ColumnStore) FindWithRawQuery(ctx context.Context, mongoQuery interface{}, options map[string]interface{}) ([]map[string]interface{}, error) {
+	// Parse the MongoDB query
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to QueryBuilder and use existing Find method
+	queryBuilder := NewQueryBuilder()
+	for field, value := range parsedQuery {
+		if !strings.HasPrefix(field, "$") {
+			queryBuilder.Where(field, "=", value)
+		}
+	}
+
+	// Convert options to QueryOptions
+	queryOpts := QueryOptions{}
+	
+	if sort, exists := options["$sort"]; exists {
+		if sortMap, ok := sort.(map[string]interface{}); ok {
+			queryOpts.Sort = make(map[string]int)
+			for field, direction := range sortMap {
+				if dir, ok := direction.(int); ok {
+					queryOpts.Sort[field] = dir
+				}
+			}
+		}
+	}
+
+	if limit, exists := options["$limit"]; exists {
+		if limitInt, ok := limit.(int); ok {
+			limit64 := int64(limitInt)
+			queryOpts.Limit = &limit64
+		}
+	}
+
+	if skip, exists := options["$skip"]; exists {
+		if skipInt, ok := skip.(int); ok {
+			skip64 := int64(skipInt)
+			queryOpts.Skip = &skip64
+		}
+	}
+
+	if fields, exists := options["$fields"]; exists {
+		if fieldsMap, ok := fields.(map[string]interface{}); ok {
+			queryOpts.Fields = make(map[string]int)
+			for field, include := range fieldsMap {
+				if inc, ok := include.(int); ok {
+					queryOpts.Fields[field] = inc
+				} else if inc, ok := include.(bool); ok && inc {
+					queryOpts.Fields[field] = 1
+				}
+			}
+		}
+	}
+
+	return s.Find(ctx, queryBuilder, queryOpts)
+}
+
+func (s *ColumnStore) CountWithRawQuery(ctx context.Context, mongoQuery interface{}) (int64, error) {
+	// Parse the MongoDB query
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return 0, err
+	}
+
+	// Convert to QueryBuilder and use existing Count method
+	queryBuilder := NewQueryBuilder()
+	for field, value := range parsedQuery {
+		if !strings.HasPrefix(field, "$") {
+			queryBuilder.Where(field, "=", value)
+		}
+	}
+
+	return s.Count(ctx, queryBuilder)
+}
+
+func (s *ColumnStore) UpdateWithRawQuery(ctx context.Context, mongoQuery interface{}, mongoUpdate interface{}) (UpdateResult, error) {
+	// Parse the MongoDB query and update
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedUpdate, err := ParseMongoQuery(mongoUpdate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to QueryBuilder
+	queryBuilder := NewQueryBuilder()
+	for field, value := range parsedQuery {
+		if !strings.HasPrefix(field, "$") {
+			queryBuilder.Where(field, "=", value)
+		}
+	}
+
+	// Convert to UpdateBuilder
+	updateBuilder := NewUpdateBuilder()
+	if setOps, exists := parsedUpdate["$set"]; exists {
+		if setMap, ok := setOps.(map[string]interface{}); ok {
+			for field, value := range setMap {
+				updateBuilder.Set(field, value)
+			}
+		}
+	}
+
+	return s.Update(ctx, queryBuilder, updateBuilder)
+}
+
+func (s *ColumnStore) RemoveWithRawQuery(ctx context.Context, mongoQuery interface{}) (DeleteResult, error) {
+	// Parse the MongoDB query
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to QueryBuilder and use existing Remove method
+	queryBuilder := NewQueryBuilder()
+	for field, value := range parsedQuery {
+		if !strings.HasPrefix(field, "$") {
+			queryBuilder.Where(field, "=", value)
+		}
+	}
+
+	return s.Remove(ctx, queryBuilder)
 }

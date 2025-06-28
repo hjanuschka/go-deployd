@@ -290,6 +290,122 @@ func (s *MongoStore) Aggregate(ctx context.Context, pipeline []map[string]interf
 	return mapResults, nil
 }
 
+// Enhanced MongoDB-style query methods
+func (s *MongoStore) FindWithRawQuery(ctx context.Context, mongoQuery interface{}, queryOptions map[string]interface{}) ([]map[string]interface{}, error) {
+	// Parse the MongoDB query
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to BSON
+	bsonQuery := s.mapToBSON(parsedQuery)
+
+	// Build find options
+	findOpts := options.Find()
+	if sort, exists := queryOptions["$sort"]; exists {
+		if sortMap, ok := sort.(map[string]interface{}); ok {
+			sortBSON := bson.D{}
+			for field, direction := range sortMap {
+				if dir, ok := direction.(int); ok {
+					sortBSON = append(sortBSON, bson.E{Key: field, Value: dir})
+				}
+			}
+			findOpts.SetSort(sortBSON)
+		}
+	}
+
+	if limit, exists := queryOptions["$limit"]; exists {
+		if limitInt, ok := limit.(int); ok {
+			findOpts.SetLimit(int64(limitInt))
+		}
+	}
+
+	if skip, exists := queryOptions["$skip"]; exists {
+		if skipInt, ok := skip.(int); ok {
+			findOpts.SetSkip(int64(skipInt))
+		}
+	}
+
+	if fields, exists := queryOptions["$fields"]; exists {
+		if fieldsMap, ok := fields.(map[string]interface{}); ok {
+			projection := bson.M{}
+			for field, include := range fieldsMap {
+				projection[field] = include
+			}
+			findOpts.SetProjection(projection)
+		}
+	}
+
+	// Execute query
+	results, err := s.Store.Find(ctx, bsonQuery, findOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert results
+	mapResults := make([]map[string]interface{}, len(results))
+	for i, result := range results {
+		mapResults[i] = s.convertBSONToMap(map[string]interface{}(result))
+	}
+
+	return mapResults, nil
+}
+
+func (s *MongoStore) CountWithRawQuery(ctx context.Context, mongoQuery interface{}) (int64, error) {
+	// Parse the MongoDB query
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return 0, err
+	}
+
+	// Convert to BSON and count
+	bsonQuery := s.mapToBSON(parsedQuery)
+	return s.Store.Count(ctx, bsonQuery)
+}
+
+func (s *MongoStore) UpdateWithRawQuery(ctx context.Context, mongoQuery interface{}, mongoUpdate interface{}) (UpdateResult, error) {
+	// Parse the MongoDB query and update
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedUpdate, err := ParseMongoQuery(mongoUpdate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to BSON
+	bsonQuery := s.mapToBSON(parsedQuery)
+	bsonUpdate := s.mapToBSON(parsedUpdate)
+
+	// Execute update
+	result, err := s.Store.Update(ctx, bsonQuery, bsonUpdate)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MongoUpdateResult{UpdateResult: result}, nil
+}
+
+func (s *MongoStore) RemoveWithRawQuery(ctx context.Context, mongoQuery interface{}) (DeleteResult, error) {
+	// Parse the MongoDB query
+	parsedQuery, err := ParseMongoQuery(mongoQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to BSON and remove
+	bsonQuery := s.mapToBSON(parsedQuery)
+	result, err := s.Store.Remove(ctx, bsonQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MongoDeleteResult{DeleteResult: result}, nil
+}
+
 // Helper method to convert map[string]interface{} to bson.M
 func (s *MongoStore) mapToBSON(m map[string]interface{}) bson.M {
 	if m == nil {

@@ -130,6 +130,20 @@ export const apiService = {
     return response.data
   },
 
+  // MongoDB-style query execution
+  queryCollection: async (collection, mongoQuery, options = {}) => {
+    // Add $skipEvents for admin dashboard to bypass event validation
+    // Flatten the mongoQuery and options into query parameters
+    const requestParams = {
+      ...mongoQuery,  // Spread the query conditions directly as parameters
+      ...options,     // Add options like $sort, $limit, $skip, $fields
+      $skipEvents: true
+    }
+    
+    const response = await api.get(`/${collection}`, { params: requestParams })
+    return response.data
+  },
+
   // Server info
   getServerInfo: async () => {
     const response = await api.get('/_admin/info')

@@ -31,6 +31,10 @@ import {
   useToast,
   useColorModeValue,
   Flex,
+  InputGroup,
+  InputLeftElement,
+  Input,
+  Collapse,
 } from '@chakra-ui/react'
 import {
   FiRefreshCw,
@@ -42,11 +46,15 @@ import {
   FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
+  FiSearch,
+  FiFilter,
+  FiX,
 } from 'react-icons/fi'
 import { apiService } from '../services/api'
 import DocumentModal from '../components/DocumentModal'
 import PropertiesEditor from '../components/PropertiesEditor'
 import EventsEditor from '../components/EventsEditor'
+import VisualQueryBuilder from '../components/VisualQueryBuilder'
 import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function CollectionDetail() {
@@ -54,9 +62,10 @@ function CollectionDetail() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [tabIndex, setTabIndex] = useState(() => {
     const tab = searchParams.get('tab')
-    if (tab === 'properties') return 1
-    if (tab === 'events') return 2
-    if (tab === 'api') return 3
+    if (tab === 'query') return 1
+    if (tab === 'properties') return 2
+    if (tab === 'events') return 3
+    if (tab === 'api') return 4
     return 0
   })
   const [collection, setCollection] = useState(null)
@@ -68,6 +77,12 @@ function CollectionDetail() {
   const [sortDirection, setSortDirection] = useState('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [documentsPerPage] = useState(50)
+  const [currentQuery, setCurrentQuery] = useState({})
+  const [queryResults, setQueryResults] = useState([])
+  const [queryLoading, setQueryLoading] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const [columnFilters, setColumnFilters] = useState({})
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const { isOpen, onOpen, onClose } = useDisclosure()
   const toast = useToast()
 
@@ -113,15 +128,83 @@ function CollectionDetail() {
     setTabIndex(index)
     const params = new URLSearchParams(searchParams)
     if (index === 1) {
-      params.set('tab', 'properties')
+      params.set('tab', 'query')
     } else if (index === 2) {
-      params.set('tab', 'events')
+      params.set('tab', 'properties')
     } else if (index === 3) {
+      params.set('tab', 'events')
+    } else if (index === 4) {
       params.set('tab', 'api')
     } else {
       params.delete('tab')
     }
     setSearchParams(params)
+  }
+
+  // Handler for query execution from VisualQueryBuilder
+  const handleQueryExecute = async ({ query, options }) => {
+    try {
+      setQueryLoading(true)
+      setError(null)
+      
+      // Execute MongoDB-style query via API
+      const results = await apiService.queryCollection(name, query, options)
+      setQueryResults(results)
+      
+      toast({
+        title: 'Query executed successfully',
+        description: `Found ${results.length} matching documents`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (err) {
+      setError(err.message)
+      toast({
+        title: 'Query execution failed',
+        description: err.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    } finally {
+      setQueryLoading(false)
+    }
+  }
+
+  // Filter documents based on search and column filters
+  const getFilteredDocuments = () => {
+    let filtered = [...documents]
+
+    // Apply search text filter
+    if (searchText) {
+      const searchLower = searchText.toLowerCase()
+      filtered = filtered.filter(doc => {
+        return Object.values(doc).some(value => {
+          if (value == null) return false
+          return String(value).toLowerCase().includes(searchLower)
+        })
+      })
+    }
+
+    // Apply column filters
+    Object.entries(columnFilters).forEach(([column, filterValue]) => {
+      if (filterValue && filterValue.trim()) {
+        const filterLower = filterValue.toLowerCase()
+        filtered = filtered.filter(doc => {
+          const value = doc[column]
+          if (value == null) return false
+          return String(value).toLowerCase().includes(filterLower)
+        })
+      }
+    })
+
+    return filtered
+  }
+
+  // Handler for query changes in VisualQueryBuilder
+  const handleQueryChange = ({ query, options }) => {
+    setCurrentQuery({ query, options })
   }
 
   const handleCreateDocument = () => {
@@ -260,9 +343,10 @@ function CollectionDetail() {
   }
 
   const getSortedDocuments = () => {
-    if (!documents.length) return documents
+    const filteredDocs = getFilteredDocuments()
+    if (!filteredDocs.length) return filteredDocs
 
-    const sorted = [...documents].sort((a, b) => {
+    const sorted = [...filteredDocs].sort((a, b) => {
       let aValue = a[sortColumn]
       let bValue = b[sortColumn]
       
@@ -315,8 +399,9 @@ function CollectionDetail() {
     setCurrentPage(pageNumber)
   }
 
-  // Calculate pagination values
-  const totalPages = Math.ceil(documents.length / documentsPerPage)
+  // Calculate pagination values for filtered data
+  const filteredDocuments = getFilteredDocuments()
+  const totalPages = Math.ceil(filteredDocuments.length / documentsPerPage)
   const indexOfLastDocument = currentPage * documentsPerPage
   const indexOfFirstDocument = indexOfLastDocument - documentsPerPage
 
@@ -396,6 +481,7 @@ function CollectionDetail() {
         <Tabs index={tabIndex} onChange={handleTabChange}>
           <TabList>
             <Tab>Data</Tab>
+            <Tab>Query Builder</Tab>
             <Tab>Properties</Tab>
             <Tab>Events</Tab>
             <Tab>API</Tab>
@@ -405,23 +491,91 @@ function CollectionDetail() {
             {/* Data Tab */}
             <TabPanel>
               <VStack align="stretch" spacing={4}>
-                <HStack justify="space-between">
+                {/* Header with search and filters */}
+                <HStack justify="space-between" wrap="wrap" spacing={4}>
                   <VStack align="start" spacing={1}>
-                    <Heading size="md">Documents ({documents.length})</Heading>
-                    {documents.length > 0 && totalPages > 1 && (
+                    <Heading size="md">Documents ({filteredDocuments.length}{filteredDocuments.length !== documents.length ? ` of ${documents.length}` : ''})</Heading>
+                    {filteredDocuments.length > 0 && totalPages > 1 && (
                       <Text fontSize="sm" color="gray.600">
-                        Showing {indexOfFirstDocument + 1}-{Math.min(indexOfLastDocument, documents.length)} of {documents.length} documents
+                        Showing {indexOfFirstDocument + 1}-{Math.min(indexOfLastDocument, filteredDocuments.length)} of {filteredDocuments.length} documents
                       </Text>
                     )}
                   </VStack>
-                  <Button
-                    leftIcon={<FiPlus />}
-                    colorScheme="brand"
-                    onClick={handleCreateDocument}
-                  >
-                    Add Document
-                  </Button>
+                  <HStack spacing={2}>
+                    <Button
+                      leftIcon={<FiPlus />}
+                      colorScheme="brand"
+                      onClick={handleCreateDocument}
+                    >
+                      Add Document
+                    </Button>
+                  </HStack>
                 </HStack>
+
+                {/* Search and Filter Controls */}
+                <VStack align="stretch" spacing={3}>
+                  <HStack spacing={3}>
+                    {/* Global Search */}
+                    <InputGroup flex="1" maxW="400px">
+                      <InputLeftElement pointerEvents="none">
+                        <FiSearch color="gray.300" />
+                      </InputLeftElement>
+                      <Input
+                        placeholder="Search all columns..."
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
+                      />
+                    </InputGroup>
+
+                    {/* Advanced Filters Toggle */}
+                    <Button
+                      leftIcon={<FiFilter />}
+                      variant={showAdvancedFilters ? "solid" : "outline"}
+                      onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                      size="sm"
+                    >
+                      Filters
+                    </Button>
+
+                    {/* Clear All Filters */}
+                    {(searchText || Object.values(columnFilters).some(v => v)) && (
+                      <Button
+                        leftIcon={<FiX />}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSearchText('')
+                          setColumnFilters({})
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </HStack>
+
+                  {/* Column Filters */}
+                  <Collapse in={showAdvancedFilters}>
+                    <Box p={4} bg={useColorModeValue('gray.50', 'gray.700')} borderRadius="md">
+                      <Text fontWeight="semibold" mb={3}>Filter by Column</Text>
+                      <HStack wrap="wrap" spacing={3}>
+                        {getTableColumns().map((column) => (
+                          <Box key={column} minW="200px">
+                            <Text fontSize="sm" fontWeight="medium" mb={1}>{column}</Text>
+                            <Input
+                              size="sm"
+                              placeholder={`Filter ${column}...`}
+                              value={columnFilters[column] || ''}
+                              onChange={(e) => setColumnFilters(prev => ({
+                                ...prev,
+                                [column]: e.target.value
+                              }))}
+                            />
+                          </Box>
+                        ))}
+                      </HStack>
+                    </Box>
+                  </Collapse>
+                </VStack>
 
                 <TableContainer>
                   <Table variant="simple" size="sm">
@@ -528,7 +682,7 @@ function CollectionDetail() {
                   </HStack>
                 )}
 
-                {documents.length === 0 && (
+                {filteredDocuments.length === 0 && documents.length === 0 && (
                   <Box textAlign="center" py={8}>
                     <Text color="gray.500" mb={4}>No documents yet</Text>
                     <Button
@@ -540,7 +694,94 @@ function CollectionDetail() {
                     </Button>
                   </Box>
                 )}
+
+                {filteredDocuments.length === 0 && documents.length > 0 && (
+                  <Box textAlign="center" py={8}>
+                    <Text color="gray.500" mb={4}>No documents match your filters</Text>
+                    <Button
+                      leftIcon={<FiX />}
+                      variant="outline"
+                      onClick={() => {
+                        setSearchText('')
+                        setColumnFilters({})
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  </Box>
+                )}
               </VStack>
+            </TabPanel>
+
+            {/* Query Builder Tab */}
+            <TabPanel>
+              <VisualQueryBuilder
+                collection={collection}
+                schema={collection?.properties || {}}
+                onQueryChange={handleQueryChange}
+                onExecute={handleQueryExecute}
+                initialQuery={currentQuery.query || {}}
+              />
+              
+              {/* Query Results */}
+              {queryResults.length > 0 && (
+                <Box mt={6}>
+                  <HStack justify="space-between" mb={4}>
+                    <Heading size="md">Query Results ({queryResults.length})</Heading>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setQueryResults([])
+                        setCurrentQuery({})
+                      }}
+                    >
+                      Clear Results
+                    </Button>
+                  </HStack>
+                  
+                  <TableContainer>
+                    <Table variant="simple" size="sm">
+                      <Thead>
+                        <Tr>
+                          {getTableColumns().map((column) => (
+                            <Th key={column}>{column}</Th>
+                          ))}
+                        </Tr>
+                      </Thead>
+                      <Tbody>
+                        {queryResults.map((document) => (
+                          <Tr key={document.id}>
+                            {getTableColumns().map((column) => (
+                              <Td key={column} maxW="200px" isTruncated>
+                                {column === 'id' ? (
+                                  <Text fontFamily="mono" fontSize="sm">
+                                    {document[column]}
+                                  </Text>
+                                ) : (
+                                  formatValue(
+                                    document[column], 
+                                    collection.properties?.[column]?.type
+                                  )
+                                )}
+                              </Td>
+                            ))}
+                          </Tr>
+                        ))}
+                      </Tbody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+              
+              {queryLoading && (
+                <Box display="flex" justifyContent="center" py={8}>
+                  <VStack spacing={2}>
+                    <Spinner size="lg" color="brand.500" />
+                    <Text>Executing query...</Text>
+                  </VStack>
+                </Box>
+              )}
             </TabPanel>
 
             {/* Properties Tab */}
