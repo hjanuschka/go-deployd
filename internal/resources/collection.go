@@ -159,7 +159,7 @@ func (c *Collection) Handle(ctx *appcontext.Context) error {
 // handleEventOnly handles requests for event-only collections (noStore: true)
 // Similar to dpd-event, this provides event-driven endpoints without data storage  
 func (c *Collection) handleEventOnly(ctx *appcontext.Context) error {
-	// Enhanced event context for event-only collections
+	// Enhanced event context for event-only collections 
 	eventCtx := c.createEventOnlyContext(ctx)
 	
 	// Run BeforeRequest event first
