@@ -30,6 +30,8 @@ Go-Deployd is a **blazing-fast, zero-configuration backend** that transforms a s
 - **🔒 Security First** - Built-in JWT authentication, validation, and CORS
 - **🌐 Multiple Databases** - SQLite (default), MongoDB, MySQL support
 - **🔍 MongoDB-style Queries** - Familiar query syntax across all databases
+- **📁 File Storage** - Local, S3, MinIO support with event-driven processing
+- **🚀 NoStore Collections** - Event-driven endpoints without database storage
 
 ## 🚀 Quick Start (3 Commands)
 
@@ -64,11 +66,25 @@ Your fresh installation comes with working examples:
 - Password hashing with bcrypt
 - Email verification support
 
+### **Files Collection** (Built-in File Storage)
+- File upload/download with Local, S3, MinIO backends
+- Event-driven processing with Go events for validation
+- Automatic metadata extraction and storage
+- Real-time WebSocket notifications for file operations
+
+### **Calculator Collections** (NoStore Examples)
+- `calculator-js` - JavaScript-based computation endpoint
+- `calculator-go` - Go-based computation endpoint
+- No database storage - pure event-driven processing
+- Perfect examples of NoStore collections
+
 ### **Todo-JS Collection** (JavaScript Events)
 ```javascript
 // resources/todo-js/validate.js
-if (!this.title || this.title.length < 1) {
-    cancel("Title is required", 400);
+function Run(context) {
+    if (!context.data.title || context.data.title.length < 1) {
+        context.cancel("Title is required", 400);
+    }
 }
 ```
 
@@ -135,6 +151,33 @@ ws.onmessage = (event) => {
 
 ## 💡 Example API Usage
 
+### File Storage Operations
+```bash
+# Upload a file
+curl -X POST http://localhost:2403/files \
+  -F "file=@document.pdf" \
+  -F "metadata={\"category\":\"documents\"}"
+
+# List all files
+curl http://localhost:2403/files
+
+# Download a file
+curl http://localhost:2403/files/[file-id]/download
+
+# Delete a file
+curl -X DELETE http://localhost:2403/files/[file-id]
+```
+
+### NoStore Collections (Event-Only Endpoints)
+```bash
+# Calculator endpoint (no database storage)
+curl -X POST http://localhost:2403/calculator-js \
+  -H "Content-Type: application/json" \
+  -d '{"operation": "add", "a": 10, "b": 5}'
+
+# Response: {"result": 15, "operation": "add"}
+```
+
 ### Create a Todo
 ```bash
 curl -X POST http://localhost:2403/todo-js \
@@ -164,7 +207,68 @@ curl -X POST http://localhost:2403/todo-js/query \
   -d '{"query": {"$or": [{"priority": {"$gte": 8}}, {"title": {"$regex": "urgent"}}]}}'
 ```
 
-## 🔧 Advanced Usage
+## 🔧 Advanced Features
+
+### 📁 File Storage System
+Go-Deployd includes a built-in file storage system supporting multiple backends:
+
+```bash
+# Configure storage backend in environment
+export STORAGE_TYPE=s3
+export AWS_BUCKET=my-bucket
+export AWS_REGION=us-east-1
+
+# Or use MinIO
+export STORAGE_TYPE=minio
+export MINIO_ENDPOINT=localhost:9000
+export MINIO_BUCKET=uploads
+
+# Local storage (default)
+export STORAGE_TYPE=local
+export STORAGE_PATH=./uploads
+```
+
+**File Storage Features:**
+- **Multiple Backends** - Local filesystem, AWS S3, MinIO support
+- **Event-Driven Processing** - Custom validation and processing with Go events
+- **Metadata Management** - Automatic extraction and custom metadata storage
+- **Real-time Notifications** - WebSocket events for file operations
+- **Secure Access** - Built-in authentication and authorization
+
+### 🚀 NoStore Collections
+Create event-driven endpoints without database storage:
+
+```json
+// resources/api-endpoint/config.json
+{
+  "type": "Collection",
+  "noStore": true,
+  "properties": {}
+}
+```
+
+```javascript
+// resources/api-endpoint/post.js
+function Run(context) {
+    const { operation, a, b } = context.data;
+    
+    let result;
+    switch (operation) {
+        case 'add': result = a + b; break;
+        case 'multiply': result = a * b; break;
+        default: result = 'Invalid operation';
+    }
+    
+    context.data = { operation, result, timestamp: new Date() };
+}
+```
+
+**NoStore Use Cases:**
+- API endpoints and webhooks
+- Calculators and converters
+- External service integrations
+- Data transformation pipelines
+- Serverless-style functions
 
 ### Multiple Database Support
 

@@ -17,7 +17,7 @@ function Run(context) {
 
 ### Go Events Pattern (REQUIRED)  
 ```go
-func Run(ctx *context.Context) error {
+func Run(ctx *EventContext) error {
     ctx.Data["newField"] = "value"
     ctx.Log("Event message")
     return nil
@@ -25,6 +25,37 @@ func Run(ctx *context.Context) error {
 ```
 
 **DO NOT use legacy `this.*` patterns in JavaScript - they are no longer supported.**
+
+## Go Event Compilation System - CRITICAL
+**Go events use a special compilation wrapper system - DO NOT add `package main`**
+
+### Event Compilation Process
+1. Go events are compiled using `internal/events/compile_wrapper.go`
+2. The wrapper automatically adds `package main` and required imports
+3. User Go events should ONLY contain:
+   - Import statements (if needed)
+   - The `Run(ctx *EventContext) error` function
+   - Any helper functions
+
+### EventContext Structure
+```go
+type EventContext struct {
+    Data     map[string]interface{} // Document being processed
+    Query    map[string]interface{} // Query parameters
+    Me       map[string]interface{} // Current user (if authenticated)
+    Method   string                 // HTTP method (GET, POST, etc.)
+    IsRoot   bool                   // Admin privileges
+    Internal bool                   // Internal request flag
+    Errors   map[string]string      // Validation errors
+    
+    // Methods
+    Cancel(message string, statusCode int) // Stop processing with error
+    Log(message string, data ...map[string]interface{}) // Logging
+    Emit(event string, data interface{}, room ...string) // WebSocket events
+    Error(field, message string)          // Add validation error
+    Hide(field string)                    // Remove field from response
+}
+```
 
 ## Key Architecture
 - **Collections**: Resources with config.json (database-backed or noStore)
@@ -40,18 +71,74 @@ func Run(ctx *context.Context) error {
 
 ## Event Development Guidelines
 1. Always use the unified Run(context) pattern
-2. Test events with curl after changes
-3. Check server logs for debugging: `tail -f test-server.log`
-4. JavaScript events are isolated per request (no data leakage)
-5. Modify context.data for data changes in both JS and Go
+2. **NEVER add `package main` to Go events** - handled by compile_wrapper.go
+3. Test events with curl after changes
+4. Check server logs for debugging: `tail -f test-server.log`
+5. JavaScript events are isolated per request (no data leakage)
+6. Modify context.data for data changes in both JS and Go
+7. Go events are compiled as plugins using the wrapper system
+
+## Go Event Examples
+### Correct Go Event Structure
+```go
+// resources/collection/validate.go
+import (
+    "strings"
+)
+
+func Run(ctx *EventContext) error {
+    title, ok := ctx.Data["title"].(string)
+    if !ok || strings.TrimSpace(title) == "" {
+        ctx.Cancel("Title is required", 400)
+        return nil
+    }
+    ctx.Log("Validation passed")
+    return nil
+}
+```
+
+### Files Collection Events
+Built-in files collection supports Go events for file processing:
+```go
+// resources/files/beforerequest.go
+func Run(ctx *EventContext) error {
+    if ctx.Method != "POST" {
+        return nil // Only validate uploads
+    }
+    
+    // Check file extension from headers
+    contentType := ctx.Query["content-type"]
+    if contentType == "application/exe" {
+        ctx.Cancel("Executable files not allowed", 400)
+        return nil
+    }
+    
+    return nil
+}
+```
 
 ## File Structure
 - `/resources/collection-name/` - Collection definitions
 - `/resources/collection-name/config.json` - Collection configuration
 - `/resources/collection-name/*.js` - JavaScript events
-- `/resources/collection-name/*.go` - Go events
+- `/resources/collection-name/*.go` - Go events (NO package main!)
 - `/internal/events/` - Event system implementation
+- `/internal/events/compile_wrapper.go` - Go event compilation wrapper
+- `/internal/events/compile.go` - Event compilation logic
+- `/resources/files/` - Built-in file storage with Go events
 - `/dashboard/` - Admin interface
+
+## Built-in Collections
+### Files Collection (`/resources/files/`)
+- File upload/download with Local, S3, MinIO backends
+- Go events for validation: `beforerequest.go`, `post.go`, `get.go`, `delete.go`
+- Real-time WebSocket notifications
+- Automatic metadata extraction
+
+### Users Collection (`/resources/users/`)
+- JWT authentication system
+- User registration and login
+- Password hashing with bcrypt
 
 ## NoStore Collections
 Perfect for API endpoints without database storage:
