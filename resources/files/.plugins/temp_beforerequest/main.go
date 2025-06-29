@@ -1,58 +1,44 @@
 package main
 
 import (
-	"fmt"
-	"time"
 	"reflect"
 )
 
-// Run processes the AfterCommit event - called after document is saved to database
-// Can modify the response document before it's sent to the client
+// Run performs early validation before file upload processing
 func Run(ctx *EventContext) error {
-	// Log the AfterCommit event
-	ctx.Log("AfterCommit event started for todo-go", map[string]interface{}{
-		"event": "aftercommit",
-		"action": "response_modification",
-	})
+	// This event runs before any file processing, allowing for early rejection
+	// based on request method and user authentication
 	
-	// Add fields to demonstrate response modification
-	ctx.Data["afterCommitProcessed"] = true
-	ctx.Data["afterCommitTimestamp"] = time.Now().Format(time.RFC3339)
-	
-	// Add a custom field based on document data
-	if title, ok := ctx.Data["title"].(string); ok {
-		ctx.Data["processedTitle"] = fmt.Sprintf("✅ Processed: %s", title)
+	// Check if this is a file upload request
+	if ctx.Method != "POST" {
+		return nil // Only validate POST requests (uploads)
 	}
 	
-	// Get the document ID and add a custom message
-	if docID, ok := ctx.Data["id"].(string); ok {
-		ctx.Data["customMessage"] = fmt.Sprintf("Document %s processed by AfterCommit", docID)
+	// Example: Require authentication before processing
+	if ctx.Me == nil || ctx.Me["id"] == nil {
+		ctx.Cancel("Authentication required for file uploads", 401)
+		return nil
 	}
 	
-	// Add a calculated field
-	if priority, ok := ctx.Data["priority"].(float64); ok {
-		ctx.Data["priorityLabel"] = getPriorityLabel(int(priority))
+	// Example: Check user permissions or quotas
+	// This is useful for early rejection before processing large files
+	if !ctx.IsRoot {
+		// Non-admin users have restrictions
+		ctx.Log("File upload attempt by regular user", map[string]interface{}{
+			"userId": ctx.Me["id"],
+			"method": ctx.Method,
+		})
 	}
 	
-	ctx.Log("AfterCommit event completed - response modified", map[string]interface{}{
-		"fieldsAdded": []string{"afterCommitProcessed", "afterCommitTimestamp", "processedTitle", "customMessage", "priorityLabel"},
+	// Example: Rate limiting based on user
+	// You could implement rate limiting logic here
+	
+	ctx.Log("File upload request validated", map[string]interface{}{
+		"userId": ctx.Me["id"],
+		"method": ctx.Method,
 	})
 	
 	return nil
-}
-
-// Helper function to convert priority number to label
-func getPriorityLabel(priority int) string {
-	switch priority {
-	case 1:
-		return "Low"
-	case 2, 3:
-		return "Medium"
-	case 4, 5:
-		return "High"
-	default:
-		return "Critical"
-	}
 }
 
 // deployd provides utility functions for event handlers

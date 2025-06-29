@@ -278,7 +278,6 @@ func TestGoAndJavaScriptEventParity(t *testing.T) {
 
 	t.Run("Go and JavaScript events produce identical results", func(t *testing.T) {
 		// Create a Go post event handler
-		goPostPath := filepath.Join(tmpDir, "post.go")
 		goPostCode := `
 // Go post event handler that matches JavaScript behavior exactly
 func Run(ctx *EventContext) error {
@@ -290,7 +289,6 @@ func Run(ctx *EventContext) error {
 }
 `
 		// Create a JavaScript post event handler
-		jsPostPath := filepath.Join(tmpDir, "post.js")
 		jsPostCode := `
 // JavaScript post event handler that matches Go behavior exactly
 function Run(context) {

@@ -1,45 +1,69 @@
 package main
 
 import (
-	"strings"
+	"fmt"
 	"reflect"
 )
 
-// Run validates todo data before saving
+// Run validates file uploads before they are processed
 func Run(ctx *EventContext) error {
-	// Validate title
-	title, ok := ctx.Data["title"].(string)
-	if !ok || strings.TrimSpace(title) == "" {
-		ctx.Cancel("Title is required", 400)
+	// Example: Reject files larger than 10MB (uncomment to enable)
+	// if size, ok := ctx.Data["size"].(float64); ok && size > 10*1024*1024 {
+	// 	ctx.Cancel("File size exceeds 10MB limit", 400)
+	// 	return nil
+	// }
+
+	// Example: Only allow certain file types (uncomment to enable)
+	// allowedTypes := []string{
+	// 	"image/jpeg",
+	// 	"image/png",
+	// 	"image/gif",
+	// 	"application/pdf",
+	// 	"application/msword",
+	// 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	// }
+	// 
+	// if contentType, ok := ctx.Data["contentType"].(string); ok {
+	// 	allowed := false
+	// 	for _, t := range allowedTypes {
+	// 		if t == contentType {
+	// 			allowed = true
+	// 			break
+	// 		}
+	// 	}
+	// 	if !allowed {
+	// 		ctx.Cancel(fmt.Sprintf("File type not allowed. Allowed types: %s", strings.Join(allowedTypes, ", ")), 400)
+	// 		return nil
+	// 	}
+	// }
+
+	// Require authentication for uploads
+	if ctx.Me == nil || ctx.Me["id"] == nil {
+		ctx.Cancel("Authentication required for file uploads", 401)
 		return nil
 	}
 
-	if len(title) > 200 {
-		ctx.Cancel("Title is too long (max 200 characters)", 400)
-		return nil
-	}
+	// Add custom metadata
+	ctx.Data["uploadedAt"] = "now" // Will be set by storage manager
+	ctx.Data["uploadedBy"] = ctx.Me["id"]
 
-	// Validate priority if provided
-	if priority, exists := ctx.Data["priority"]; exists {
-		if priorityNum, ok := priority.(float64); ok {
-			if priorityNum < 1 || priorityNum > 5 {
-				ctx.Cancel("Priority must be between 1 and 5", 400)
-				return nil
+	// Sanitize filename
+	if originalName, ok := ctx.Data["originalName"].(string); ok {
+		// Replace any non-alphanumeric characters (except dots and hyphens) with underscores
+		sanitized := ""
+		for _, r := range originalName {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '-' {
+				sanitized += string(r)
+			} else {
+				sanitized += "_"
 			}
 		}
+		ctx.Data["originalName"] = sanitized
 	}
 
-	// Trim whitespace from title
-	ctx.Data["title"] = strings.TrimSpace(title)
-
-	// Log validation success using proper logging
-	ctx.Log("Todo validation completed", map[string]interface{}{
-		"title":  title,
-		"action": "validate",
-	})
+	ctx.Log(fmt.Sprintf("File upload validated: %v", ctx.Data["originalName"]))
 	return nil
 }
-
 
 // deployd provides utility functions for event handlers
 var deployd = struct {
