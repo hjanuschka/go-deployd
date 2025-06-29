@@ -105,15 +105,20 @@ func (r *Router) loadResources() {
 			resourceName := filepath.Base(path)
 			configFile := filepath.Join(path, "config.json")
 
+			log.Printf("🔍 Found resource directory: %s", resourceName)
 			if _, err := os.Stat(configFile); err == nil {
+				log.Printf("📁 Loading collection %s from %s", resourceName, path)
 				// Load collection resource with emitter
 				collection, err := resources.LoadCollectionFromConfigWithEmitter(resourceName, path, r.db, r.realtimeEmitter)
 				if err != nil {
-					log.Printf("Failed to load collection %s: %v", resourceName, err)
+					log.Printf("❌ Failed to load collection %s: %v", resourceName, err)
 					return nil
 				}
 
+				log.Printf("✅ Successfully loaded collection %s", resourceName)
 				r.resources = append(r.resources, collection)
+			} else {
+				log.Printf("⚠️  No config.json found for resource %s: %v", resourceName, err)
 			}
 		}
 

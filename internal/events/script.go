@@ -212,6 +212,26 @@ func (s *Script) runTraditional(scriptCtx *ScriptContext) (*ScriptContext, error
 	} else {
 		_, err = v8ctx.RunScript(s.source, s.path)
 	}
+
+	// After initial script execution, check for Run() function and call it
+	if err == nil {
+		runFunc, runErr := v8ctx.Global().Get("Run")
+		if runErr == nil && runFunc != nil && runFunc.IsFunction() {
+			// Call Run(context) function with context object
+			contextObj, contextErr := v8ctx.Global().Get("context")
+			if contextErr == nil && contextObj != nil {
+				logging.Debug("Calling JavaScript Run(context) function", "js-execution", map[string]interface{}{
+					"hasRun":     true,
+					"hasContext": true,
+				})
+				runFuncObj, err := runFunc.AsFunction()
+				if err == nil {
+					_, err = runFuncObj.Call(v8ctx.Global(), contextObj)
+				}
+			}
+		}
+	}
+
 	executeTime := time.Since(executeStart)
 
 	if err != nil {
@@ -269,14 +289,33 @@ func extractModifiedData(v8ctx *v8.Context, sc *ScriptContext) error {
 	if err == nil && thisValue != nil && !thisValue.IsUndefined() {
 		thisJSON, err := v8.JSONStringify(v8ctx, thisValue)
 		if err == nil {
+			logging.Debug("Extracted 'this' JSON from V8", "js-extraction", map[string]interface{}{
+				"thisJSON": thisJSON,
+			})
 			var thisData bson.M
 			if json.Unmarshal([]byte(thisJSON), &thisData) == nil {
+				logging.Debug("Successfully parsed 'this' data", "js-extraction", map[string]interface{}{
+					"thisDataKeys": getMapKeys(thisData),
+					"thisDataLen":  len(thisData),
+				})
 				// Merge this.* modifications
 				for k, v := range thisData {
 					modifiedData[k] = v
 				}
+			} else {
+				logging.Debug("Failed to unmarshal 'this' JSON", "js-extraction", map[string]interface{}{
+					"error": "unmarshal failed",
+				})
 			}
+		} else {
+			logging.Debug("Failed to stringify 'this' value", "js-extraction", map[string]interface{}{
+				"error": err.Error(),
+			})
 		}
+	} else {
+		logging.Debug("Failed to get 'this' global or it's undefined", "js-extraction", map[string]interface{}{
+			"error": err.Error(),
+		})
 	}
 	
 	// Extract 'data' global modifications  
@@ -289,6 +328,28 @@ func extractModifiedData(v8ctx *v8.Context, sc *ScriptContext) error {
 				// Merge data.* modifications
 				for k, v := range dataData {
 					modifiedData[k] = v
+				}
+			}
+		}
+	}
+
+	// Extract context.data modifications (Run() function pattern)
+	contextValue, err := v8ctx.Global().Get("context")
+	if err == nil && contextValue != nil && !contextValue.IsUndefined() {
+		contextObj, err := contextValue.AsObject()
+		if err != nil {
+			return nil
+		}
+		contextDataValue, err := contextObj.Get("data")
+		if err == nil && contextDataValue != nil && !contextDataValue.IsUndefined() {
+			contextDataJSON, err := v8.JSONStringify(v8ctx, contextDataValue)
+			if err == nil {
+				var contextData bson.M
+				if json.Unmarshal([]byte(contextDataJSON), &contextData) == nil {
+					// Merge context.data.* modifications
+					for k, v := range contextData {
+						modifiedData[k] = v
+					}
 				}
 			}
 		}
@@ -309,8 +370,13 @@ func setupV8Environment(v8ctx *v8.Context, sc *ScriptContext) error {
 		"dataLen":  len(sc.data),
 	})
 
-	// Convert bson.M to JavaScript object
+	// Convert bson.M to JavaScript object (legacy this.* pattern)
 	if err := setDataObject(v8ctx, sc.data); err != nil {
+		return err
+	}
+
+	// Set up context object for Run(context) pattern
+	if err := setupContextObject(v8ctx, sc); err != nil {
 		return err
 	}
 
@@ -347,6 +413,87 @@ func setDataObject(v8ctx *v8.Context, data bson.M) error {
 	}
 	v8ctx.Global().Set("data", dataValue)
 	v8ctx.Global().Set("this", dataValue)
+	
+	// Set common noStore collection variables as globals for easy access
+	if parts, ok := data["parts"]; ok {
+		partsJSON, _ := json.Marshal(parts)
+		partsValue, err := v8.JSONParse(v8ctx, string(partsJSON))
+		if err == nil {
+			v8ctx.Global().Set("parts", partsValue)
+		}
+	}
+	
+	if url, ok := data["url"]; ok {
+		if urlStr, ok := url.(string); ok {
+			urlValue, err := v8.NewValue(v8ctx.Isolate(), urlStr)
+			if err == nil {
+				v8ctx.Global().Set("url", urlValue)
+			}
+		}
+	}
+	
+	return nil
+}
+
+// setupContextObject creates a JavaScript context object for Run(context) pattern
+func setupContextObject(v8ctx *v8.Context, sc *ScriptContext) error {
+	isolate := v8ctx.Isolate()
+	
+	// Create the context object
+	contextObj := v8.NewObjectTemplate(isolate)
+	
+	// Add data property that can be modified
+	dataJSON, _ := json.Marshal(sc.data)
+	dataValue, err := v8.JSONParse(v8ctx, string(dataJSON))
+	if err != nil {
+		return err
+	}
+	
+	// Create context instance
+	contextInstance, err := contextObj.NewInstance(v8ctx)
+	if err != nil {
+		return err
+	}
+	
+	// Set data property
+	contextInstance.Set("data", dataValue)
+	
+	// Add log method
+	logFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		if len(args) > 0 {
+			message := args[0].String()
+			logging.Info("JavaScript context.log", "js-context", map[string]interface{}{
+				"message": message,
+			})
+		}
+		return nil
+	})
+	contextInstance.Set("log", logFunc.GetFunction(v8ctx))
+	
+	// Add cancel method
+	cancelFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		msg := "Request cancelled"
+		statusCode := 400
+
+		if len(args) > 0 {
+			msg = args[0].String()
+		}
+		if len(args) > 1 && args[1].IsNumber() {
+			statusCode = int(args[1].Integer())
+		}
+
+		sc.cancelled = true
+		sc.cancelMsg = msg
+		sc.statusCode = statusCode
+		return nil
+	})
+	contextInstance.Set("cancel", cancelFunc.GetFunction(v8ctx))
+	
+	// Set the context object as global
+	v8ctx.Global().Set("context", contextInstance)
+	
 	return nil
 }
 
