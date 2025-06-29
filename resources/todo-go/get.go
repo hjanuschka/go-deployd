@@ -1,11 +1,4 @@
-//go:build ignore
-// +build ignore
-
-package main
-
-import (
-	"time"
-)
+import "time"
 
 // Run processes todo data when retrieved
 func Run(ctx *EventContext) error {

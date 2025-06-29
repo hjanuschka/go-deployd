@@ -1,7 +1,3 @@
-//go:build ignore
-// +build ignore
-
-package main
 
 // Run filters or modifies retrieved documents
 func Run(ctx *EventContext) error {

@@ -39,6 +39,7 @@ import {
   Cell
 } from 'recharts';
 import { FiActivity, FiDatabase, FiAlertTriangle, FiServer, FiClock } from 'react-icons/fi';
+import { AnimatedBackground } from '../components/AnimatedBackground';
 
 const COLORS = ['#3182CE', '#38A169', '#D69E2E', '#E53E3E', '#00B5D8'];
 
@@ -65,9 +66,10 @@ export default function Metrics() {
 
   const fetchCollections = async () => {
     try {
+      const authToken = localStorage.getItem('authToken');
       const response = await fetch('/_dashboard/api/metrics/collections', {
         headers: {
-          'X-Master-Key': localStorage.getItem('masterKey'),
+          'Authorization': authToken ? `Bearer ${authToken}` : '',
         },
       });
       if (response.ok) {
@@ -84,8 +86,9 @@ export default function Metrics() {
       setLoading(true);
       setError(null);
 
+      const authToken = localStorage.getItem('authToken');
       const headers = {
-        'X-Master-Key': localStorage.getItem('masterKey'),
+        'Authorization': authToken ? `Bearer ${authToken}` : '',
       };
 
       // Build collection query parameter
@@ -208,9 +211,22 @@ export default function Metrics() {
   const recentErrors = getRecentErrors();
 
   return (
-    <VStack spacing={6} align="stretch">
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
+        <VStack spacing={6} align="stretch">
       <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
-        <Heading size="lg">Performance Metrics</Heading>
+        <Heading 
+          size="lg" 
+          color={useColorModeValue('gray.800', 'white')}
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          px={4}
+          py={2}
+          borderRadius="lg"
+          backdropFilter="blur(10px)"
+        >
+          Performance Metrics
+        </Heading>
         <HStack spacing={4}>
           {/* Collection Selector */}
           <Box minW="150px">
@@ -278,8 +294,16 @@ export default function Metrics() {
 
       {/* System Overview Cards */}
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
             <Stat>
               <Flex justify="space-between" align="start">
                 <Box>
@@ -291,11 +315,19 @@ export default function Metrics() {
                 <Icon as={FiServer} boxSize={6} color="gray.400" />
               </Flex>
             </Stat>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
 
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
             <Stat>
               <Flex justify="space-between" align="start">
                 <Box>
@@ -307,11 +339,19 @@ export default function Metrics() {
                 <Icon as={FiActivity} boxSize={6} color="gray.400" />
               </Flex>
             </Stat>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
 
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
             <Stat>
               <Flex justify="space-between" align="start">
                 <Box>
@@ -323,11 +363,19 @@ export default function Metrics() {
                 <Icon as={FiAlertTriangle} boxSize={6} color="gray.400" />
               </Flex>
             </Stat>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
 
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
             <Stat>
               <Flex justify="space-between" align="start">
                 <Box>
@@ -339,18 +387,29 @@ export default function Metrics() {
                 <Icon as={FiDatabase} boxSize={6} color="gray.400" />
               </Flex>
             </Stat>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
       </SimpleGrid>
 
       {/* Charts Row */}
       <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
         {/* Request Volume Chart */}
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Request Volume Over Time</Heading>
-          </CardHeader>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
+            <Heading 
+              size="md"
+              color={useColorModeValue('gray.800', 'white')}
+            >
+              Request Volume Over Time
+            </Heading>
             <Box h="300px">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
@@ -362,15 +421,26 @@ export default function Metrics() {
                 </LineChart>
               </ResponsiveContainer>
             </Box>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
 
         {/* Response Times */}
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Average Response Time</Heading>
-          </CardHeader>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
+            <Heading 
+              size="md"
+              color={useColorModeValue('gray.800', 'white')}
+            >
+              Average Response Time
+            </Heading>
             <Box h="300px">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
@@ -382,15 +452,26 @@ export default function Metrics() {
                 </LineChart>
               </ResponsiveContainer>
             </Box>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
 
         {/* Metrics by Type */}
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Metrics by Type (24h)</Heading>
-          </CardHeader>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
+            <Heading 
+              size="md"
+              color={useColorModeValue('gray.800', 'white')}
+            >
+              Metrics by Type (24h)
+            </Heading>
             <Box h="300px">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -412,15 +493,26 @@ export default function Metrics() {
                 </PieChart>
               </ResponsiveContainer>
             </Box>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
 
         {/* Error Rate Chart */}
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Error Rate Over Time</Heading>
-          </CardHeader>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
+            <Heading 
+              size="md"
+              color={useColorModeValue('gray.800', 'white')}
+            >
+              Error Rate Over Time
+            </Heading>
             <Box h="300px">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
@@ -432,17 +524,28 @@ export default function Metrics() {
                 </BarChart>
               </ResponsiveContainer>
             </Box>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
       </SimpleGrid>
 
       {/* Event Performance (when collection is selected) */}
       {selectedCollection !== 'all' && Object.keys(eventMetrics).length > 0 && (
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Event Performance{selectedCollection !== 'overall' ? ` - ${selectedCollection}` : ''}</Heading>
-          </CardHeader>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
+            <Heading 
+              size="md"
+              color={useColorModeValue('gray.800', 'white')}
+            >
+              Event Performance{selectedCollection !== 'overall' ? ` - ${selectedCollection}` : ''}
+            </Heading>
             <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
               {Object.entries(eventMetrics).map(([eventName, metrics]) => {
                 const avgDuration = metrics.reduce((sum, m) => sum + (m.duration || 0), 0) / metrics.length / 1000000; // Convert to ms
@@ -472,17 +575,28 @@ export default function Metrics() {
                 );
               })}
             </SimpleGrid>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
       )}
 
       {/* Recent Errors */}
       {recentErrors.length > 0 && (
-        <Card bg={cardBg} borderColor={borderColor}>
-          <CardHeader>
-            <Heading size="md">Recent Errors</Heading>
-          </CardHeader>
-          <CardBody>
+        <Box
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <VStack align="stretch" spacing={4}>
+            <Heading 
+              size="md"
+              color={useColorModeValue('gray.800', 'white')}
+            >
+              Recent Errors
+            </Heading>
             <VStack spacing={3} align="stretch">
               {recentErrors.map((metric, index) => (
                 <Box key={index} p={3} bg="red.50" borderRadius="md" borderLeft="4px" borderLeftColor="red.500">
@@ -508,9 +622,11 @@ export default function Metrics() {
                 </Box>
               ))}
             </VStack>
-          </CardBody>
-        </Card>
+          </VStack>
+        </Box>
       )}
-    </VStack>
+        </VStack>
+      </Box>
+    </Box>
   );
 }

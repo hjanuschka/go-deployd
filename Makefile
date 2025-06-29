@@ -20,9 +20,9 @@ help:
 	@echo "🔥 Development Commands:"
 	@echo "  make dev                 Run both servers (React + Go) - recommended"
 	@echo "  make dev-simple          Run both servers (no hot reload)"
-	@echo "  make dev-sqlite          Run with hot reload (SQLite, requires air)"
-	@echo "  make dev-mongo           Run with hot reload (MongoDB, requires air)"
-	@echo "  make install-dev-tools   Install development tools (air, etc.)"
+	@echo "  make dev-sqlite          Run with hot reload (SQLite, requires nodemon)"
+	@echo "  make dev-mongo           Run with hot reload (MongoDB, requires nodemon)"
+	@echo "  make install-dev-tools   Install development tools (nodemon, etc.)"
 	@echo ""
 	@echo "🧪 Test Commands:"
 	@echo "  make test                Run Go tests"
@@ -241,12 +241,12 @@ e2e-test-mysql:
 # Install development tools
 install-dev-tools:
 	@echo "🔧 Installing development tools..."
-	@echo "Installing air for Go hot reloading..."
-	@go install github.com/air-verse/air@latest
-	@if command -v air &> /dev/null; then \
-		echo "✅ Air installed successfully"; \
+	@echo "Installing nodemon for Go hot reloading..."
+	@npm install
+	@if command -v npx nodemon &> /dev/null; then \
+		echo "✅ Nodemon installed successfully"; \
 	else \
-		echo "❌ Failed to install air"; \
+		echo "❌ Failed to install nodemon"; \
 		exit 1; \
 	fi
 	@echo "✅ All development tools installed!"
@@ -269,7 +269,7 @@ dev-simple:
 dev-sqlite: dashboard-build-dev
 	@echo "🔥 Starting development servers with hot reload (SQLite)..."
 	@echo "📝 Features:"
-	@echo "   • Go server hot reload with Air"
+	@echo "   • Go server hot reload with Nodemon"
 	@echo "   • React dashboard hot reload with Vite"
 	@echo "   • SQLite database (no external dependencies)"
 	@echo "   • Dashboard built with debug symbols and sourcemaps"
@@ -281,7 +281,7 @@ dev-sqlite: dashboard-build-dev
 dev-mongo: dashboard-build-dev
 	@echo "🔥 Starting development servers with hot reload (MongoDB)..."
 	@echo "📝 Features:"
-	@echo "   • Go server hot reload with Air"
+	@echo "   • Go server hot reload with Nodemon"
 	@echo "   • React dashboard hot reload with Vite"
 	@echo "   • MongoDB database"
 	@echo "   • Dashboard built with debug symbols and sourcemaps"

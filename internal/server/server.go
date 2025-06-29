@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/metrics"
+	"github.com/hjanuschka/go-deployd/internal/realtime"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 	"github.com/hjanuschka/go-deployd/internal/router"
 	"github.com/hjanuschka/go-deployd/internal/swagger"
@@ -43,15 +45,17 @@ type Config struct {
 }
 
 type Server struct {
-	config         *Config
-	db             database.DatabaseInterface
-	router         *router.Router
-	adminHandler   *admin.AdminHandler
-	upgrader       websocket.Upgrader
-	httpMux        *mux.Router
-	jwtManager     *auth.JWTManager
-	securityConfig *appconfig.SecurityConfig
-	dashboardFS    *embed.FS
+	config          *Config
+	db              database.DatabaseInterface
+	router          *router.Router
+	adminHandler    *admin.AdminHandler
+	upgrader        websocket.Upgrader
+	httpMux         *mux.Router
+	jwtManager      *auth.JWTManager
+	securityConfig  *appconfig.SecurityConfig
+	realtimeConfig  *appconfig.RealtimeConfig
+	realtimeHub     *realtime.Hub
+	dashboardFS     *embed.FS
 }
 
 func New(config *Config) (*Server, error) {
@@ -132,11 +136,20 @@ func New(config *Config) (*Server, error) {
 	// Create JWT manager
 	jwtManager := auth.NewJWTManager(securityConfig.JWTSecret, jwtDuration)
 
+	// Load realtime configuration
+	realtimeConfig, err := appconfig.LoadRealtimeConfig(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load realtime config: %w", err)
+	}
+
 	// Log server startup
 	logging.Info("Starting go-deployd server", "server", map[string]interface{}{
-		"port":        config.Port,
-		"database":    config.DatabaseType,
-		"development": config.Development,
+		"port":              config.Port,
+		"database":          config.DatabaseType,
+		"development":       config.Development,
+		"websocket_enabled": realtimeConfig.Enabled,
+		"broker_type":       realtimeConfig.Broker.Type,
+		"multi_server":      realtimeConfig.IsMultiServerMode(),
 	})
 
 	s := &Server{
@@ -147,12 +160,22 @@ func New(config *Config) (*Server, error) {
 				return true // TODO: Implement proper origin checking
 			},
 		},
-		httpMux:        mux.NewRouter(),
-		jwtManager:     jwtManager,
-		securityConfig: securityConfig,
+		httpMux:         mux.NewRouter(),
+		jwtManager:      jwtManager,
+		securityConfig:  securityConfig,
+		realtimeConfig:  realtimeConfig,
 	}
 
-	s.router = router.New(s.db, config.Development, config.ConfigPath)
+	// Initialize realtime hub if WebSocket is enabled
+	if realtimeConfig.Enabled {
+		s.realtimeHub = realtime.NewHub(jwtManager, realtimeConfig)
+		go s.realtimeHub.Run()
+		logging.Info("WebSocket hub initialized and running", "realtime", nil)
+	} else {
+		logging.Info("WebSocket disabled in configuration", "realtime", nil)
+	}
+
+	s.router = router.NewWithEmitter(s.db, config.Development, config.ConfigPath, s.realtimeHub)
 
 	// Create admin handler
 	adminConfig := &admin.Config{
@@ -204,6 +227,12 @@ func (s *Server) setupRoutes() {
 
 	// Serve self-test page
 	s.httpMux.HandleFunc("/self-test.html", s.handleSelfTest)
+
+	// Serve dpd.js client library
+	s.httpMux.HandleFunc("/dpd.js", s.handleDpdJS)
+
+	// Serve public files
+	s.setupPublicFileServing()
 
 	// Root route handling
 	s.setupRootRoute()
@@ -277,29 +306,14 @@ func (s *Server) setupRootRoute() {
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := s.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("WebSocket upgrade failed: %v", err)
+	// Check if WebSocket is enabled
+	if !s.realtimeConfig.Enabled || s.realtimeHub == nil {
+		http.Error(w, "WebSocket not enabled", http.StatusServiceUnavailable)
 		return
 	}
-	defer conn.Close()
 
-	// Handle WebSocket connection
-	// TODO: Implement full Socket.IO compatibility
-	for {
-		messageType, p, err := conn.ReadMessage()
-		if err != nil {
-			log.Printf("WebSocket read error: %v", err)
-			break
-		}
-
-		log.Printf("WebSocket message received: %s", p)
-
-		if err := conn.WriteMessage(messageType, p); err != nil {
-			log.Printf("WebSocket write error: %v", err)
-			break
-		}
-	}
+	// Delegate to the realtime hub
+	s.realtimeHub.HandleWebSocket(w, r)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -307,15 +321,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Close() error {
+	logging.Info("Starting server shutdown", "server", nil)
+
+	// Close WebSocket hub if it exists
+	if s.realtimeHub != nil {
+		// Note: We would implement a Close() method on the Hub
+		// For now, we just log the shutdown
+		logging.Info("Closing WebSocket hub", "server", nil)
+	}
+
 	// Shutdown V8 pool for JavaScript events
 	if v8Pool := events.GetV8Pool(); v8Pool != nil {
 		v8Pool.Shutdown()
 		logging.Info("V8 pool shut down", "server", nil)
 	}
 
+	// Close database connection
 	if s.db != nil {
-		return s.db.Close()
+		if err := s.db.Close(); err != nil {
+			logging.Error("Failed to close database", "server", map[string]interface{}{
+				"error": err.Error(),
+			})
+			return err
+		}
+		logging.Info("Database connection closed", "server", nil)
 	}
+
+	logging.Info("Server shutdown complete", "server", nil)
 	return nil
 }
 
@@ -1214,6 +1246,75 @@ func (s *Server) handleSelfTest(w http.ResponseWriter, r *http.Request) {
 	// Serve the self-test.html file
 	selfTestPath := filepath.Join("web", "self-test.html")
 	http.ServeFile(w, r, selfTestPath)
+}
+
+// handleDpdJS serves the dpd.js client library
+func (s *Server) handleDpdJS(w http.ResponseWriter, r *http.Request) {
+	// Enable CORS
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
+	w.Header().Set("Content-Type", "application/javascript")
+
+	// Serve the dpd.js file
+	dpdJSPath := filepath.Join("web", "dpd.js")
+	http.ServeFile(w, r, dpdJSPath)
+}
+
+// setupPublicFileServing sets up static file serving from the public directory
+func (s *Server) setupPublicFileServing() {
+	publicDir := "public"
+	
+	// Check if public directory exists
+	if _, err := os.Stat(publicDir); os.IsNotExist(err) {
+		// Public directory doesn't exist, skip setup
+		return
+	}
+
+	// Create file server for public directory
+	fileServer := http.FileServer(http.Dir(publicDir))
+	
+	// Setup handler with security checks
+	s.httpMux.PathPrefix("/public/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only allow GET requests
+		if r.Method != "GET" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Remove /public prefix and clean the path
+		path := strings.TrimPrefix(r.URL.Path, "/public")
+		path = filepath.Clean(path)
+
+		// Security: Prevent directory traversal
+		if strings.Contains(path, "..") {
+			http.Error(w, "Invalid path", http.StatusBadRequest)
+			return
+		}
+
+		// Security: Don't serve hidden files
+		parts := strings.Split(path, "/")
+		for _, part := range parts {
+			if strings.HasPrefix(part, ".") {
+				http.Error(w, "Access denied", http.StatusForbidden)
+				return
+			}
+		}
+
+		// Log file access
+		fmt.Printf("📁 Serving public file: %s\n", path)
+
+		// Create new request with modified path
+		r2 := new(http.Request)
+		*r2 = *r
+		r2.URL = new(url.URL)
+		*r2.URL = *r.URL
+		r2.URL.Path = path
+
+		// Serve the file
+		fileServer.ServeHTTP(w, r2)
+	})
+
+	fmt.Printf("✅ Public file serving enabled at /public/\n")
 }
 
 // SetDashboardFS sets the embedded dashboard filesystem

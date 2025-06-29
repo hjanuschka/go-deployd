@@ -142,6 +142,11 @@ type EventContext struct {
 	// Log writes a message to the application logs
 	Log func(message string, data ...map[string]interface{})
 	
+	// Emit sends real-time events to WebSocket clients
+	// Usage: Emit("event-name", data) - broadcasts to all clients
+	//        Emit("event-name", data, "room-name") - sends to specific room
+	Emit func(event string, data interface{}, room ...string)
+	
 	// Hide removes a field from the response
 	hideFields []string
 }
@@ -195,6 +200,7 @@ func (h eventHandler) Run(ctx interface{}) error {
 		Errors:   safeGetStringMapField(v, "Errors"),
 		Cancel:   safeGetCancelField(v, "Cancel"),
 		Log:      safeGetLogField(v, "Log"),
+		Emit:     safeGetEmitField(v, "Emit"),
 	}
 	
 	// Run the user's event handler
@@ -296,6 +302,17 @@ func safeGetLogField(v reflect.Value, fieldName string) func(string, ...map[stri
 		return logFunc
 	}
 	return deployd.Log // fallback to global deployd.Log
+}
+
+func safeGetEmitField(v reflect.Value, fieldName string) func(string, interface{}, ...string) {
+	val := getFieldValue(v, fieldName)
+	if val == nil {
+		return func(string, interface{}, ...string) {} // no-op function
+	}
+	if emitFunc, ok := val.(func(string, interface{}, ...string)); ok {
+		return emitFunc
+	}
+	return func(string, interface{}, ...string) {} // no-op function
 }
 `
 

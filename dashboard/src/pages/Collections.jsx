@@ -46,6 +46,9 @@ import {
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { apiService } from '../services/api'
+import { AnimatedBackground } from '../components/AnimatedBackground'
+import { GradientStatCard } from '../components/GradientStatCard'
+import { AnimatedCard } from '../components/AnimatedCard'
 
 function Collections() {
   const [collections, setCollections] = useState([])
@@ -60,8 +63,6 @@ function Collections() {
   const navigate = useNavigate()
   const toast = useToast()
   
-  const cardBg = useColorModeValue('white', 'gray.700')
-  const borderColor = useColorModeValue('gray.200', 'gray.600')
 
 
   useEffect(() => {
@@ -221,21 +222,41 @@ function Collections() {
   }
 
   return (
-    <Box>
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
       <VStack spacing={6} align="stretch">
         <HStack justify="space-between">
-          <Heading size="lg">Collections</Heading>
+          <Heading 
+            size="lg"
+            color={useColorModeValue('gray.800', 'white')}
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            px={4}
+            py={2}
+            borderRadius="lg"
+            backdropFilter="blur(10px)"
+          >
+            Collections
+          </Heading>
           <HStack spacing={2}>
             <IconButton
               icon={<FiRefreshCw />}
               onClick={loadCollections}
               variant="outline"
               aria-label="Refresh collections"
+              bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+              color={useColorModeValue('gray.800', 'white')}
+              borderColor={useColorModeValue('gray.300', 'whiteAlpha.300')}
+              _hover={{ bg: useColorModeValue('whiteAlpha.800', 'whiteAlpha.300') }}
+              backdropFilter="blur(10px)"
             />
             <Button
               leftIcon={<FiPlus />}
               colorScheme="brand"
               onClick={onOpen}
+              bg="brand.500"
+              _hover={{ bg: 'brand.600' }}
+              boxShadow="lg"
             >
               Create Collection
             </Button>
@@ -253,6 +274,16 @@ function Collections() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               size="md"
+              bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+              borderColor={useColorModeValue('gray.300', 'whiteAlpha.300')}
+              color={useColorModeValue('gray.800', 'white')}
+              _placeholder={{ color: useColorModeValue('gray.500', 'whiteAlpha.600') }}
+              _hover={{ borderColor: useColorModeValue('gray.400', 'whiteAlpha.400') }}
+              _focus={{ 
+                borderColor: 'brand.400',
+                boxShadow: '0 0 0 1px var(--chakra-colors-brand-400)'
+              }}
+              backdropFilter="blur(10px)"
             />
           </InputGroup>
         </Box>
@@ -301,20 +332,31 @@ function Collections() {
             )}
           </HStack>
 
-          <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }} gap={6}>
-            {currentCollections.map((collection) => (
-          <GridItem key={collection.name}>
+          <Box
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            borderRadius="xl"
+            p={6}
+            backdropFilter="blur(20px)"
+            borderWidth="1px"
+            borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+            boxShadow="xl"
+          >
+            <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }} gap={6}>
+              {currentCollections.map((collection) => (
+            <GridItem key={collection.name}>
             <Card 
-              bg={cardBg}
-              shadow="md"
+              bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+              backdropFilter="blur(20px)"
+              shadow="xl"
               borderWidth="1px"
-              borderColor={borderColor}
+              borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
               _hover={{ 
-                shadow: 'lg',
-                transform: 'translateY(-2px)',
-                borderColor: 'brand.300'
+                shadow: '2xl',
+                transform: 'translateY(-4px)',
+                borderColor: 'brand.400',
+                bg: useColorModeValue('whiteAlpha.950', 'blackAlpha.700')
               }}
-              transition="all 0.2s"
+              transition="all 0.3s"
               h="full"
             >
               <CardHeader pb={2}>
@@ -391,16 +433,18 @@ function Collections() {
             {currentPage === 1 && (
               <GridItem>
                 <Card 
-                  bg={cardBg}
-                  shadow="md"
+                  bg={useColorModeValue('whiteAlpha.700', 'blackAlpha.400')}
+                  backdropFilter="blur(10px)"
+                  shadow="lg"
                   borderWidth="2px"
                   borderStyle="dashed"
-                  borderColor="brand.300"
+                  borderColor={useColorModeValue('brand.300', 'brand.400')}
                   _hover={{ 
                     borderColor: 'brand.500',
-                    bg: useColorModeValue('brand.50', 'gray.600')
+                    bg: useColorModeValue('whiteAlpha.900', 'blackAlpha.600'),
+                    transform: 'translateY(-2px)'
                   }}
-                  transition="all 0.2s"
+                  transition="all 0.3s"
                   h="full"
                   cursor="pointer"
                   onClick={onOpen}
@@ -435,6 +479,7 @@ function Collections() {
               </GridItem>
             )}
           </Grid>
+          </Box>
         </VStack>
       )}
 
@@ -530,6 +575,7 @@ function Collections() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      </Box>
     </Box>
   )
 }

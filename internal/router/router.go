@@ -15,18 +15,24 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/database"
+	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 )
 
 type Router struct {
-	resources   []resources.Resource
-	db          database.DatabaseInterface
-	development bool
-	configPath  string
-	jwtManager  *auth.JWTManager
+	resources       []resources.Resource
+	db              database.DatabaseInterface
+	development     bool
+	configPath      string
+	jwtManager      *auth.JWTManager
+	realtimeEmitter events.RealtimeEmitter
 }
 
 func New(db database.DatabaseInterface, development bool, configPath string) *Router {
+	return NewWithEmitter(db, development, configPath, nil)
+}
+
+func NewWithEmitter(db database.DatabaseInterface, development bool, configPath string, emitter events.RealtimeEmitter) *Router {
 	// Load security config to set up JWT
 	var jwtManager *auth.JWTManager
 	securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
@@ -39,10 +45,11 @@ func New(db database.DatabaseInterface, development bool, configPath string) *Ro
 	}
 
 	r := &Router{
-		db:          db,
-		development: development,
-		configPath:  configPath,
-		jwtManager:  jwtManager,
+		db:              db,
+		development:     development,
+		configPath:      configPath,
+		jwtManager:      jwtManager,
+		realtimeEmitter: emitter,
 	}
 
 	r.loadResources()
@@ -78,6 +85,11 @@ func (r *Router) loadResources() {
 			},
 		}, r.db)
 
+		// Set the realtime emitter if available
+		if r.realtimeEmitter != nil {
+			todosCollection.SetRealtimeEmitter(r.realtimeEmitter)
+		}
+
 		r.resources = append(r.resources, todosCollection)
 		return
 	}
@@ -93,15 +105,20 @@ func (r *Router) loadResources() {
 			resourceName := filepath.Base(path)
 			configFile := filepath.Join(path, "config.json")
 
+			log.Printf("🔍 Found resource directory: %s", resourceName)
 			if _, err := os.Stat(configFile); err == nil {
-				// Load collection resource
-				collection, err := resources.LoadCollectionFromConfig(resourceName, path, r.db)
+				log.Printf("📁 Loading collection %s from %s", resourceName, path)
+				// Load collection resource with emitter
+				collection, err := resources.LoadCollectionFromConfigWithEmitter(resourceName, path, r.db, r.realtimeEmitter)
 				if err != nil {
-					log.Printf("Failed to load collection %s: %v", resourceName, err)
+					log.Printf("❌ Failed to load collection %s: %v", resourceName, err)
 					return nil
 				}
 
+				log.Printf("✅ Successfully loaded collection %s", resourceName)
 				r.resources = append(r.resources, collection)
+			} else {
+				log.Printf("⚠️  No config.json found for resource %s: %v", resourceName, err)
 			}
 		}
 
@@ -242,9 +259,18 @@ func (r *Router) GetCollection(name string) *resources.Collection {
 }
 
 func (r *Router) sortResources() {
-	// Sort resources by path specificity (longer paths first)
+	// Sort resources by path length first (longer paths first), then by path segments
 	sort.Slice(r.resources, func(i, j int) bool {
-		return len(strings.Split(r.resources[i].GetPath(), "/")) > len(strings.Split(r.resources[j].GetPath(), "/"))
+		pathI := r.resources[i].GetPath()
+		pathJ := r.resources[j].GetPath()
+		
+		// First, compare by actual path length (longer first)
+		if len(pathI) != len(pathJ) {
+			return len(pathI) > len(pathJ)
+		}
+		
+		// If same length, compare by number of segments (more specific first)
+		return len(strings.Split(pathI, "/")) > len(strings.Split(pathJ, "/"))
 	})
 }
 
@@ -334,6 +360,11 @@ func (r *Router) createBuiltinUsersCollection() {
 
 	// CRITICAL: Set the configPath and load event scripts for built-in users collection
 	usersCollection.Collection.SetConfigPath(usersConfigPath)
+
+	// Set the realtime emitter if available
+	if r.realtimeEmitter != nil {
+		usersCollection.Collection.SetRealtimeEmitter(r.realtimeEmitter)
+	}
 
 	// Load event scripts if the users directory exists
 	if _, err := os.Stat(usersConfigPath); err == nil {

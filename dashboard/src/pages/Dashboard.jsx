@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Grid,
@@ -31,16 +32,28 @@ import {
   FiClock,
   FiInfo,
   FiRefreshCw,
+  FiTrendingUp,
+  FiActivity,
+  FiSettings,
+  FiUsers,
 } from 'react-icons/fi'
 import { apiService } from '../services/api'
+import { GradientStatCard } from '../components/GradientStatCard'
+import { ActivityFeed } from '../components/ActivityFeed'
+import { QuickActions } from '../components/QuickActions'
+import { MetricsChart } from '../components/MetricsChart'
+import { SkeletonGrid } from '../components/SkeletonCard'
+import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function Dashboard() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [stats, setStats] = useState({
     collections: [],
     totalDocuments: 0,
-    serverInfo: null
+    serverInfo: null,
+    metricsData: null
   })
 
   const cardBg = useColorModeValue('white', 'gray.700')
@@ -52,14 +65,19 @@ function Dashboard() {
       setError(null)
       
       // Get real data from API
-      const [collectionsData, serverInfoData] = await Promise.all([
+      const [collectionsData, serverInfoData, metricsData] = await Promise.all([
         apiService.getCollections().catch(() => []),
         apiService.getServerInfo().catch(() => ({
           version: '1.0.0',
           goVersion: '1.21',
           uptime: '2h 15m',
           database: 'Connected'
-        }))
+        })),
+        fetch('/_dashboard/api/metrics/system', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          }
+        }).then(res => res.ok ? res.json() : null).catch(() => null)
       ])
 
       // Get document counts for each collection
@@ -96,7 +114,8 @@ function Dashboard() {
       setStats({
         collections: collectionsWithCounts,
         totalDocuments: collectionsWithCounts.reduce((sum, col) => sum + (col.documentCount || 0), 0),
-        serverInfo: serverInfoData
+        serverInfo: serverInfoData,
+        metricsData: metricsData
       })
     } catch (err) {
       setError(err.message)
@@ -111,11 +130,21 @@ function Dashboard() {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minH="300px">
-        <VStack spacing={4}>
-          <Spinner size="xl" color="brand.500" />
-          <Text>Loading dashboard...</Text>
-        </VStack>
+      <Box position="relative" minH="100vh">
+        <AnimatedBackground />
+        <Box position="relative" zIndex={1} p={6}>
+          <VStack spacing={8}>
+            <VStack spacing={4}>
+              <Spinner size="xl" color="brand.500" />
+              <Text>Loading dashboard...</Text>
+            </VStack>
+            <SkeletonGrid type="stat" count={4} columns={4} />
+            <Grid templateColumns={{ base: '1fr', lg: '2fr 1fr' }} gap={6} w="full">
+              <SkeletonGrid type="chart" count={1} columns={1} />
+              <SkeletonGrid type="activity" count={3} columns={1} />
+            </Grid>
+          </VStack>
+        </Box>
       </Box>
     )
   }
@@ -137,153 +166,118 @@ function Dashboard() {
     )
   }
 
-  const StatCard = ({ title, value, helpText, icon, colorScheme = "brand" }) => (
-    <Card bg={cardBg} shadow="md">
-      <CardBody>
-        <HStack spacing={4}>
-          <Box
-            p={3}
-            borderRadius="lg"
-            bg={`${colorScheme}.100`}
-            color={`${colorScheme}.500`}
-          >
-            <Icon as={icon} boxSize={8} />
-          </Box>
-          <Stat>
-            <StatLabel fontSize="sm" color="gray.500">
-              {title}
-            </StatLabel>
-            <StatNumber fontSize="2xl" fontWeight="bold">
-              {value}
-            </StatNumber>
-            {helpText && (
-              <StatHelpText fontSize="xs" color="gray.400">
-                {helpText}
-              </StatHelpText>
-            )}
-          </Stat>
-        </HStack>
-      </CardBody>
-    </Card>
-  )
 
   return (
-    <Box>
-      <HStack justify="space-between" mb={6}>
-        <Heading size="lg">Dashboard Overview</Heading>
-        <IconButton
-          icon={<FiRefreshCw />}
-          onClick={loadDashboardData}
-          variant="outline"
-          aria-label="Refresh data"
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
+        <HStack justify="space-between" mb={6}>
+          <Heading 
+            size="lg" 
+            color={useColorModeValue('gray.800', 'white')}
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            px={4}
+            py={2}
+            borderRadius="lg"
+            backdropFilter="blur(10px)"
+          >
+            Dashboard Overview
+          </Heading>
+          <IconButton
+            icon={<FiRefreshCw />}
+            onClick={loadDashboardData}
+            variant="outline"
+            aria-label="Refresh data"
+            bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+            color={useColorModeValue('gray.800', 'white')}
+            borderColor={useColorModeValue('gray.300', 'whiteAlpha.300')}
+            _hover={{ bg: useColorModeValue('whiteAlpha.800', 'whiteAlpha.300') }}
+            backdropFilter="blur(10px)"
+          />
+        </HStack>
+
+        {/* Enhanced Stats Grid */}
+        <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }} gap={6} mb={8}>
+          <GridItem>
+            <GradientStatCard
+              title="Collections"
+              value={stats.collections.length}
+              icon={FiDatabase}
+              gradient="brand"
+              subtitle="Active collections"
+              onClick={() => navigate('/collections')}
+            />
+          </GridItem>
+          <GridItem>
+            <GradientStatCard
+              title="Documents"
+              value={stats.totalDocuments}
+              icon={FiFile}
+              gradient="success"
+              subtitle="Total documents"
+              onClick={() => navigate('/collections')}
+            />
+          </GridItem>
+          <GridItem>
+            <GradientStatCard
+              title="Uptime"
+              value={stats.serverInfo?.uptime || 'N/A'}
+              icon={FiClock}
+              gradient="warning"
+              subtitle="System uptime"
+              onClick={() => navigate('/metrics')}
+            />
+          </GridItem>
+          <GridItem>
+            <GradientStatCard
+              title="Status"
+              value="Healthy"
+              icon={FiActivity}
+              gradient="success"
+              subtitle={stats.serverInfo?.database || 'Connected'}
+              onClick={() => navigate('/metrics')}
+            />
+          </GridItem>
+        </Grid>
+
+        {/* Enhanced Content Grid */}
+        <Grid templateColumns={{ base: '1fr', lg: '2fr 1fr' }} gap={6} mb={8}>
+          {/* Metrics Chart */}
+          <GridItem>
+            <MetricsChart
+              title="Performance Metrics"
+              subtitle="Real-time system performance and usage statistics"
+              data={[
+                { name: 'Collections', value: stats.collections.length },
+                { name: 'Documents', value: stats.totalDocuments },
+                { name: 'Requests/hr', value: stats.metricsData?.hourly_requests || 0 },
+                { name: 'Total Metrics', value: stats.metricsData?.total_metrics || 0 }
+              ]}
+            />
+          </GridItem>
+
+          {/* Activity Feed */}
+          <GridItem>
+            <ActivityFeed
+              title="Collections Status"
+              activities={stats.collections.slice(0, 5).map(col => ({
+                type: 'collection',
+                message: `${col.name} (${col.documentCount} documents)`,
+                timestamp: new Date(col.lastModified),
+                user: 'Data',
+                collection: col.name
+              }))}
+              onActivityClick={(collectionName) => navigate(`/collections/${collectionName}`)}
+            />
+          </GridItem>
+        </Grid>
+
+        {/* Quick Actions */}
+        <QuickActions
+          onActionClick={(path) => navigate(path)}
         />
-      </HStack>
 
-      {/* Stats Grid */}
-      <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }} gap={6} mb={8}>
-        <GridItem>
-          <StatCard
-            title="Collections"
-            value={stats.collections.length}
-            icon={FiDatabase}
-            colorScheme="brand"
-          />
-        </GridItem>
-        <GridItem>
-          <StatCard
-            title="Documents"
-            value={stats.totalDocuments}
-            icon={FiFile}
-            colorScheme="green"
-          />
-        </GridItem>
-        <GridItem>
-          <StatCard
-            title="Uptime"
-            value={stats.serverInfo?.uptime || 'N/A'}
-            icon={FiClock}
-            colorScheme="purple"
-          />
-        </GridItem>
-        <GridItem>
-          <StatCard
-            title="Database"
-            value={
-              <Badge
-                colorScheme="green"
-                fontSize="sm"
-              >
-                {stats.serverInfo?.database || 'Connected'}
-              </Badge>
-            }
-            icon={FiInfo}
-            colorScheme="blue"
-          />
-        </GridItem>
-      </Grid>
-
-      {/* Content Grid */}
-      <Grid templateColumns={{ base: '1fr', lg: '2fr 1fr' }} gap={6}>
-        {/* Collections List */}
-        <GridItem>
-          <Card bg={cardBg} shadow="md">
-            <CardHeader>
-              <Heading size="md">Collections</Heading>
-            </CardHeader>
-            <CardBody>
-              <List spacing={3}>
-                {stats.collections.map((collection) => (
-                  <ListItem key={collection.name}>
-                    <HStack justify="space-between" p={3} borderRadius="md" bg={useColorModeValue('gray.50', 'gray.600')}>
-                      <HStack spacing={3}>
-                        <ListIcon as={FiDatabase} color="brand.500" />
-                        <VStack align="start" spacing={0}>
-                          <Text fontWeight="medium">{collection.name}</Text>
-                          <Text fontSize="sm" color="gray.500">
-                            {collection.documentCount} documents
-                          </Text>
-                        </VStack>
-                      </HStack>
-                      <Text fontSize="sm" color="gray.400">
-                        {new Date(collection.lastModified).toLocaleDateString()}
-                      </Text>
-                    </HStack>
-                  </ListItem>
-                ))}
-              </List>
-            </CardBody>
-          </Card>
-        </GridItem>
-
-        {/* Server Info */}
-        <GridItem>
-          <Card bg={cardBg} shadow="md">
-            <CardHeader>
-              <Heading size="md">Server Information</Heading>
-            </CardHeader>
-            <CardBody>
-              <VStack align="stretch" spacing={4}>
-                <Box>
-                  <Text fontSize="sm" color="gray.500">Version</Text>
-                  <Text fontWeight="medium">{stats.serverInfo?.version}</Text>
-                </Box>
-                <Box>
-                  <Text fontSize="sm" color="gray.500">Go Version</Text>
-                  <Text fontWeight="medium">{stats.serverInfo?.goVersion}</Text>
-                </Box>
-                <Box>
-                  <Text fontSize="sm" color="gray.500">Database</Text>
-                  <Text fontWeight="medium">{stats.serverInfo?.database?.split(' ')[0] || 'Unknown'}</Text>
-                </Box>
-                <Box>
-                  <Text fontSize="sm" color="gray.500">Environment</Text>
-                  <Badge colorScheme="yellow">Development</Badge>
-                </Box>
-              </VStack>
-            </CardBody>
-          </Card>
-        </GridItem>
-      </Grid>
+      </Box>
     </Box>
   )
 }

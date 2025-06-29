@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -124,11 +125,17 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Create listener with SO_REUSEADDR
+	listener, err := net.Listen("tcp", httpServer.Addr)
+	if err != nil {
+		log.Fatalf("Failed to create listener: %v", err)
+	}
+
 	go func() {
 		logging.GetLogger().Info("Server listening", logging.Fields{
 			"url": fmt.Sprintf("http://localhost:%d", *port),
 		})
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
@@ -142,8 +149,19 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Shutdown HTTP server gracefully
 	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		log.Printf("HTTP server forced to shutdown: %v", err)
+	}
+
+	// Close the listener
+	if err := listener.Close(); err != nil {
+		log.Printf("Error closing listener: %v", err)
+	}
+
+	// Close server resources (database, websockets, etc.)
+	if err := srv.Close(); err != nil {
+		log.Printf("Error closing server resources: %v", err)
 	}
 
 	logging.GetLogger().Info("Server gracefully stopped")

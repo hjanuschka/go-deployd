@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import {
   Box,
@@ -57,6 +57,8 @@ import Login from './pages/Login'
 import Metrics from './pages/Metrics'
 import Sidebar from './components/Sidebar'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ToastProvider } from './components/ToastSystem'
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
 
 const menuItems = [
   { text: 'Dashboard', icon: FiHome, path: '/' },
@@ -75,6 +77,9 @@ function AuthenticatedApp() {
   const { logout, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  
+  // Initialize keyboard shortcuts
+  useKeyboardShortcuts()
 
   const bg = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
@@ -211,9 +216,22 @@ function App() {
     return result
   }
 
-  // Force login page if URL path is /login or not authenticated
-  if (location.pathname === '/login' || !isAuthenticated) {
+  // Force login page if not authenticated (but not still loading)
+  if (!isAuthenticated && !loading) {
     return <Login onLogin={handleLogin} />
+  }
+  
+  // If authenticated and on login page, redirect to dashboard
+  if (isAuthenticated && location.pathname === '/login') {
+    navigate('/', { replace: true })
+    return (
+      <Center minH="100vh">
+        <VStack spacing={4}>
+          <Spinner size="xl" color="brand.500" />
+          <Text>Redirecting to dashboard...</Text>
+        </VStack>
+      </Center>
+    )
   }
 
   return <AuthenticatedApp />
@@ -222,7 +240,9 @@ function App() {
 function AppWithAuth() {
   return (
     <AuthProvider>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </AuthProvider>
   )
 }

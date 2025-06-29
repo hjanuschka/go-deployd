@@ -1,0 +1,19 @@
+{
+  "name": "go-deployd",
+  "version": "1.0.0",
+  "description": "Go-based deployment and API server with dashboard",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:go\" \"npm run dev:dashboard\"",
+    "dev:go": "nodemon",
+    "dev:go:clean": "lsof -ti:2403 | xargs kill -9 2>/dev/null || true && nodemon",
+    "dev:dashboard": "cd dashboard && npm run dev",
+    "build": "cd dashboard && npm run build",
+    "build:dev": "cd dashboard && npm run build:dev",
+    "clean:port": "lsof -ti:2403 | xargs kill -9 2>/dev/null || true",
+    "restart": "npm run clean:port && npm run dev:go"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "concurrently": "^8.2.2"
+  }
+}

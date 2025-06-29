@@ -52,6 +52,12 @@ type StoreInterface interface {
 	PopLast(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error)
 	Upsert(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error)
 	Aggregate(ctx context.Context, pipeline []map[string]interface{}) ([]map[string]interface{}, error)
+
+	// Enhanced MongoDB-style query methods
+	FindWithRawQuery(ctx context.Context, mongoQuery interface{}, options map[string]interface{}) ([]map[string]interface{}, error)
+	CountWithRawQuery(ctx context.Context, mongoQuery interface{}) (int64, error)
+	UpdateWithRawQuery(ctx context.Context, mongoQuery interface{}, mongoUpdate interface{}) (UpdateResult, error)
+	RemoveWithRawQuery(ctx context.Context, mongoQuery interface{}) (DeleteResult, error)
 }
 
 // QueryBuilder provides a database-agnostic query building interface

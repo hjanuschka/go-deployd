@@ -10,13 +10,13 @@ const api = axios.create({
   withCredentials: true,
 })
 
-// Add request interceptor to include master key from localStorage if available
+// Add request interceptor to include JWT token from localStorage if available
 api.interceptors.request.use(
   (config) => {
-    // Get master key from localStorage or cookie
-    const masterKey = localStorage.getItem('masterKey')
-    if (masterKey) {
-      config.headers['X-Master-Key'] = masterKey
+    // Get JWT token from localStorage
+    const authToken = localStorage.getItem('authToken')
+    if (authToken) {
+      config.headers['Authorization'] = `Bearer ${authToken}`
     }
     return config
   },
@@ -35,9 +35,10 @@ api.interceptors.response.use(
     console.error('API Error:', error)
     console.error('Error details:', error.response?.status, error.response?.data)
     
-    // If we get 401, clear stored master key
+    // If we get 401, clear stored auth token and user data
     if (error.response?.status === 401) {
-      localStorage.removeItem('masterKey')
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('authUser')
       // Optionally redirect to login page
       window.location.href = '/_dashboard/login'
     }
@@ -127,6 +128,39 @@ export const apiService = {
     const requestParams = { ...query, $skipEvents: true }
     const response = await api.get(`/${collection}/count`, { params: requestParams })
     return response.data
+  },
+
+  // MongoDB-style query execution
+  queryCollection: async (collection, mongoQuery, options = {}) => {
+    // Add $skipEvents for admin dashboard to bypass event validation
+    
+    // Check if this is a complex query that needs POST with JSON body
+    const isComplexQuery = JSON.stringify(mongoQuery).includes('$or') || 
+                          JSON.stringify(mongoQuery).includes('$and') || 
+                          JSON.stringify(mongoQuery).includes('$nor') ||
+                          JSON.stringify(options).includes('$or') ||
+                          JSON.stringify(options).includes('$and')
+
+    if (isComplexQuery) {
+      // Use POST request with JSON body for complex queries
+      const requestData = {
+        query: mongoQuery,
+        options: { ...options, $skipEvents: true }
+      }
+      console.log('Complex query - using POST:', requestData)
+      const response = await api.post(`/${collection}/query`, requestData)
+      return response.data
+    } else {
+      // Use GET with query parameters for simple queries
+      const requestParams = {
+        ...mongoQuery,  // Spread the query conditions directly as parameters
+        ...options,     // Add options like $sort, $limit, $skip, $fields
+        $skipEvents: true
+      }
+      console.log('Simple query - using GET:', requestParams)
+      const response = await api.get(`/${collection}`, { params: requestParams })
+      return response.data
+    }
   },
 
   // Server info

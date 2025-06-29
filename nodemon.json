@@ -1,0 +1,16 @@
+{
+  "watch": ["cmd", "internal", "resources"],
+  "ext": "go,js,json",
+  "ignore": ["dashboard/**", "web/**", "*.test.go", "testdata/**", "tmp/**", "resources/*/config.json"],
+  "exec": "./scripts/dev-server.sh",
+  "delay": "1000ms",
+  "signal": "SIGTERM",
+  "verbose": true,
+  "env": {
+    "GO_ENV": "development"
+  },
+  "events": {
+    "restart": "echo 'go-deployd restarting due to file changes...'",
+    "crash": "echo 'go-deployd crashed - waiting for file changes before restart...'"
+  }
+}

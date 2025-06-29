@@ -1,17 +1,24 @@
-// Simple post-processing for newly created todos
-// Set default values if not provided
-if (this.completed === undefined) {
-    this.completed = false;
+// Run function for todo POST events using new context pattern
+function Run(context) {
+    context.log("Todo POST event executing with Run(context) pattern");
+    
+    // Set default values if not provided
+    if (context.data.completed === undefined) {
+        context.data.completed = false;
+    }
+    
+    if (context.data.priority === undefined) {
+        context.data.priority = 1;
+    }
+    
+    // Add creation metadata
+    context.data.createdBy = "JavaScript Run(context)";
+    
+    // Log todo creation using proper logging
+    context.log("Todo created successfully", {
+        title: context.data.title,
+        action: "post", 
+        completed: context.data.completed,
+        priority: context.data.priority
+    });
 }
-
-if (this.priority === undefined) {
-    this.priority = 1;
-}
-
-// Log todo creation using proper logging
-ctx.Log("Todo created successfully", {
-    title: this.title,
-    action: "post",
-    completed: this.completed,
-    priority: this.priority
-});

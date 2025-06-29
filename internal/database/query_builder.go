@@ -134,6 +134,9 @@ func (q *BaseQueryBuilder) ToMap() map[string]interface{} {
 type SQLQueryBuilder struct {
 	*BaseQueryBuilder
 	rawConditions []RawCondition
+	// columnChecker determines if a field should use direct column access
+	// If nil, defaults to JSON access for all fields
+	columnChecker func(field string) bool
 }
 
 type RawCondition struct {
@@ -148,7 +151,14 @@ func NewSQLQueryBuilder() *SQLQueryBuilder {
 			orGroups:   make([][]QueryCondition, 0),
 		},
 		rawConditions: make([]RawCondition, 0),
+		columnChecker: nil, // Default to JSON access
 	}
+}
+
+// SetColumnChecker sets a function to determine if a field should use direct column access
+func (q *SQLQueryBuilder) SetColumnChecker(checker func(field string) bool) *SQLQueryBuilder {
+	q.columnChecker = checker
+	return q
 }
 
 // WhereRaw adds a raw SQL condition
@@ -172,17 +182,24 @@ func (q *SQLQueryBuilder) ToSQL() (string, []interface{}) {
 	// Add regular conditions
 	for _, cond := range q.conditions {
 		sqlOperator, argCount := q.convertOperator(cond.Operator)
+		fieldRef := q.getFieldReference(cond.Field)
+		
 		if argCount == 0 {
-			whereParts = append(whereParts, fmt.Sprintf("JSON_EXTRACT(data, '$.%s') %s", cond.Field, sqlOperator))
+			whereParts = append(whereParts, fmt.Sprintf("%s %s", fieldRef, sqlOperator))
 		} else if argCount == 1 {
-			whereParts = append(whereParts, fmt.Sprintf("JSON_EXTRACT(data, '$.%s') %s ?", cond.Field, sqlOperator))
-			args = append(args, cond.Value)
+			whereParts = append(whereParts, fmt.Sprintf("%s %s ?", fieldRef, sqlOperator))
+			// Special handling for regex operators
+			if cond.Operator == "$regex" {
+				args = append(args, q.regexToLike(cond.Value))
+			} else {
+				args = append(args, cond.Value)
+			}
 		} else {
 			// Handle IN/NOT IN operators
 			if values, ok := cond.Value.([]interface{}); ok {
 				placeholders := strings.Repeat("?,", len(values))
 				placeholders = placeholders[:len(placeholders)-1] // remove trailing comma
-				whereParts = append(whereParts, fmt.Sprintf("JSON_EXTRACT(data, '$.%s') %s (%s)", cond.Field, sqlOperator, placeholders))
+				whereParts = append(whereParts, fmt.Sprintf("%s %s (%s)", fieldRef, sqlOperator, placeholders))
 				args = append(args, values...)
 			}
 		}
@@ -194,17 +211,24 @@ func (q *SQLQueryBuilder) ToSQL() (string, []interface{}) {
 			var orParts []string
 			for _, cond := range group {
 				sqlOperator, argCount := q.convertOperator(cond.Operator)
+				fieldRef := q.getFieldReference(cond.Field)
+				
 				if argCount == 0 {
-					orParts = append(orParts, fmt.Sprintf("JSON_EXTRACT(data, '$.%s') %s", cond.Field, sqlOperator))
+					orParts = append(orParts, fmt.Sprintf("%s %s", fieldRef, sqlOperator))
 				} else if argCount == 1 {
-					orParts = append(orParts, fmt.Sprintf("JSON_EXTRACT(data, '$.%s') %s ?", cond.Field, sqlOperator))
-					args = append(args, cond.Value)
+					orParts = append(orParts, fmt.Sprintf("%s %s ?", fieldRef, sqlOperator))
+					// Special handling for regex operators
+					if cond.Operator == "$regex" {
+						args = append(args, q.regexToLike(cond.Value))
+					} else {
+						args = append(args, cond.Value)
+					}
 				} else {
 					// Handle IN/NOT IN operators
 					if values, ok := cond.Value.([]interface{}); ok {
 						placeholders := strings.Repeat("?,", len(values))
 						placeholders = placeholders[:len(placeholders)-1]
-						orParts = append(orParts, fmt.Sprintf("JSON_EXTRACT(data, '$.%s') %s (%s)", cond.Field, sqlOperator, placeholders))
+						orParts = append(orParts, fmt.Sprintf("%s %s (%s)", fieldRef, sqlOperator, placeholders))
 						args = append(args, values...)
 					}
 				}
@@ -225,7 +249,29 @@ func (q *SQLQueryBuilder) ToSQL() (string, []interface{}) {
 		return "", nil
 	}
 
-	return strings.Join(whereParts, " AND "), args
+	sql := strings.Join(whereParts, " AND ")
+	
+	// Debug logging - print the actual SQL being generated
+	fmt.Printf("DEBUG: SQLQueryBuilder generated SQL: %s\n", sql)
+	fmt.Printf("DEBUG: SQLQueryBuilder args: %v\n", args)
+	
+	return sql, args
+}
+
+// getFieldReference returns the appropriate field reference (column or JSON extraction)
+func (q *SQLQueryBuilder) getFieldReference(field string) string {
+	// If we have a column checker and the field has a column, use direct access
+	if q.columnChecker != nil && q.columnChecker(field) {
+		// For direct column access, quote the field name to handle special characters
+		fieldRef := fmt.Sprintf("\"%s\"", field)
+		fmt.Printf("DEBUG: Field '%s' has column, using direct access: %s\n", field, fieldRef)
+		return fieldRef
+	}
+	
+	// Default to JSON extraction for backward compatibility
+	fieldRef := fmt.Sprintf("JSON_EXTRACT(data, '$.%s')", field)
+	fmt.Printf("DEBUG: Field '%s' no column, using JSON extraction: %s\n", field, fieldRef)
+	return fieldRef
 }
 
 // convertOperator converts MongoDB operators to SQL operators
@@ -254,6 +300,51 @@ func (q *SQLQueryBuilder) convertOperator(mongoOp string) (string, int) {
 	default:
 		return "=", 1 // Default to equality
 	}
+}
+
+// regexToLike converts regex patterns to SQL LIKE patterns
+func (q *SQLQueryBuilder) regexToLike(value interface{}) string {
+	pattern, ok := value.(string)
+	if !ok {
+		return fmt.Sprintf("%v", value)
+	}
+
+	// Simple conversion for basic regex patterns
+	// This handles the most common cases used in search functionality
+	
+	// Handle anchors first
+	isStartAnchored := strings.HasPrefix(pattern, "^")
+	isEndAnchored := strings.HasSuffix(pattern, "$")
+	
+	// Remove anchors for processing
+	if isStartAnchored {
+		pattern = strings.TrimPrefix(pattern, "^")
+	}
+	if isEndAnchored {
+		pattern = strings.TrimSuffix(pattern, "$")
+	}
+	
+	// Escape SQL LIKE special characters
+	pattern = strings.ReplaceAll(pattern, "%", "\\%")
+	pattern = strings.ReplaceAll(pattern, "_", "\\_")
+	
+	// Convert basic regex patterns to LIKE patterns
+	// Handle .* (any characters) -> %
+	pattern = strings.ReplaceAll(pattern, ".*", "%")
+	// Handle .+ (one or more characters) -> _%
+	pattern = strings.ReplaceAll(pattern, ".+", "_%")
+	// Handle . (single character) -> _
+	pattern = strings.ReplaceAll(pattern, ".", "_")
+	
+	// Apply anchoring
+	if !isStartAnchored {
+		pattern = "%" + pattern
+	}
+	if !isEndAnchored {
+		pattern = pattern + "%"
+	}
+	
+	return pattern
 }
 
 // BaseUpdateBuilder provides a basic implementation of UpdateBuilder

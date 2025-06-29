@@ -47,6 +47,7 @@ import {
 } from 'react-icons/fi'
 import { apiService } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function Settings() {
   const [serverInfo, setServerInfo] = useState(null)
@@ -91,7 +92,6 @@ function Settings() {
   const toast = useToast()
   const { colorMode, toggleColorMode } = useColorMode()
   const { authFetch } = useAuth()
-  const cardBg = useColorModeValue('white', 'gray.700')
 
   useEffect(() => {
     loadServerInfo()
@@ -348,9 +348,22 @@ function Settings() {
   }
 
   return (
-    <VStack align="stretch" spacing={6}>
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
+        <VStack align="stretch" spacing={6}>
       <HStack justify="space-between">
-        <Heading size="lg">Settings</Heading>
+        <Heading 
+          size="lg" 
+          color={useColorModeValue('gray.800', 'white')}
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          px={4}
+          py={2}
+          borderRadius="lg"
+          backdropFilter="blur(10px)"
+        >
+          Settings
+        </Heading>
         <HStack>
           <Button
             leftIcon={<FiRefreshCw />}
@@ -377,14 +390,25 @@ function Settings() {
           {/* Server Tab */}
           <TabPanel>
             <VStack align="stretch" spacing={6}>
-              <Card bg={cardBg}>
-                <CardHeader>
+              <Box
+                bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+                borderRadius="xl"
+                p={6}
+                backdropFilter="blur(20px)"
+                borderWidth="1px"
+                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                boxShadow="xl"
+              >
+                <VStack align="stretch" spacing={4}>
                   <HStack>
                     <FiServer />
-                    <Heading size="md">Server Information</Heading>
+                    <Heading 
+                      size="md"
+                      color={useColorModeValue('gray.800', 'white')}
+                    >
+                      Server Information
+                    </Heading>
                   </HStack>
-                </CardHeader>
-                <CardBody>
                   {serverInfo ? (
                     <VStack align="stretch" spacing={4}>
                       <HStack justify="space-between" wrap="wrap">
@@ -431,14 +455,25 @@ function Settings() {
                   ) : (
                     <Text color="gray.500">Loading server information...</Text>
                   )}
-                </CardBody>
-              </Card>
+                </VStack>
+              </Box>
 
-              <Card bg={cardBg}>
-                <CardHeader>
-                  <Heading size="md">Server Configuration</Heading>
-                </CardHeader>
-                <CardBody>
+              <Box
+                bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+                borderRadius="xl"
+                p={6}
+                backdropFilter="blur(20px)"
+                borderWidth="1px"
+                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                boxShadow="xl"
+              >
+                <VStack align="stretch" spacing={4}>
+                  <Heading 
+                    size="md"
+                    color={useColorModeValue('gray.800', 'white')}
+                  >
+                    Server Configuration
+                  </Heading>
                   <VStack align="stretch" spacing={4}>
                     <FormControl>
                       <FormLabel>Port</FormLabel>
@@ -477,6 +512,10 @@ function Settings() {
                     <Button
                       leftIcon={<FiSave />}
                       colorScheme="brand"
+                      bg="brand.500"
+                      _hover={{ bg: 'brand.600', transform: 'translateY(-1px)' }}
+                      boxShadow="lg"
+                      transition="all 0.2s"
                       onClick={saveSettings}
                       isLoading={saving}
                       loadingText="Saving"
@@ -484,8 +523,8 @@ function Settings() {
                       Save Server Settings
                     </Button>
                   </VStack>
-                </CardBody>
-              </Card>
+                </VStack>
+              </Box>
             </VStack>
           </TabPanel>
 
@@ -499,14 +538,25 @@ function Settings() {
                 </AlertDescription>
               </Alert>
 
-              <Card bg={cardBg}>
-                <CardHeader>
+              <Box
+                bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+                borderRadius="xl"
+                p={6}
+                backdropFilter="blur(20px)"
+                borderWidth="1px"
+                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                boxShadow="xl"
+              >
+                <VStack align="stretch" spacing={4}>
                   <HStack>
                     <FiDatabase />
-                    <Heading size="md">Database Configuration</Heading>
+                    <Heading 
+                      size="md"
+                      color={useColorModeValue('gray.800', 'white')}
+                    >
+                      Database Configuration
+                    </Heading>
                   </HStack>
-                </CardHeader>
-                <CardBody>
                   <VStack align="stretch" spacing={4}>
                     <FormControl>
                       <FormLabel>Database URL</FormLabel>
@@ -533,6 +583,10 @@ function Settings() {
                     <Button
                       leftIcon={<FiSave />}
                       colorScheme="brand"
+                      bg="brand.500"
+                      _hover={{ bg: 'brand.600', transform: 'translateY(-1px)' }}
+                      boxShadow="lg"
+                      transition="all 0.2s"
                       onClick={saveSettings}
                       isLoading={saving}
                       loadingText="Saving"
@@ -540,8 +594,8 @@ function Settings() {
                       Save Database Settings
                     </Button>
                   </VStack>
-                </CardBody>
-              </Card>
+                </VStack>
+              </Box>
             </VStack>
           </TabPanel>
 
@@ -555,11 +609,22 @@ function Settings() {
                 </AlertDescription>
               </Alert>
 
-              <Card bg={cardBg}>
-                <CardHeader>
-                  <Heading size="md">JWT Authentication Settings</Heading>
-                </CardHeader>
-                <CardBody>
+              <Box
+                bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+                borderRadius="xl"
+                p={6}
+                backdropFilter="blur(20px)"
+                borderWidth="1px"
+                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                boxShadow="xl"
+              >
+                <VStack align="stretch" spacing={4}>
+                  <Heading 
+                    size="md"
+                    color={useColorModeValue('gray.800', 'white')}
+                  >
+                    JWT Authentication Settings
+                  </Heading>
                   {securityLoading ? (
                     <Text color="gray.500">Loading security settings...</Text>
                   ) : (
@@ -629,6 +694,10 @@ function Settings() {
                       <Button
                         leftIcon={<FiSave />}
                         colorScheme="brand"
+                        bg="brand.500"
+                        _hover={{ bg: 'brand.600', transform: 'translateY(-1px)' }}
+                        boxShadow="lg"
+                        transition="all 0.2s"
                         onClick={saveSecuritySettings}
                         isLoading={saving}
                         loadingText="Saving Security Settings"
@@ -638,8 +707,8 @@ function Settings() {
                       </Button>
                     </VStack>
                   )}
-                </CardBody>
-              </Card>
+                </VStack>
+              </Box>
             </VStack>
           </TabPanel>
 
@@ -653,14 +722,25 @@ function Settings() {
                 </AlertDescription>
               </Alert>
 
-              <Card bg={cardBg}>
-                <CardHeader>
+              <Box
+                bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+                borderRadius="xl"
+                p={6}
+                backdropFilter="blur(20px)"
+                borderWidth="1px"
+                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                boxShadow="xl"
+              >
+                <VStack align="stretch" spacing={4}>
                   <HStack>
                     <FiMail />
-                    <Heading size="md">Email Configuration</Heading>
+                    <Heading 
+                      size="md"
+                      color={useColorModeValue('gray.800', 'white')}
+                    >
+                      Email Configuration
+                    </Heading>
                   </HStack>
-                </CardHeader>
-                <CardBody>
                   {emailLoading ? (
                     <Text color="gray.500">Loading email settings...</Text>
                   ) : (
@@ -717,7 +797,7 @@ function Settings() {
 
                       {emailSettings.provider === 'smtp' && (
                         <VStack align="stretch" spacing={4}>
-                          <Heading size="sm" color="gray.600">SMTP Settings</Heading>
+                          <Heading size="sm" color={useColorModeValue('gray.600', 'gray.300')}>SMTP Settings</Heading>
                           
                           <HStack spacing={4}>
                             <FormControl flex="2">
@@ -776,7 +856,7 @@ function Settings() {
 
                       {emailSettings.provider === 'ses' && (
                         <VStack align="stretch" spacing={4}>
-                          <Heading size="sm" color="gray.600">Amazon SES Settings</Heading>
+                          <Heading size="sm" color={useColorModeValue('gray.600', 'gray.300')}>Amazon SES Settings</Heading>
                           
                           <FormControl>
                             <FormLabel>AWS Region</FormLabel>
@@ -822,7 +902,7 @@ function Settings() {
                       <Divider />
 
                       <VStack align="stretch" spacing={4}>
-                        <Heading size="sm" color="gray.600">Test Email</Heading>
+                        <Heading size="sm" color={useColorModeValue('gray.600', 'gray.300')}>Test Email</Heading>
                         
                         <FormControl>
                           <FormLabel>Test Email Address</FormLabel>
@@ -853,6 +933,10 @@ function Settings() {
                       <Button
                         leftIcon={<FiSave />}
                         colorScheme="brand"
+                        bg="brand.500"
+                        _hover={{ bg: 'brand.600', transform: 'translateY(-1px)' }}
+                        boxShadow="lg"
+                        transition="all 0.2s"
                         onClick={saveEmailSettings}
                         isLoading={saving}
                         loadingText="Saving Email Settings"
@@ -862,22 +946,33 @@ function Settings() {
                       </Button>
                     </VStack>
                   )}
-                </CardBody>
-              </Card>
+                </VStack>
+              </Box>
             </VStack>
           </TabPanel>
 
           {/* Appearance Tab */}
           <TabPanel>
             <VStack align="stretch" spacing={6}>
-              <Card bg={cardBg}>
-                <CardHeader>
+              <Box
+                bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+                borderRadius="xl"
+                p={6}
+                backdropFilter="blur(20px)"
+                borderWidth="1px"
+                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                boxShadow="xl"
+              >
+                <VStack align="stretch" spacing={4}>
                   <HStack>
                     <FiSettings />
-                    <Heading size="md">Dashboard Appearance</Heading>
+                    <Heading 
+                      size="md"
+                      color={useColorModeValue('gray.800', 'white')}
+                    >
+                      Dashboard Appearance
+                    </Heading>
                   </HStack>
-                </CardHeader>
-                <CardBody>
                   <VStack align="stretch" spacing={4}>
                     <FormControl display="flex" alignItems="center" justifyContent="space-between">
                       <Box>
@@ -897,13 +992,15 @@ function Settings() {
                     </FormControl>
 
                   </VStack>
-                </CardBody>
-              </Card>
+                </VStack>
+              </Box>
             </VStack>
           </TabPanel>
         </TabPanels>
       </Tabs>
-    </VStack>
+        </VStack>
+      </Box>
+    </Box>
   )
 }
 

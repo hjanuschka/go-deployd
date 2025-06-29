@@ -1,11 +1,4 @@
-//go:build ignore
-// +build ignore
-
-package main
-
-import (
-	"strings"
-)
+import "strings"
 
 // Run validates todo data before saving
 func Run(ctx *EventContext) error {

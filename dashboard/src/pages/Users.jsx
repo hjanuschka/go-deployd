@@ -36,9 +36,11 @@ import {
   AlertDialogHeader,
   AlertDialogContent,
   AlertDialogOverlay,
+  useColorModeValue,
 } from '@chakra-ui/react'
 import { FiPlus, FiEdit2, FiTrash2, FiUser } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
+import { AnimatedBackground } from '../components/AnimatedBackground'
 
 function Users() {
   const [users, setUsers] = useState([])
@@ -52,7 +54,7 @@ function Users() {
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure()
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure()
   
-  const { masterKey } = useAuth()
+  const { authFetch } = useAuth()
   const toast = useToast()
   const cancelRef = React.useRef()
 
@@ -64,12 +66,7 @@ function Users() {
   const fetchUserSchema = async () => {
     try {
       setSchemaLoading(true)
-      const response = await fetch('/_admin/collections/users', {
-        headers: {
-          'X-Master-Key': masterKey,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await authFetch('/_admin/collections/users')
 
       if (response.ok) {
         const data = await response.json()
@@ -132,12 +129,7 @@ function Users() {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/users', {
-        headers: {
-          'X-Master-Key': masterKey,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await authFetch('/users')
 
       if (response.ok) {
         const data = await response.json()
@@ -161,10 +153,9 @@ function Users() {
 
   const handleCreate = async () => {
     try {
-      const response = await fetch('/users', {
+      const response = await authFetch('/users', {
         method: 'POST',
         headers: {
-          'X-Master-Key': masterKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(formData)
@@ -205,10 +196,9 @@ function Users() {
         delete updateData.password
       }
 
-      const response = await fetch(`/users/${selectedUser.id}`, {
+      const response = await authFetch(`/users/${selectedUser.id}`, {
         method: 'PUT',
         headers: {
-          'X-Master-Key': masterKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(updateData)
@@ -243,12 +233,8 @@ function Users() {
     if (!selectedUser) return
 
     try {
-      const response = await fetch(`/users/${selectedUser.id}`, {
-        method: 'DELETE',
-        headers: {
-          'X-Master-Key': masterKey,
-          'Content-Type': 'application/json'
-        }
+      const response = await authFetch(`/users/${selectedUser.id}`, {
+        method: 'DELETE'
       })
 
       if (response.ok) {
@@ -509,28 +495,69 @@ function Users() {
   }
 
   return (
-    <Box>
+    <Box position="relative" minH="100vh">
+      <AnimatedBackground />
+      <Box position="relative" zIndex={1} p={6}>
       <HStack justify="space-between" mb={6}>
-        <Heading size="lg" color="brand.500">
+        <Heading 
+          size="lg" 
+          color={useColorModeValue('gray.800', 'white')}
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          px={4}
+          py={2}
+          borderRadius="lg"
+          backdropFilter="blur(10px)"
+        >
           Users Management
         </Heading>
-        <Button leftIcon={<FiPlus />} colorScheme="brand" onClick={openCreateModal}>
+        <Button 
+          leftIcon={<FiPlus />} 
+          colorScheme="brand" 
+          onClick={openCreateModal}
+          bg="brand.500"
+          _hover={{ bg: 'brand.600', transform: 'translateY(-1px)' }}
+          boxShadow="lg"
+          transition="all 0.2s"
+        >
           Add User
         </Button>
       </HStack>
 
       {users.length === 0 ? (
-        <Box textAlign="center" py={10}>
-          <FiUser size={48} style={{ margin: '0 auto 16px' }} />
-          <Text fontSize="lg" color="gray.500">
+        <Box 
+          textAlign="center" 
+          py={10}
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
+          <Box 
+            as={FiUser} 
+            size="48px" 
+            color={useColorModeValue('gray.400', 'whiteAlpha.600')}
+            margin="0 auto 16px" 
+          />
+          <Text fontSize="lg" color={useColorModeValue('gray.600', 'whiteAlpha.800')}>
             No users found
           </Text>
-          <Text color="gray.400" mt={2}>
+          <Text color={useColorModeValue('gray.500', 'whiteAlpha.600')} mt={2}>
             Create your first user to get started
           </Text>
         </Box>
       ) : (
-        <Box overflowX="auto">
+        <Box 
+          overflowX="auto"
+          bg={useColorModeValue('whiteAlpha.900', 'blackAlpha.600')}
+          borderRadius="xl"
+          p={6}
+          backdropFilter="blur(20px)"
+          borderWidth="1px"
+          borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+          boxShadow="xl"
+        >
           <Table variant="simple">
             <Thead>
               <Tr>
@@ -557,14 +584,15 @@ function Users() {
                         icon={<FiEdit2 />}
                         onClick={() => openEditModal(user)}
                         aria-label="Edit user"
-                        variant="ghost"
+                        variant="outline"
+                        colorScheme="blue"
                       />
                       <IconButton
                         size="sm"
                         icon={<FiTrash2 />}
                         onClick={() => openDeleteModal(user)}
                         aria-label="Delete user"
-                        variant="ghost"
+                        variant="outline"
                         colorScheme="red"
                       />
                     </HStack>
@@ -650,6 +678,7 @@ function Users() {
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
+      </Box>
     </Box>
   )
 }
