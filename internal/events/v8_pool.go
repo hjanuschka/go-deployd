@@ -287,6 +287,11 @@ func (pool *V8Pool) ExecuteScript(eventCtx *V8EventContext, filePath string, scr
 	}
 	pool.mu.Unlock()
 
+	// Clear the V8 context to prevent data leakage between executions
+	if err := clearV8Context(eventCtx.context); err != nil {
+		return err
+	}
+	
 	// Set up the script environment in the context
 	if err := setupV8Environment(eventCtx.context, scriptCtx); err != nil {
 		return err
@@ -325,10 +330,15 @@ func (pool *V8Pool) ExecuteScript(eventCtx *V8EventContext, filePath string, scr
 }
 
 // wrapScriptInFunction wraps the script code in an IIFE to avoid global variable pollution
+// but preserves Run function in global scope for unified pattern
 func (pool *V8Pool) wrapScriptInFunction(source string) string {
 	return fmt.Sprintf(`
 (function() {
 	%s
+	// Make Run function globally available if it exists
+	if (typeof Run === 'function') {
+		globalThis.Run = Run;
+	}
 })();
 `, source)
 }

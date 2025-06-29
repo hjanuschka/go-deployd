@@ -284,70 +284,53 @@ func extractModifiedData(v8ctx *v8.Context, sc *ScriptContext) error {
 		modifiedData[k] = v
 	}
 	
-	// Extract modifications from the global object itself
-	// Since JavaScript modifications like "this.status = 'Done'" add properties to global scope
-	global := v8ctx.Global()
-	globalJSON, err := v8.JSONStringify(v8ctx, global)
-	if err == nil {
-		logging.Debug("Extracted global JSON from V8", "js-extraction", map[string]interface{}{
-			"globalJSON": globalJSON,
-		})
-		var globalData bson.M
-		if json.Unmarshal([]byte(globalJSON), &globalData) == nil {
-			logging.Debug("Successfully parsed global data", "js-extraction", map[string]interface{}{
-				"globalDataKeys": getMapKeys(globalData),
-				"globalDataLen":  len(globalData),
-			})
-			// Extract only the data properties we care about, not all global V8 stuff
-			for k, v := range globalData {
-				// Skip V8 internal properties and only take data-like properties
-				if k != "this" && k != "data" && k != "context" && k != "me" && 
-				   k != "query" && k != "internal" && k != "isRoot" && k != "dpd" && 
-				   k != "deployd" && k != "previous" && k != "console" {
-					modifiedData[k] = v
-				}
-			}
-		} else {
-			logging.Debug("Failed to unmarshal global JSON", "js-extraction", map[string]interface{}{
-				"error": "unmarshal failed",
-			})
-		}
-	} else {
-		logging.Debug("Failed to stringify global object", "js-extraction", map[string]interface{}{
-			"error": err.Error(),
-		})
-	}
-	
-	// Extract 'data' global modifications  
-	dataValue, err := v8ctx.Global().Get("data")
-	if err == nil && dataValue != nil && !dataValue.IsUndefined() {
-		dataJSON, err := v8.JSONStringify(v8ctx, dataValue)
-		if err == nil {
-			var dataData bson.M
-			if json.Unmarshal([]byte(dataJSON), &dataData) == nil {
-				// Merge data.* modifications
-				for k, v := range dataData {
-					modifiedData[k] = v
-				}
-			}
-		}
-	}
-
-	// Extract context.data modifications (Run() function pattern)
+	// First priority: Extract from context.data (Run() function pattern)
 	contextValue, err := v8ctx.Global().Get("context")
 	if err == nil && contextValue != nil && !contextValue.IsUndefined() {
 		contextObj, err := contextValue.AsObject()
-		if err != nil {
-			return nil
+		if err == nil {
+			contextDataValue, err := contextObj.Get("data")
+			if err == nil && contextDataValue != nil && !contextDataValue.IsUndefined() {
+				contextDataJSON, err := v8.JSONStringify(v8ctx, contextDataValue)
+				if err == nil {
+					logging.Debug("Extracted context.data JSON from V8", "js-extraction", map[string]interface{}{
+						"contextDataJSON": contextDataJSON,
+					})
+					var contextData bson.M
+					if json.Unmarshal([]byte(contextDataJSON), &contextData) == nil {
+						logging.Debug("Successfully parsed context.data", "js-extraction", map[string]interface{}{
+							"contextDataKeys": getMapKeys(contextData),
+							"contextDataLen":  len(contextData),
+						})
+						// Use context.data as the source of truth
+						modifiedData = contextData
+					}
+				}
+			}
 		}
-		contextDataValue, err := contextObj.Get("data")
-		if err == nil && contextDataValue != nil && !contextDataValue.IsUndefined() {
-			contextDataJSON, err := v8.JSONStringify(v8ctx, contextDataValue)
-			if err == nil {
-				var contextData bson.M
-				if json.Unmarshal([]byte(contextDataJSON), &contextData) == nil {
-					// Merge context.data.* modifications
-					for k, v := range contextData {
+	}
+	
+	// Fallback: Extract from global scope (this.* pattern for backward compatibility)
+	if len(modifiedData) == len(sc.data) {
+		// If context.data didn't provide new data, try global extraction
+		global := v8ctx.Global()
+		globalJSON, err := v8.JSONStringify(v8ctx, global)
+		if err == nil {
+			logging.Debug("Fallback: Extracted global JSON from V8", "js-extraction", map[string]interface{}{
+				"globalJSON": globalJSON,
+			})
+			var globalData bson.M
+			if json.Unmarshal([]byte(globalJSON), &globalData) == nil {
+				logging.Debug("Successfully parsed global data", "js-extraction", map[string]interface{}{
+					"globalDataKeys": getMapKeys(globalData),
+					"globalDataLen":  len(globalData),
+				})
+				// Extract only the data properties we care about, not all global V8 stuff
+				for k, v := range globalData {
+					// Skip V8 internal properties and only take data-like properties
+					if k != "this" && k != "data" && k != "context" && k != "me" && 
+					   k != "query" && k != "internal" && k != "isRoot" && k != "dpd" && 
+					   k != "deployd" && k != "previous" && k != "console" {
 						modifiedData[k] = v
 					}
 				}
@@ -358,6 +341,35 @@ func extractModifiedData(v8ctx *v8.Context, sc *ScriptContext) error {
 	// Update the script context data
 	sc.data = modifiedData
 
+	return nil
+}
+
+// clearV8Context clears the V8 global context to prevent data leakage between executions
+func clearV8Context(v8ctx *v8.Context) error {
+	global := v8ctx.Global()
+	
+	// List of properties to clear (data properties that might leak between executions)
+	// Keep core V8 globals but clear application data
+	propertiesToClear := []string{
+		// Data objects
+		"this", "data", "context",
+		// Common data fields that might leak
+		"id", "title", "description", "completed", "priority", "createdAt", "updatedAt",
+		"status", "formattedDate", "processedBy", "processedAt", "priorityLabel",
+		// NoStore collection fields  
+		"parts", "url", "operation", "operands", "result", "error", "usage",
+		"test", "timestamp", "cancelled", "event", "test_run_pattern",
+		// User/context fields
+		"me", "query", "internal", "isRoot", "previous",
+		// Deployd globals
+		"dpd", "deployd",
+	}
+	
+	// Delete each property from global context
+	for _, prop := range propertiesToClear {
+		global.Delete(prop)
+	}
+	
 	return nil
 }
 
@@ -470,7 +482,7 @@ func createV8Value(isolate *v8.Isolate, goVal interface{}) (*v8.Value, error) {
 	case string:
 		return v8.NewValue(isolate, val)
 	case []interface{}:
-		// Create JavaScript array
+		// Create JavaScript array from []interface{}
 		arrayTemplate := v8.NewObjectTemplate(isolate)
 		arrayInstance, err := arrayTemplate.NewInstance(nil)
 		if err != nil {
@@ -478,6 +490,24 @@ func createV8Value(isolate *v8.Isolate, goVal interface{}) (*v8.Value, error) {
 		}
 		for i, item := range val {
 			itemVal, err := createV8Value(isolate, item)
+			if err == nil {
+				arrayInstance.SetIdx(uint32(i), itemVal)
+			}
+		}
+		lengthVal, err := v8.NewValue(isolate, len(val))
+		if err == nil {
+			arrayInstance.Set("length", lengthVal)
+		}
+		return arrayInstance.Value, nil
+	case []string:
+		// Create JavaScript array from []string
+		arrayTemplate := v8.NewObjectTemplate(isolate)
+		arrayInstance, err := arrayTemplate.NewInstance(nil)
+		if err != nil {
+			return nil, err
+		}
+		for i, item := range val {
+			itemVal, err := v8.NewValue(isolate, item)
 			if err == nil {
 				arrayInstance.SetIdx(uint32(i), itemVal)
 			}

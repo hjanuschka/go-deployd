@@ -1,12 +1,16 @@
-// Simple get processing for todos using this.* pattern (VERIFIED WORKING)
-// Add a computed field showing completion status
-this.status = this.completed ? "Done" : "Pending";
-
-// Format the creation date for display
-if (this.createdAt) {
-    this.formattedDate = new Date(this.createdAt).toLocaleDateString();
+// Unified Run(context) pattern for todo GET events
+function Run(context) {
+    context.log("Todo GET event executing with unified Run(context) pattern");
+    
+    // Add a computed field showing completion status
+    context.data.status = context.data.completed ? "Done" : "Pending";
+    
+    // Format the creation date for display
+    if (context.data.createdAt) {
+        context.data.formattedDate = new Date(context.data.createdAt).toLocaleDateString();
+    }
+    
+    // Add metadata about the processing
+    context.data.processedBy = "JavaScript Run(context) unified";
+    context.data.processedAt = new Date().toISOString();
 }
-
-// Add metadata about the processing
-this.processedBy = "JavaScript this.* pattern";
-this.processedAt = new Date().toISOString();
