@@ -1,43 +1,41 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 )
 
-// Run performs early validation before file upload processing
+// Run controls file access and listing
 func Run(ctx *EventContext) error {
-	// This event runs before any file processing, allowing for early rejection
-	// based on request method and user authentication
-	
-	// Check if this is a file upload request
-	if ctx.Method != "POST" {
-		return nil // Only validate POST requests (uploads)
-	}
-	
-	// Example: Require authentication before processing
-	if ctx.Me == nil || ctx.Me["id"] == nil {
-		ctx.Cancel("Authentication required for file uploads", 401)
-		return nil
-	}
-	
-	// Example: Check user permissions or quotas
-	// This is useful for early rejection before processing large files
-	if !ctx.IsRoot {
-		// Non-admin users have restrictions
-		ctx.Log("File upload attempt by regular user", map[string]interface{}{
-			"userId": ctx.Me["id"],
-			"method": ctx.Method,
+	// For single file access (GET /files/{id})
+	if ctx.Data != nil && ctx.Data["id"] != nil {
+		// Example: Only allow file owner or admin to access (uncomment to enable)
+		// if !ctx.IsRoot && ctx.Data["uploadedBy"] != ctx.Me["id"] {
+		// 	ctx.Cancel("You can only access your own files", 403)
+		// 	return nil
+		// }
+
+		// Add access logging
+		ctx.Log("File accessed", map[string]interface{}{
+			"id":         ctx.Data["id"],
+			"name":       ctx.Data["originalName"],
+			"accessedBy": ctx.Me["id"],
 		})
 	}
-	
-	// Example: Rate limiting based on user
-	// You could implement rate limiting logic here
-	
-	ctx.Log("File upload request validated", map[string]interface{}{
-		"userId": ctx.Me["id"],
-		"method": ctx.Method,
-	})
-	
+
+	// For file listing (GET /files)
+	if ctx.Data == nil || ctx.Data["id"] == nil {
+		// Require authentication for listing files
+		if ctx.Me == nil || ctx.Me["id"] == nil {
+			ctx.Cancel("Authentication required to list files", 401)
+		return nil
+		}
+
+		// The files resource will automatically filter by user
+		// unless the user is root/admin
+		ctx.Log(fmt.Sprintf("Files listed by user: %v", ctx.Me["id"]))
+	}
+
 	return nil
 }
 
