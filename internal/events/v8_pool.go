@@ -298,6 +298,28 @@ func (pool *V8Pool) ExecuteScript(eventCtx *V8EventContext, filePath string, scr
 		return err
 	}
 
+	// After initial script execution, check for Run() function and call it
+	runFunc, runErr := eventCtx.context.Global().Get("Run")
+	if runErr == nil && runFunc != nil && runFunc.IsFunction() {
+		// Call Run(context) function with context object
+		contextObj, contextErr := eventCtx.context.Global().Get("context")
+		if contextErr == nil && contextObj != nil {
+			logging.Debug("Calling JavaScript Run(context) function (V8 pool)", "js-execution", map[string]interface{}{
+				"hasRun":     true,
+				"hasContext": true,
+			})
+			runFuncObj, err := runFunc.AsFunction()
+			if err == nil {
+				_, err = runFuncObj.Call(eventCtx.context.Global(), contextObj)
+				if err != nil {
+					logging.Debug("Run(context) function execution failed", "js-execution", map[string]interface{}{
+						"error": err.Error(),
+					})
+				}
+			}
+		}
+	}
+
 	// Extract modified data back from JavaScript
 	return extractModifiedData(eventCtx.context, scriptCtx)
 }
