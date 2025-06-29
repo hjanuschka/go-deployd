@@ -276,10 +276,15 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 	
 	// For noStore collections, skip database operations and just run events
 	if c.config.NoStore {
-		// Create simple data context with URL routing info
+		// Create data context with URL routing info and body
 		data := map[string]interface{}{
 			"url":   c.extractURLPath(ctx),
 			"parts": c.extractURLParts(ctx),
+		}
+		
+		// Merge request body into data (for JSON payloads)
+		for k, v := range ctx.Body {
+			data[k] = v
 		}
 		
 		// Run GET event
@@ -1348,6 +1353,8 @@ func (c *Collection) runGetEvent(ctx *appcontext.Context, data map[string]interf
 		"documentId": data["id"],
 		"email":      data["email"],
 		"hasScript":  c.scriptManager != nil,
+		"dataKeys":   getDataKeys(data),
+		"noStore":    c.config.NoStore,
 	})
 
 	err := c.scriptManager.RunEvent(events.EventGet, ctx, data)
@@ -1355,6 +1362,10 @@ func (c *Collection) runGetEvent(ctx *appcontext.Context, data map[string]interf
 	if err != nil {
 		logging.Error("❌ GET EVENT FAILED", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
 			"error": err.Error(),
+		})
+	} else {
+		logging.Debug("✅ GET EVENT SUCCESS", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
+			"resultKeys": getDataKeys(data),
 		})
 	}
 

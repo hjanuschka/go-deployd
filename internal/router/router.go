@@ -254,9 +254,18 @@ func (r *Router) GetCollection(name string) *resources.Collection {
 }
 
 func (r *Router) sortResources() {
-	// Sort resources by path specificity (longer paths first)
+	// Sort resources by path length first (longer paths first), then by path segments
 	sort.Slice(r.resources, func(i, j int) bool {
-		return len(strings.Split(r.resources[i].GetPath(), "/")) > len(strings.Split(r.resources[j].GetPath(), "/"))
+		pathI := r.resources[i].GetPath()
+		pathJ := r.resources[j].GetPath()
+		
+		// First, compare by actual path length (longer first)
+		if len(pathI) != len(pathJ) {
+			return len(pathI) > len(pathJ)
+		}
+		
+		// If same length, compare by number of segments (more specific first)
+		return len(strings.Split(pathI, "/")) > len(strings.Split(pathJ, "/"))
 	})
 }
 
