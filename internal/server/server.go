@@ -26,6 +26,7 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/realtime"
 	"github.com/hjanuschka/go-deployd/internal/resources"
 	"github.com/hjanuschka/go-deployd/internal/router"
+	"github.com/hjanuschka/go-deployd/internal/storage"
 	"github.com/hjanuschka/go-deployd/internal/swagger"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"golang.org/x/crypto/bcrypt"
@@ -55,6 +56,7 @@ type Server struct {
 	securityConfig  *appconfig.SecurityConfig
 	realtimeConfig  *appconfig.RealtimeConfig
 	realtimeHub     *realtime.Hub
+	storageManager  *storage.Manager
 	dashboardFS     *embed.FS
 }
 
@@ -175,7 +177,24 @@ func New(config *Config) (*Server, error) {
 		logging.Info("WebSocket disabled in configuration", "realtime", nil)
 	}
 
-	s.router = router.NewWithEmitter(s.db, config.Development, config.ConfigPath, s.realtimeHub)
+	// Initialize storage manager
+	storageConfig, err := appconfig.LoadStorageConfig(config.ConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load storage config: %w", err)
+	}
+	
+	baseURL := fmt.Sprintf("http://localhost:%d", config.Port)
+	if !config.Development {
+		// In production, use the proper domain
+		baseURL = "" // Will be configured by environment
+	}
+	
+	s.storageManager, err = storage.NewManager(storageConfig, s.db, baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize storage manager: %w", err)
+	}
+
+	s.router = router.NewWithStorage(s.db, config.Development, config.ConfigPath, s.realtimeHub, s.storageManager)
 
 	// Create admin handler
 	adminConfig := &admin.Config{

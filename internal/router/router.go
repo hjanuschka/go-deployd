@@ -17,6 +17,7 @@ import (
 	"github.com/hjanuschka/go-deployd/internal/database"
 	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/resources"
+	"github.com/hjanuschka/go-deployd/internal/storage"
 )
 
 type Router struct {
@@ -26,6 +27,7 @@ type Router struct {
 	configPath      string
 	jwtManager      *auth.JWTManager
 	realtimeEmitter events.RealtimeEmitter
+	storageManager  *storage.Manager
 }
 
 func New(db database.DatabaseInterface, development bool, configPath string) *Router {
@@ -33,6 +35,10 @@ func New(db database.DatabaseInterface, development bool, configPath string) *Ro
 }
 
 func NewWithEmitter(db database.DatabaseInterface, development bool, configPath string, emitter events.RealtimeEmitter) *Router {
+	return NewWithStorage(db, development, configPath, emitter, nil)
+}
+
+func NewWithStorage(db database.DatabaseInterface, development bool, configPath string, emitter events.RealtimeEmitter, storageManager *storage.Manager) *Router {
 	// Load security config to set up JWT
 	var jwtManager *auth.JWTManager
 	securityConfig, err := config.LoadSecurityConfig(config.GetConfigDir())
@@ -50,6 +56,7 @@ func NewWithEmitter(db database.DatabaseInterface, development bool, configPath 
 		configPath:      configPath,
 		jwtManager:      jwtManager,
 		realtimeEmitter: emitter,
+		storageManager:  storageManager,
 	}
 
 	r.loadResources()
@@ -64,6 +71,9 @@ func (r *Router) loadResources() {
 
 	// Always create built-in users collection first
 	r.createBuiltinUsersCollection()
+	
+	// Create built-in files resource if storage manager is available
+	r.createBuiltinFilesResource()
 
 	// Create default collection resources if config path exists
 	if _, err := os.Stat(r.configPath); os.IsNotExist(err) {
@@ -379,6 +389,23 @@ func (r *Router) createBuiltinUsersCollection() {
 	}
 
 	r.resources = append(r.resources, usersCollection)
+}
+
+// createBuiltinFilesResource creates the built-in files resource for file upload/management
+func (r *Router) createBuiltinFilesResource() {
+	// Only create files resource if storage manager is available
+	if r.storageManager == nil {
+		log.Printf("⚠️ Storage manager not available, skipping files resource creation")
+		return
+	}
+	
+	log.Printf("📁 Creating built-in files resource...")
+	
+	// Create files resource
+	filesResource := resources.NewFilesResource("files", r.storageManager, r.db)
+	
+	log.Printf("✅ Successfully created built-in files resource")
+	r.resources = append(r.resources, filesResource)
 }
 
 // migrateBuiltinCollection handles schema migration for built-in collections

@@ -1,0 +1,10 @@
+{
+  "type": "local",
+  "local": {
+    "basePath": "uploads",
+    "urlPrefix": "/files"
+  },
+  "maxFileSize": 52428800,
+  "allowedExtensions": [],
+  "signedUrlExpiration": 3600
+}
