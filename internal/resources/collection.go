@@ -22,6 +22,7 @@ type CollectionConfig struct {
 	EventConfig               map[string]events.EventConfiguration `json:"eventConfig,omitempty"`
 	AllowAdditionalProperties bool                                 `json:"allowAdditionalProperties,omitempty"`
 	IsBuiltin                 bool                                 `json:"isBuiltin,omitempty"`
+	NoStore                   bool                                 `json:"noStore,omitempty"`
 }
 
 type Collection struct {
@@ -44,22 +45,28 @@ func NewCollection(name string, config *CollectionConfig, db database.DatabaseIn
 		config.Properties = make(map[string]Property)
 	}
 
-	// Add required timestamp fields if not present
-	config.Properties["createdAt"] = Property{
-		Type:     "date",
-		Required: false,
-		Default:  "now",
-	}
-	config.Properties["updatedAt"] = Property{
-		Type:     "date",
-		Required: false,
-		Default:  "now",
+	var store database.StoreInterface
+	
+	// Only create store and add timestamp fields if not an event-only collection
+	if !config.NoStore {
+		// Add required timestamp fields if not present
+		config.Properties["createdAt"] = Property{
+			Type:     "date",
+			Required: false,
+			Default:  "now",
+		}
+		config.Properties["updatedAt"] = Property{
+			Type:     "date",
+			Required: false,
+			Default:  "now",
+		}
+		store = db.CreateStore(name)
 	}
 
 	return &Collection{
 		BaseResource:     NewBaseResource(name),
 		config:           config,
-		store:            db.CreateStore(name),
+		store:            store,
 		db:               db,
 		scriptManager:    events.NewUniversalScriptManager(),
 		hotReloadManager: nil, // Will be initialized when needed
@@ -123,6 +130,11 @@ func LoadCollectionFromConfigWithEmitter(name, configPath string, db database.Da
 }
 
 func (c *Collection) Handle(ctx *appcontext.Context) error {
+	// Check if this is an event-only collection (noStore: true)
+	if c.config.NoStore {
+		return c.handleEventOnly(ctx)
+	}
+	
 	id := ctx.GetID()
 	
 	// Handle special endpoints for POST requests
@@ -141,6 +153,99 @@ func (c *Collection) Handle(ctx *appcontext.Context) error {
 		return c.handleDelete(ctx)
 	default:
 		return ctx.WriteError(405, "Method not allowed")
+	}
+}
+
+// handleEventOnly handles requests for event-only collections (noStore: true)
+// Similar to dpd-event, this provides event-driven endpoints without data storage
+func (c *Collection) handleEventOnly(ctx *appcontext.Context) error {
+	// Enhanced event context for event-only collections
+	eventCtx := c.createEventOnlyContext(ctx)
+	
+	// Run BeforeRequest event first
+	if err := c.runBeforeRequestEventOnly(ctx, eventCtx); err != nil {
+		if scriptErr, ok := err.(*events.ScriptError); ok {
+			return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+		}
+		return ctx.WriteError(500, err.Error())
+	}
+	
+	// Run method-specific event
+	var err error
+	switch ctx.Method {
+	case "GET":
+		err = c.runGetEventOnly(ctx, eventCtx)
+	case "POST":
+		err = c.runPostEventOnly(ctx, eventCtx)
+	case "PUT":
+		err = c.runPutEventOnly(ctx, eventCtx)
+	case "DELETE":
+		err = c.runDeleteEventOnly(ctx, eventCtx)
+	default:
+		return ctx.WriteError(405, "Method not allowed")
+	}
+	
+	if err != nil {
+		if scriptErr, ok := err.(*events.ScriptError); ok {
+			return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+		}
+		return ctx.WriteError(500, err.Error())
+	}
+	
+	// Return the result set by the event script
+	if eventCtx.Result != nil {
+		return ctx.WriteJSON(eventCtx.Result)
+	}
+	
+	// Default empty response
+	return ctx.WriteJSON(map[string]interface{}{})
+}
+
+// EventOnlyContext provides enhanced context for event-only collections
+type EventOnlyContext struct {
+	URL         string                 `json:"url"`         // Request URL without collection base
+	Parts       []string               `json:"parts"`       // URL path segments
+	Query       map[string]interface{} `json:"query"`       // Query parameters
+	Body        map[string]interface{} `json:"body"`        // Request body
+	Headers     map[string]string      `json:"headers"`     // Request headers
+	Result      interface{}            `json:"-"`           // Response result (set by setResult)
+	StatusCode  int                    `json:"-"`           // HTTP status code
+	RespHeaders map[string]string      `json:"-"`           // Response headers
+}
+
+// createEventOnlyContext creates the enhanced context for event-only collections
+func (c *Collection) createEventOnlyContext(ctx *appcontext.Context) *EventOnlyContext {
+	// Extract URL parts (everything after collection name)
+	url := ctx.URL
+	var parts []string
+	if url != "" && url != "/" {
+		parts = strings.Split(strings.Trim(url, "/"), "/")
+		// Filter out empty parts
+		filtered := make([]string, 0, len(parts))
+		for _, part := range parts {
+			if part != "" {
+				filtered = append(filtered, part)
+			}
+		}
+		parts = filtered
+	}
+	
+	// Convert request headers to map
+	headers := make(map[string]string)
+	for key, values := range ctx.Request.Header {
+		if len(values) > 0 {
+			headers[strings.ToLower(key)] = values[0]
+		}
+	}
+	
+	return &EventOnlyContext{
+		URL:         url,
+		Parts:       parts,
+		Query:       ctx.Query,
+		Body:        ctx.Body,
+		Headers:     headers,
+		StatusCode:  200, // Default status code
+		RespHeaders: make(map[string]string),
 	}
 }
 
@@ -1453,4 +1558,74 @@ func (c *Collection) valuesEqual(a, b interface{}) bool {
 // GetConfig returns the collection configuration
 func (c *Collection) GetConfig() *CollectionConfig {
 	return c.config
+}
+
+// Event-only collection methods (for noStore: true collections)
+
+func (c *Collection) runBeforeRequestEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) error {
+	// Create enhanced context for event scripts
+	scriptContext := c.createEnhancedScriptContext(ctx, eventCtx)
+	
+	// Run the beforerequest event with enhanced context
+	return c.scriptManager.RunEvent(events.EventBeforeRequest, ctx, scriptContext)
+}
+
+func (c *Collection) runGetEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) error {
+	scriptContext := c.createEnhancedScriptContext(ctx, eventCtx)
+	return c.scriptManager.RunEvent(events.EventGet, ctx, scriptContext)
+}
+
+func (c *Collection) runPostEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) error {
+	scriptContext := c.createEnhancedScriptContext(ctx, eventCtx)
+	return c.scriptManager.RunEvent(events.EventPost, ctx, scriptContext)
+}
+
+func (c *Collection) runPutEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) error {
+	scriptContext := c.createEnhancedScriptContext(ctx, eventCtx)
+	return c.scriptManager.RunEvent(events.EventPut, ctx, scriptContext)
+}
+
+func (c *Collection) runDeleteEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) error {
+	scriptContext := c.createEnhancedScriptContext(ctx, eventCtx)
+	return c.scriptManager.RunEvent(events.EventDelete, ctx, scriptContext)
+}
+
+// createEnhancedScriptContext creates the script context with dpd-event style functionality
+func (c *Collection) createEnhancedScriptContext(ctx *appcontext.Context, eventCtx *EventOnlyContext) map[string]interface{} {
+	scriptContext := map[string]interface{}{
+		// Core dpd-event compatibility
+		"url":   eventCtx.URL,
+		"parts": eventCtx.Parts,
+		"query": eventCtx.Query,
+		"body":  eventCtx.Body,
+		
+		// Helper functions (dpd-event style)
+		"setResult": func(result interface{}) {
+			eventCtx.Result = result
+		},
+		"getHeader": func(name string) interface{} {
+			if header, exists := eventCtx.Headers[strings.ToLower(name)]; exists {
+				return header
+			}
+			return nil
+		},
+		"setHeader": func(name string, value string) {
+			eventCtx.RespHeaders[name] = value
+			ctx.Response.Header().Set(name, value)
+		},
+		"setStatusCode": func(code interface{}) {
+			if statusCode, ok := code.(float64); ok {
+				eventCtx.StatusCode = int(statusCode)
+				ctx.Response.WriteHeader(int(statusCode))
+			} else if statusCode, ok := code.(int); ok {
+				eventCtx.StatusCode = statusCode
+				ctx.Response.WriteHeader(statusCode)
+			}
+		},
+		
+		// Standard context (for compatibility with existing events)
+		"this": eventCtx.Body,
+	}
+	
+	return scriptContext
 }

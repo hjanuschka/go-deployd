@@ -12,6 +12,7 @@ Welcome to the Go-Deployd documentation! Go-Deployd is a modern API framework th
 - [WebSocket & Real-time](./websocket-realtime.md) - Real-time event broadcasting
 - [dpd.js Client](./dpd-js-client.md) - JavaScript client library
 - [Advanced Queries](./advanced-queries.md) - MongoDB-style queries and SQL translation
+- [Event Collections](./event-collections.md) - Event-driven endpoints without data storage (noStore)
 
 ## Overview
 
