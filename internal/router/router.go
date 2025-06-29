@@ -404,6 +404,21 @@ func (r *Router) createBuiltinFilesResource() {
 	// Create files resource
 	filesResource := resources.NewFilesResource("files", r.storageManager, r.db)
 	
+	// Set realtime emitter if available
+	if r.realtimeEmitter != nil {
+		filesResource.SetRealtimeEmitter(r.realtimeEmitter)
+	}
+	
+	// Load event scripts for files resource
+	filesPath := filepath.Join("resources", "files")
+	if _, err := os.Stat(filesPath); err == nil {
+		if err := filesResource.LoadScripts(filesPath); err != nil {
+			log.Printf("⚠️ Failed to load scripts for files resource: %v", err)
+		} else {
+			log.Printf("✅ Loaded event scripts for files resource")
+		}
+	}
+	
 	log.Printf("✅ Successfully created built-in files resource")
 	r.resources = append(r.resources, filesResource)
 }

@@ -16,6 +16,7 @@ import (
 	
 	appcontext "github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/database"
+	"github.com/hjanuschka/go-deployd/internal/events"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/storage"
 )
@@ -23,51 +24,69 @@ import (
 // FilesResource handles file upload and management
 type FilesResource struct {
 	*BaseResource
-	storageManager *storage.Manager
-	db             database.DatabaseInterface
+	storageManager   *storage.Manager
+	db               database.DatabaseInterface
+	scriptManager    *events.UniversalScriptManager
+	realtimeEmitter  events.RealtimeEmitter
+	configPath       string
 }
 
 // NewFilesResource creates a new files resource
 func NewFilesResource(name string, storageManager *storage.Manager, db database.DatabaseInterface) *FilesResource {
 	return &FilesResource{
-		BaseResource:   NewBaseResource(name),
-		storageManager: storageManager,
-		db:             db,
+		BaseResource:     NewBaseResource(name),
+		storageManager:   storageManager,
+		db:               db,
+		scriptManager:    events.NewUniversalScriptManager(),
+		realtimeEmitter:  nil, // Will be set when available
 	}
 }
 
-// ServeHTTP handles file operations
-func (fr *FilesResource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// SetScriptManager sets the script manager for event handling
+func (fr *FilesResource) SetScriptManager(sm *events.UniversalScriptManager) {
+	fr.scriptManager = sm
+}
+
+// SetRealtimeEmitter sets the realtime emitter for WebSocket events
+func (fr *FilesResource) SetRealtimeEmitter(emitter events.RealtimeEmitter) {
+	fr.realtimeEmitter = emitter
+	if fr.scriptManager != nil {
+		fr.scriptManager.SetRealtimeEmitter(emitter)
+	}
+}
+
+// LoadScripts loads event scripts from the files resource directory
+func (fr *FilesResource) LoadScripts(configPath string) error {
+	fr.configPath = configPath
+	if fr.scriptManager != nil {
+		return fr.scriptManager.LoadScriptsWithConfig(configPath, nil)
+	}
+	return nil
+}
+
+// Handle implements the Resource interface
+func (fr *FilesResource) Handle(ctx *appcontext.Context) error {
 	// Set CORS headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+	ctx.Response.Header().Set("Access-Control-Allow-Origin", "*")
+	ctx.Response.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	ctx.Response.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 	
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
+	if ctx.Request.Method == "OPTIONS" {
+		ctx.Response.WriteHeader(http.StatusOK)
+		return nil
 	}
 	
-	// Create context with authentication data
-	authData := &appcontext.AuthData{
-		IsAuthenticated: false,
-		IsRoot:         false,
+	// Parse URL path - the router already removes the resource prefix
+	path := strings.Trim(ctx.Request.URL.Path, "/")
+	path = strings.TrimPrefix(path, fr.GetName())
+	path = strings.TrimPrefix(path, "/")
+	
+	var pathParts []string
+	if path != "" {
+		pathParts = strings.Split(path, "/")
 	}
 	
-	ctx := appcontext.New(r, w, fr, authData, true)
-	ctx.Method = r.Method
-	
-	// Parse URL path
-	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(pathParts) < 2 {
-		fr.writeError(ctx, http.StatusBadRequest, "Invalid path")
-		return
-	}
-	
-	// Remove the resource name from path
-	pathParts = pathParts[1:] // Remove resource name
-	
-	switch r.Method {
+	switch ctx.Request.Method {
 	case "GET":
 		fr.handleGet(ctx, pathParts)
 	case "POST":
@@ -77,6 +96,8 @@ func (fr *FilesResource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		fr.writeError(ctx, http.StatusMethodNotAllowed, "Method not allowed")
 	}
+	
+	return nil
 }
 
 // handleGet serves files or file metadata
@@ -142,7 +163,45 @@ func (fr *FilesResource) handleDelete(ctx *appcontext.Context, pathParts []strin
 	
 	fileID := pathParts[0]
 	
-	// Check permissions
+	// Get file info first for events
+	fileInfo, err := fr.storageManager.GetInfo(ctx.Request.Context(), fileID)
+	if err != nil {
+		if _, ok := err.(storage.FileNotFoundError); ok {
+			fr.writeError(ctx, http.StatusNotFound, "File not found")
+			return
+		}
+		fr.writeError(ctx, http.StatusInternalServerError, "Failed to get file info")
+		return
+	}
+	
+	// Convert fileInfo to map for event
+	fileData := map[string]interface{}{
+		"id":           fileInfo.ID,
+		"filename":     fileInfo.Filename,
+		"originalName": fileInfo.OriginalName,
+		"contentType":  fileInfo.ContentType,
+		"size":         fileInfo.Size,
+		"storageType":  fileInfo.StorageType,
+		"path":         fileInfo.Path,
+		"url":          fileInfo.URL,
+		"uploadedAt":   fileInfo.UploadedAt.Format(time.RFC3339),
+		"uploadedBy":   fileInfo.UploadedBy,
+	}
+	
+	// Run before-delete event
+	if fr.scriptManager != nil {
+		ctx.Body = fileData
+		if err := fr.scriptManager.RunEvent(events.EventDelete, ctx, fileData); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				fr.writeError(ctx, scriptErr.StatusCode, scriptErr.Message)
+				return
+			}
+			fr.writeError(ctx, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	
+	// Check permissions (after event, in case event modified permissions)
 	if !fr.canDeleteFile(ctx, fileID) {
 		fr.writeError(ctx, http.StatusForbidden, "Permission denied")
 		return
@@ -161,6 +220,22 @@ func (fr *FilesResource) handleDelete(ctx *appcontext.Context, pathParts []strin
 		})
 		fr.writeError(ctx, http.StatusInternalServerError, "Failed to delete file")
 		return
+	}
+	
+	// Run after-delete event
+	if fr.scriptManager != nil {
+		ctx.Body = fileData
+		if err := fr.scriptManager.RunEvent(events.EventAfterCommit, ctx, fileData); err != nil {
+			// Log error but don't fail the deletion
+			logging.Error("After-delete event failed", "files", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}
+	
+	// Emit realtime event
+	if fr.realtimeEmitter != nil {
+		fr.realtimeEmitter.EmitCollectionChange("files", "deleted", fileData)
 	}
 	
 	ctx.Response.WriteHeader(http.StatusNoContent)
@@ -213,18 +288,41 @@ func (fr *FilesResource) handleUpload(ctx *appcontext.Context) {
 		userID = ctx.UserID
 	}
 	
-	// Upload options
+	// Create event data for before-post event
+	eventData := map[string]interface{}{
+		"originalName": header.Filename,
+		"contentType":  detectedContentType,
+		"size":         header.Size,
+		"uploadedBy":   userID,
+		"uploadedAt":   time.Now().Format(time.RFC3339),
+	}
+	
+	// Add form metadata to event data
+	for key, values := range ctx.Request.Form {
+		if key != "file" && len(values) > 0 {
+			eventData[key] = values[0]
+		}
+	}
+	
+	// Run before-post event
+	if fr.scriptManager != nil {
+		ctx.Body = eventData
+		if err := fr.scriptManager.RunEvent(events.EventPost, ctx, eventData); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				fr.writeError(ctx, scriptErr.StatusCode, scriptErr.Message)
+				return
+			}
+			fr.writeError(ctx, http.StatusInternalServerError, err.Error())
+			return
+		}
+		eventData = ctx.Body // Get any modifications from the event
+	}
+	
+	// Upload options from event data
 	options := &storage.UploadOptions{
 		ContentType: detectedContentType,
 		UserID:      userID,
-		Metadata:    make(map[string]interface{}),
-	}
-	
-	// Add form metadata
-	for key, values := range ctx.Request.Form {
-		if key != "file" && len(values) > 0 {
-			options.Metadata[key] = values[0]
-		}
+		Metadata:    eventData,
 	}
 	
 	// Upload file
@@ -238,21 +336,90 @@ func (fr *FilesResource) handleUpload(ctx *appcontext.Context) {
 		return
 	}
 	
+	// Convert fileInfo to map for event
+	fileData := map[string]interface{}{
+		"id":           fileInfo.ID,
+		"filename":     fileInfo.Filename,
+		"originalName": fileInfo.OriginalName,
+		"contentType":  fileInfo.ContentType,
+		"size":         fileInfo.Size,
+		"storageType":  fileInfo.StorageType,
+		"path":         fileInfo.Path,
+		"url":          fileInfo.URL,
+		"uploadedAt":   fileInfo.UploadedAt.Format(time.RFC3339),
+		"uploadedBy":   fileInfo.UploadedBy,
+	}
+	
+	// Run after-post event
+	if fr.scriptManager != nil {
+		ctx.Body = fileData
+		if err := fr.scriptManager.RunEvent(events.EventAfterCommit, ctx, fileData); err != nil {
+			// Log error but don't fail the upload
+			logging.Error("After-post event failed", "files", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+		fileData = ctx.Body // Get any modifications from the event
+	}
+	
+	// Emit realtime event
+	if fr.realtimeEmitter != nil {
+		fr.realtimeEmitter.EmitCollectionChange("files", "created", fileData)
+	}
+	
 	// Return file info
 	ctx.Response.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(ctx.Response).Encode(fileInfo)
+	json.NewEncoder(ctx.Response).Encode(fileData)
 }
 
 // handleDownload serves file content
 func (fr *FilesResource) handleDownload(ctx *appcontext.Context, fileID string) {
-	// Check permissions
+	// Get file info first for events
+	fileInfo, err := fr.storageManager.GetInfo(ctx.Request.Context(), fileID)
+	if err != nil {
+		if _, ok := err.(storage.FileNotFoundError); ok {
+			fr.writeError(ctx, http.StatusNotFound, "File not found")
+			return
+		}
+		fr.writeError(ctx, http.StatusInternalServerError, "Failed to get file info")
+		return
+	}
+	
+	// Convert fileInfo to map for event
+	fileData := map[string]interface{}{
+		"id":           fileInfo.ID,
+		"filename":     fileInfo.Filename,
+		"originalName": fileInfo.OriginalName,
+		"contentType":  fileInfo.ContentType,
+		"size":         fileInfo.Size,
+		"storageType":  fileInfo.StorageType,
+		"path":         fileInfo.Path,
+		"url":          fileInfo.URL,
+		"uploadedAt":   fileInfo.UploadedAt.Format(time.RFC3339),
+		"uploadedBy":   fileInfo.UploadedBy,
+	}
+	
+	// Run before-get event
+	if fr.scriptManager != nil {
+		ctx.Body = fileData
+		if err := fr.scriptManager.RunEvent(events.EventGet, ctx, fileData); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				fr.writeError(ctx, scriptErr.StatusCode, scriptErr.Message)
+				return
+			}
+			fr.writeError(ctx, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	
+	// Check permissions (after event)
 	if !fr.canAccessFile(ctx, fileID) {
 		fr.writeError(ctx, http.StatusForbidden, "Permission denied")
 		return
 	}
 	
 	// Download file
-	reader, fileInfo, err := fr.storageManager.Download(ctx.Request.Context(), fileID)
+	reader, _, err := fr.storageManager.Download(ctx.Request.Context(), fileID)
 	if err != nil {
 		if _, ok := err.(storage.FileNotFoundError); ok {
 			fr.writeError(ctx, http.StatusNotFound, "File not found")
@@ -310,6 +477,19 @@ func (fr *FilesResource) handleInfo(ctx *appcontext.Context, fileID string) {
 
 // handleList returns a list of files
 func (fr *FilesResource) handleList(ctx *appcontext.Context) {
+	// Run before-get event for list operation (no specific file ID)
+	if fr.scriptManager != nil {
+		ctx.Body = map[string]interface{}{} // Empty body for list operation
+		if err := fr.scriptManager.RunEvent(events.EventGet, ctx, ctx.Body); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				fr.writeError(ctx, scriptErr.StatusCode, scriptErr.Message)
+				return
+			}
+			fr.writeError(ctx, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	
 	// Parse query parameters
 	query := ctx.Request.URL.Query()
 	
@@ -334,7 +514,7 @@ func (fr *FilesResource) handleList(ctx *appcontext.Context) {
 	if ctx.IsAuthenticated && !ctx.IsRoot {
 		options.UserID = ctx.UserID // Non-root users can only see their own files
 	} else if !ctx.IsRoot {
-		// Anonymous users can't list files
+		// Anonymous users can't list files (unless event allows it)
 		fr.writeError(ctx, http.StatusForbidden, "Authentication required")
 		return
 	}
