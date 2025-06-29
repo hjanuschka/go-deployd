@@ -1,7 +1,7 @@
 {
   "watch": ["cmd", "internal", "resources"],
-  "ext": "go",
-  "ignore": ["dashboard/**", "web/**", "*.test.go", "testdata/**", "tmp/**"],
+  "ext": "go,js,json",
+  "ignore": ["dashboard/**", "web/**", "*.test.go", "testdata/**", "tmp/**", "resources/*/config.json"],
   "exec": "./scripts/dev-server.sh",
   "delay": "1000ms",
   "signal": "SIGTERM",
