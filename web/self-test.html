@@ -396,6 +396,9 @@
                 <button class="main-tab-button" onclick="selectMainTab('dpdjs')">
                     🚀 dpd.js Editor
                 </button>
+                <button class="main-tab-button" onclick="selectMainTab('files')">
+                    📁 File Storage
+                </button>
                 <button class="main-tab-button" onclick="selectMainTab('performance')">
                     ⚡ Performance
                 </button>
@@ -583,6 +586,72 @@
             </div>
             </div>
 
+            <!-- File Storage Tab -->
+            <div id="filesTab" class="main-tab-content">
+                <h2 style="color: #4CAF50; margin-bottom: 20px;">📁 File Storage & Upload</h2>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+                    <!-- File Upload Section -->
+                    <div style="background: #242424; padding: 20px; border-radius: 8px; border: 1px solid #333;">
+                        <h3 style="color: #4CAF50; margin-bottom: 15px;">📤 Upload Files</h3>
+                        
+                        <div class="form-group">
+                            <label>Select File</label>
+                            <input type="file" id="fileUpload" style="padding: 8px;" accept="*/*">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Upload Progress</label>
+                            <div style="background: #2a2a2a; border-radius: 4px; height: 20px; overflow: hidden;">
+                                <div id="uploadProgress" style="background: #4CAF50; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                            </div>
+                            <div id="uploadStatus" style="color: #b0b0b0; font-size: 0.9em; margin-top: 5px;">Ready to upload...</div>
+                        </div>
+                        
+                        <button onclick="uploadFile()" style="width: 100%; background: #4CAF50;">
+                            📤 Upload File
+                        </button>
+                        
+                        <div style="margin-top: 15px; font-size: 0.9em; color: #b0b0b0;">
+                            <strong>Supported:</strong> All file types<br>
+                            <strong>Max Size:</strong> 10MB (configurable)<br>
+                            <strong>Storage:</strong> Local/S3/MinIO
+                        </div>
+                    </div>
+                    
+                    <!-- File List Section -->
+                    <div style="background: #242424; padding: 20px; border-radius: 8px; border: 1px solid #333;">
+                        <h3 style="color: #4CAF50; margin-bottom: 15px;">📋 My Files</h3>
+                        
+                        <button onclick="refreshFileList()" style="margin-bottom: 15px; background: #2196F3;">
+                            🔄 Refresh List
+                        </button>
+                        
+                        <div id="fileList" style="max-height: 300px; overflow-y: auto;">
+                            <div style="color: #666; text-align: center; padding: 20px;">
+                                Click "Refresh List" to load your files...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- dpd.js Examples Section -->
+                <div style="background: #242424; padding: 20px; border-radius: 8px; border: 1px solid #333;">
+                    <h3 style="color: #4CAF50; margin-bottom: 15px;">💻 dpd.js File Operations</h3>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px;">
+                        <button onclick="insertFileExample('upload')" style="background: #4CAF50; font-size: 0.9em;">📤 Upload Example</button>
+                        <button onclick="insertFileExample('list')" style="background: #2196F3; font-size: 0.9em;">📋 List Files</button>
+                        <button onclick="insertFileExample('download')" style="background: #FF9800; font-size: 0.9em;">💾 Download File</button>
+                        <button onclick="insertFileExample('delete')" style="background: #f44336; font-size: 0.9em;">🗑️ Delete File</button>
+                    </div>
+                    
+                    <div style="background: #1a1a1a; border-radius: 4px; padding: 15px; font-family: monospace; font-size: 0.9em; max-height: 300px; overflow-y: auto;" id="fileCodeExample">
+                        <div style="color: #666;">Select an example above to see the code...</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Performance Testing Tab -->
             <div id="performanceTab" class="main-tab-content">
                 <h2 style="color: #4CAF50; margin-bottom: 20px;">⚡ Performance & Load Testing</h2>
@@ -718,7 +787,7 @@
         // Main Tab Functions
         function selectMainTab(tabName) {
             // Hide all tab contents
-            const tabs = ['api', 'websocket', 'dpdjs', 'performance'];
+            const tabs = ['api', 'websocket', 'dpdjs', 'files', 'performance'];
             tabs.forEach(tab => {
                 const tabContent = document.getElementById(tab + 'Tab');
                 const tabButton = document.querySelector(`[onclick="selectMainTab('${tab}')"]`);
@@ -1969,6 +2038,303 @@ logOutput('⏳ Attempting username/password authentication...');`
             
             if (examples[example]) {
                 dpdEditor.setValue(examples[example]);
+            }
+        }
+
+        // File Storage Functions
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileUpload');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showError('Please select a file to upload');
+                return;
+            }
+            
+            const progressBar = document.getElementById('uploadProgress');
+            const statusDiv = document.getElementById('uploadStatus');
+            
+            statusDiv.textContent = 'Uploading...';
+            progressBar.style.width = '0%';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const xhr = new XMLHttpRequest();
+                
+                // Track upload progress
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        progressBar.style.width = percentComplete + '%';
+                        statusDiv.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+                    }
+                });
+                
+                xhr.onload = function() {
+                    if (xhr.status === 200 || xhr.status === 201) {
+                        const response = JSON.parse(xhr.responseText);
+                        progressBar.style.width = '100%';
+                        statusDiv.textContent = `✅ Upload successful! File ID: ${response.id}`;
+                        statusDiv.style.color = '#4CAF50';
+                        
+                        // Refresh file list
+                        setTimeout(() => {
+                            refreshFileList();
+                        }, 1000);
+                        
+                        // Reset after 3 seconds
+                        setTimeout(() => {
+                            progressBar.style.width = '0%';
+                            statusDiv.textContent = 'Ready to upload...';
+                            statusDiv.style.color = '#b0b0b0';
+                            fileInput.value = '';
+                        }, 3000);
+                    } else {
+                        throw new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`);
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    throw new Error('Network error during upload');
+                };
+                
+                // Open the request first
+                xhr.open('POST', '/files');
+                
+                // Then add authentication header if we have a token
+                if (currentToken) {
+                    xhr.setRequestHeader('Authorization', 'Bearer ' + currentToken);
+                }
+                
+                // Finally send the form data
+                xhr.send(formData);
+                
+            } catch (error) {
+                progressBar.style.width = '0%';
+                statusDiv.textContent = '❌ ' + error.message;
+                statusDiv.style.color = '#f44336';
+                
+                setTimeout(() => {
+                    statusDiv.textContent = 'Ready to upload...';
+                    statusDiv.style.color = '#b0b0b0';
+                }, 3000);
+            }
+        }
+        
+        async function refreshFileList() {
+            const fileListDiv = document.getElementById('fileList');
+            fileListDiv.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">Loading files...</div>';
+            
+            try {
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                if (currentToken) {
+                    headers['Authorization'] = 'Bearer ' + currentToken;
+                }
+                
+                const response = await fetch('/files?limit=50', {
+                    method: 'GET',
+                    headers: headers
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch files: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                const files = data.files || [];
+                
+                if (!files || files.length === 0) {
+                    fileListDiv.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No files found</div>';
+                    return;
+                }
+                
+                fileListDiv.innerHTML = files.map(file => {
+                    const uploadDate = new Date(file.uploadedAt).toLocaleDateString();
+                    const fileSize = formatFileSize(file.size);
+                    
+                    return `
+                        <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 4px; padding: 10px; margin-bottom: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: bold; color: #e0e0e0;">${file.originalName}</div>
+                                    <div style="font-size: 0.8em; color: #b0b0b0;">
+                                        ${fileSize} • ${uploadDate} • ${file.contentType || 'unknown'}
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button onclick="downloadFile('${file.id}', '${file.originalName}')" style="background: #2196F3; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 0.8em; cursor: pointer;">💾 Download</button>
+                                    <button onclick="deleteFile('${file.id}')" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 0.8em; cursor: pointer;">🗑️ Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                fileListDiv.innerHTML = `<div style="color: #f44336; text-align: center; padding: 20px;">❌ ${error.message}</div>`;
+            }
+        }
+        
+        async function downloadFile(fileId, filename) {
+            try {
+                const headers = {};
+                if (currentToken) {
+                    headers['Authorization'] = 'Bearer ' + currentToken;
+                }
+                
+                const response = await fetch(`/files/${fileId}`, {
+                    method: 'GET',
+                    headers: headers
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+            } catch (error) {
+                showError('Download failed: ' + error.message);
+            }
+        }
+        
+        async function deleteFile(fileId) {
+            if (!confirm('Are you sure you want to delete this file?')) {
+                return;
+            }
+            
+            try {
+                const headers = {};
+                if (currentToken) {
+                    headers['Authorization'] = 'Bearer ' + currentToken;
+                }
+                
+                const response = await fetch(`/files/${fileId}`, {
+                    method: 'DELETE',
+                    headers: headers
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Delete failed: ${response.status} ${response.statusText}`);
+                }
+                
+                // Refresh file list
+                refreshFileList();
+                
+            } catch (error) {
+                showError('Delete failed: ' + error.message);
+            }
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function insertFileExample(example) {
+            const examples = {
+                upload: `// Upload a file using dpd.js
+// Note: File uploads with dpd.js require FormData
+const fileInput = document.getElementById('fileUpload');
+const file = fileInput.files[0];
+
+if (file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // Using raw fetch since dpd.js doesn't handle FormData uploads
+    fetch('/files', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + dpd.token
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(result => {
+        console.log('File uploaded:', result);
+        logOutput('✅ File uploaded: ' + result.originalName + ' (ID: ' + result.id + ')');
+    })
+    .catch(error => {
+        console.error('Upload error:', error);
+        logOutput('❌ Upload failed: ' + error.message);
+    });
+} else {
+    logOutput('❌ No file selected');
+}`,
+                list: `// List all files
+dpd.files.get({}, (err, files) => {
+    if (err) {
+        console.error('Error:', err);
+        logOutput('❌ Error fetching files: ' + err.message);
+        return;
+    }
+    
+    console.log('Files:', files);
+    logOutput('📋 Found ' + files.length + ' files:');
+    
+    files.forEach(file => {
+        const size = Math.round(file.size / 1024) + ' KB';
+        const date = new Date(file.uploadedAt).toLocaleDateString();
+        logOutput('  📄 ' + file.originalName + ' (' + size + ') - ' + date);
+    });
+});`,
+                download: `// Download a file (replace FILE_ID with actual file ID)
+const fileId = 'FILE_ID_HERE';
+
+dpd.files.get(fileId, (err, fileInfo) => {
+    if (err) {
+        logOutput('❌ Error getting file info: ' + err.message);
+        return;
+    }
+    
+    // Create download link
+    const downloadUrl = '/files/' + fileId;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fileInfo.originalName;
+    link.style.display = 'none';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    logOutput('💾 Downloading: ' + fileInfo.originalName);
+});`,
+                delete: `// Delete a file (replace FILE_ID with actual file ID)
+const fileId = 'FILE_ID_HERE';
+
+dpd.files.del(fileId, (err) => {
+    if (err) {
+        console.error('Delete error:', err);
+        logOutput('❌ Delete failed: ' + err.message);
+        return;
+    }
+    
+    console.log('File deleted successfully');
+    logOutput('🗑️ File deleted successfully');
+});`
+            };
+            
+            const codeDiv = document.getElementById('fileCodeExample');
+            if (examples[example]) {
+                codeDiv.innerHTML = `<pre style="margin: 0; white-space: pre-wrap; color: #e0e0e0;">${examples[example]}</pre>`;
             }
         }
     </script>

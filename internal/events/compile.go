@@ -23,6 +23,7 @@ type EventContext struct {
 	Query      map[string]interface{}
 	Me         map[string]interface{}
 	Previous   map[string]interface{} // For PUT requests
+	Method     string
 	IsRoot     bool
 	Internal   bool
 	Errors     map[string]string
@@ -229,6 +230,7 @@ func RunGoPluginWithEmitter(pluginPath string, ctx *context.Context, data map[st
 		Data:       data,
 		Errors:     make(map[string]string),
 		Query:      ctx.Query,
+		Method:     ctx.Method,
 		Internal:   false,
 		IsRoot:     ctx.IsRoot,
 		Resource:   ctx.Resource,

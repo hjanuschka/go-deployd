@@ -1,0 +1,16 @@
+{
+  "_comment": "Example MinIO configuration - copy to storage.json and configure",
+  "type": "minio",
+  "s3": {
+    "endpoint": "http://localhost:9000",
+    "region": "us-east-1",
+    "bucket": "my-app-files",
+    "accessKeyId": "minioadmin",
+    "secretAccessKey": "minioadmin",
+    "useSSL": false,
+    "pathStyle": true
+  },
+  "maxFileSize": 104857600,
+  "allowedExtensions": [],
+  "signedUrlExpiration": 3600
+}

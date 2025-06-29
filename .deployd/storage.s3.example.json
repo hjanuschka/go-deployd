@@ -1,0 +1,15 @@
+{
+  "_comment": "Example S3 configuration - copy to storage.json and configure",
+  "type": "s3",
+  "s3": {
+    "region": "us-east-1",
+    "bucket": "my-app-files",
+    "accessKeyId": "AKIA...",
+    "secretAccessKey": "...",
+    "useSSL": true,
+    "pathStyle": false
+  },
+  "maxFileSize": 52428800,
+  "allowedExtensions": ["jpg", "jpeg", "png", "gif", "pdf", "txt", "doc", "docx"],
+  "signedUrlExpiration": 3600
+}

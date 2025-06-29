@@ -116,7 +116,7 @@ function CollectionDetail() {
       ])
       
       setCollection(collectionData)
-      setDocuments(documentsData)
+      setDocuments(Array.isArray(documentsData) ? documentsData : [])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -174,6 +174,10 @@ function CollectionDetail() {
 
   // Filter documents based on search and column filters
   const getFilteredDocuments = () => {
+    // Safety check to ensure documents is always an array
+    if (!Array.isArray(documents)) {
+      return []
+    }
     let filtered = [...documents]
 
     // Apply search text filter
