@@ -96,14 +96,16 @@ func TestJavaScriptEventHandlers(t *testing.T) {
 		// Create a JavaScript event handler that modifies data
 		handlerPath := filepath.Join(tmpDir, "post.js")
 		handlerCode := `
-// Event handler script - modifies the global data object directly
-data.processed = true;
-data.processedAt = new Date().toISOString();
-if (data.name) {
-	data.name = "JS Modified: " + data.name;
+// Event handler script using unified Run(context) pattern
+function Run(context) {
+	context.data.processed = true;
+	context.data.processedAt = new Date().toISOString();
+	if (context.data.name) {
+		context.data.name = "JS Modified: " + context.data.name;
+	}
+	
+	context.log("JavaScript handler modified data:", context.data);
 }
-
-console.log("JavaScript handler modified data:", data);
 `
 		err := os.WriteFile(handlerPath, []byte(handlerCode), 0644)
 		require.NoError(t, err)
@@ -136,7 +138,11 @@ console.log("JavaScript handler modified data:", data);
 
 		// Verify the handler modified the data
 		assert.Equal(t, "JS Modified: Test Item", data["name"])
-		assert.True(t, data["processed"].(bool))
+		if processed, ok := data["processed"]; ok && processed != nil {
+			assert.True(t, processed.(bool))
+		} else {
+			t.Error("Expected 'processed' field to be set by JavaScript handler")
+		}
 		assert.NotEmpty(t, data["processedAt"])
 	})
 
@@ -144,16 +150,20 @@ console.log("JavaScript handler modified data:", data);
 		// Create a JavaScript validation handler that rejects invalid data
 		handlerPath := filepath.Join(tmpDir, "validate.js")
 		handlerCode := `
-// Validation script - use error() function to reject invalid data
-if (!data.name || data.name.trim() === '') {
-	error('name', 'name field is required and cannot be empty');
-}
+// Validation script using unified Run(context) pattern
+function Run(context) {
+	if (!context.data.name || context.data.name.trim() === '') {
+		context.error('name', 'name field is required and cannot be empty');
+		return;
+	}
 
-if (typeof data.value !== 'number' || data.value < 0) {
-	error('value', 'value must be a non-negative number');
-}
+	if (typeof context.data.value !== 'number' || context.data.value < 0) {
+		context.error('value', 'value must be a non-negative number');
+		return;
+	}
 
-console.log("JavaScript validation passed for data:", data);
+	context.log("JavaScript validation passed for data:", context.data);
+}
 `
 		err := os.WriteFile(handlerPath, []byte(handlerCode), 0644)
 		require.NoError(t, err)
