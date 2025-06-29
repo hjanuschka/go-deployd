@@ -1,43 +1,45 @@
 package main
 
 import (
-	"fmt"
+	"strings"
 	"reflect"
 )
 
-// Run controls file access and listing
+// Run validates todo data before saving
 func Run(ctx *EventContext) error {
-	// For single file access (GET /files/{id})
-	if ctx.Data != nil && ctx.Data["id"] != nil {
-		// Example: Only allow file owner or admin to access (uncomment to enable)
-		// if !ctx.IsRoot && ctx.Data["uploadedBy"] != ctx.Me["id"] {
-		// 	ctx.Cancel("You can only access your own files", 403)
-		// 	return nil
-		// }
-
-		// Add access logging
-		ctx.Log("File accessed", map[string]interface{}{
-			"id":         ctx.Data["id"],
-			"name":       ctx.Data["originalName"],
-			"accessedBy": ctx.Me["id"],
-		})
-	}
-
-	// For file listing (GET /files)
-	if ctx.Data == nil || ctx.Data["id"] == nil {
-		// Require authentication for listing files
-		if ctx.Me == nil || ctx.Me["id"] == nil {
-			ctx.Cancel("Authentication required to list files", 401)
+	// Validate title
+	title, ok := ctx.Data["title"].(string)
+	if !ok || strings.TrimSpace(title) == "" {
+		ctx.Cancel("Title is required", 400)
 		return nil
-		}
-
-		// The files resource will automatically filter by user
-		// unless the user is root/admin
-		ctx.Log(fmt.Sprintf("Files listed by user: %v", ctx.Me["id"]))
 	}
 
+	if len(title) > 200 {
+		ctx.Cancel("Title is too long (max 200 characters)", 400)
+		return nil
+	}
+
+	// Validate priority if provided
+	if priority, exists := ctx.Data["priority"]; exists {
+		if priorityNum, ok := priority.(float64); ok {
+			if priorityNum < 1 || priorityNum > 5 {
+				ctx.Cancel("Priority must be between 1 and 5", 400)
+				return nil
+			}
+		}
+	}
+
+	// Trim whitespace from title
+	ctx.Data["title"] = strings.TrimSpace(title)
+
+	// Log validation success using proper logging
+	ctx.Log("Todo validation completed", map[string]interface{}{
+		"title":  title,
+		"action": "validate",
+	})
 	return nil
 }
+
 
 // deployd provides utility functions for event handlers
 var deployd = struct {

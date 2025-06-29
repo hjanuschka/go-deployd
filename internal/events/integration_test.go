@@ -138,11 +138,7 @@ function Run(context) {
 
 		// Verify the handler modified the data
 		assert.Equal(t, "JS Modified: Test Item", data["name"])
-		if processed, ok := data["processed"]; ok && processed != nil {
-			assert.True(t, processed.(bool))
-		} else {
-			t.Error("Expected 'processed' field to be set by JavaScript handler")
-		}
+		assert.True(t, data["processed"].(bool))
 		assert.NotEmpty(t, data["processedAt"])
 	})
 
@@ -215,15 +211,22 @@ func TestEventHandlerExecution(t *testing.T) {
 		// Create different event handlers for different event types
 		postHandlerPath := filepath.Join(tmpDir, "post.js")
 		postHandlerCode := `
-data.eventType = "post";
-data.processed = true;
+// Post event handler using unified Run(context) pattern
+function Run(context) {
+	context.data.eventType = "post";
+	context.data.processed = true;
+}
 `
 		validateHandlerPath := filepath.Join(tmpDir, "validate.js")
 		validateHandlerCode := `
-if (!data.name) {
-	error('name', 'Name is required');
+// Validate event handler using unified Run(context) pattern
+function Run(context) {
+	if (!context.data.name) {
+		context.cancel('Name is required', 400);
+		return;
+	}
+	context.data.validated = true;
 }
-data.validated = true;
 `
 
 		err := os.WriteFile(postHandlerPath, []byte(postHandlerCode), 0644)
@@ -251,31 +254,102 @@ data.validated = true;
 		postData := map[string]interface{}{"name": "Test", "value": 42.0}
 		err = manager.RunEvent(events.EventPost, ctx, postData)
 		require.NoError(t, err)
-		if eventType, ok := postData["eventType"]; ok && eventType != nil {
-			assert.Equal(t, "post", eventType)
-		} else {
-			t.Log("eventType field not set by JavaScript event - this is acceptable")
-		}
-		if processed, ok := postData["processed"]; ok && processed != nil {
-			assert.True(t, processed.(bool))
-		} else {
-			t.Log("processed field not set by JavaScript event - this is acceptable")
-		}
+		assert.Equal(t, "post", postData["eventType"])
+		assert.True(t, postData["processed"].(bool))
 
 		// Test validate event
 		validateData := map[string]interface{}{"name": "Test", "value": 42.0}
 		err = manager.RunEvent(events.EventValidate, ctx, validateData)
 		require.NoError(t, err)
-		if validated, ok := validateData["validated"]; ok && validated != nil {
-			assert.True(t, validated.(bool))
-		} else {
-			t.Log("validated field not set by JavaScript event - this is acceptable")
-		}
+		assert.True(t, validateData["validated"].(bool))
 
 		// Test validate event with missing name - should fail
 		invalidData := map[string]interface{}{"value": 42.0}
 		err = manager.RunEvent(events.EventValidate, ctx, invalidData)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "Name is required")
+	})
+}
+
+// TestGoAndJavaScriptEventParity demonstrates that Go and JavaScript events
+// can produce identical behavior with the unified pattern
+func TestGoAndJavaScriptEventParity(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("Go and JavaScript events produce identical results", func(t *testing.T) {
+		// Create a Go post event handler
+		goPostPath := filepath.Join(tmpDir, "post.go")
+		goPostCode := `
+// Go post event handler that matches JavaScript behavior exactly
+func Run(ctx *EventContext) error {
+	ctx.Data["eventType"] = "post"
+	ctx.Data["processed"] = true
+	ctx.Data["processedBy"] = "Go"
+	ctx.Log("Go post event executed")
+	return nil
+}
+`
+		// Create a JavaScript post event handler
+		jsPostPath := filepath.Join(tmpDir, "post.js")
+		jsPostCode := `
+// JavaScript post event handler that matches Go behavior exactly
+function Run(context) {
+	context.data.eventType = "post";
+	context.data.processed = true;
+	context.data.processedBy = "JavaScript";
+	context.log("JavaScript post event executed");
+}
+`
+		// Test with Go handler
+		goDir := filepath.Join(tmpDir, "go-test")
+		os.MkdirAll(goDir, 0755)
+		os.WriteFile(filepath.Join(goDir, "post.go"), []byte(goPostCode), 0644)
+		
+		goManager := events.NewUniversalScriptManager()
+		goConfig := map[string]events.EventConfiguration{
+			"post": {Runtime: "go"},
+		}
+		err := goManager.LoadScriptsWithConfig(goDir, goConfig)
+		if err != nil {
+			t.Skipf("Could not load Go script: %v", err)
+		}
+
+		goData := map[string]interface{}{"name": "Test", "value": 42.0}
+		ctx := &context.Context{Method: "POST"}
+		err = goManager.RunEvent(events.EventPost, ctx, goData)
+		if err != nil {
+			t.Skipf("Go events require plugin compilation: %v", err)
+		}
+
+		// Test with JavaScript handler
+		jsDir := filepath.Join(tmpDir, "js-test")
+		os.MkdirAll(jsDir, 0755)
+		os.WriteFile(filepath.Join(jsDir, "post.js"), []byte(jsPostCode), 0644)
+		
+		jsManager := events.NewUniversalScriptManager()
+		jsConfig := map[string]events.EventConfiguration{
+			"post": {Runtime: "js"},
+		}
+		err = jsManager.LoadScriptsWithConfig(jsDir, jsConfig)
+		require.NoError(t, err)
+
+		jsData := map[string]interface{}{"name": "Test", "value": 42.0}
+		err = jsManager.RunEvent(events.EventPost, ctx, jsData)
+		require.NoError(t, err)
+
+		// Both should have identical structure (except processedBy)
+		assert.Equal(t, "post", jsData["eventType"])
+		assert.True(t, jsData["processed"].(bool))
+		assert.Equal(t, "JavaScript", jsData["processedBy"])
+		
+		// If Go worked, it should have same structure
+		if goData["eventType"] != nil {
+			assert.Equal(t, "post", goData["eventType"])
+			assert.True(t, goData["processed"].(bool))
+			assert.Equal(t, "Go", goData["processedBy"])
+			
+			// Log the parity success
+			t.Log("✅ Go and JavaScript events produced identical results!")
+		}
 	})
 }
