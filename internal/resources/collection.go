@@ -130,15 +130,10 @@ func LoadCollectionFromConfigWithEmitter(name, configPath string, db database.Da
 }
 
 func (c *Collection) Handle(ctx *appcontext.Context) error {
-	// Check if this is an event-only collection (noStore: true)
-	if c.config.NoStore {
-		return c.handleEventOnly(ctx)
-	}
-	
 	id := ctx.GetID()
 	
-	// Handle special endpoints for POST requests
-	if ctx.Method == "POST" && id == "query" {
+	// Handle special endpoints for POST requests (only for regular collections)
+	if !c.config.NoStore && ctx.Method == "POST" && id == "query" {
 		return c.handleQuery(ctx)
 	}
 	
@@ -172,15 +167,17 @@ func (c *Collection) handleEventOnly(ctx *appcontext.Context) error {
 	
 	// Run method-specific event
 	var err error
+	var scriptData map[string]interface{}
+	
 	switch ctx.Method {
 	case "GET":
-		err = c.runGetEventOnly(ctx, eventCtx)
+		scriptData, err = c.runGetEventOnly(ctx, eventCtx)
 	case "POST":
-		err = c.runPostEventOnly(ctx, eventCtx)
+		scriptData, err = c.runPostEventOnly(ctx, eventCtx)
 	case "PUT":
-		err = c.runPutEventOnly(ctx, eventCtx)
+		scriptData, err = c.runPutEventOnly(ctx, eventCtx)
 	case "DELETE":
-		err = c.runDeleteEventOnly(ctx, eventCtx)
+		scriptData, err = c.runDeleteEventOnly(ctx, eventCtx)
 	default:
 		return ctx.WriteError(405, "Method not allowed")
 	}
@@ -192,9 +189,10 @@ func (c *Collection) handleEventOnly(ctx *appcontext.Context) error {
 		return ctx.WriteError(500, err.Error())
 	}
 	
-	// Return the result set by the event script
-	if eventCtx.Result != nil {
-		return ctx.WriteJSON(eventCtx.Result)
+	// For noStore collections, return the script data directly
+	// This allows scripts to modify the response by setting properties
+	if scriptData != nil {
+		return ctx.WriteJSON(scriptData)
 	}
 	
 	// Default empty response
@@ -216,7 +214,18 @@ type EventOnlyContext struct {
 // createEventOnlyContext creates the enhanced context for event-only collections
 func (c *Collection) createEventOnlyContext(ctx *appcontext.Context) *EventOnlyContext {
 	// Extract URL parts (everything after collection name)
-	url := ctx.URL
+	fullURL := ctx.URL
+	
+	// Remove collection name from URL (e.g., "/calculator-js/add/5/3" -> "/add/5/3")
+	collectionPrefix := "/" + c.name
+	url := fullURL
+	if strings.HasPrefix(fullURL, collectionPrefix) {
+		url = strings.TrimPrefix(fullURL, collectionPrefix)
+		if url == "" {
+			url = "/"
+		}
+	}
+	
 	var parts []string
 	if url != "" && url != "/" {
 		parts = strings.Split(strings.Trim(url, "/"), "/")
@@ -252,8 +261,8 @@ func (c *Collection) createEventOnlyContext(ctx *appcontext.Context) *EventOnlyC
 func (c *Collection) handleGet(ctx *appcontext.Context) error {
 	id := ctx.GetID()
 
-	// Special endpoints
-	if id == "count" {
+	// Special endpoints (only for regular collections)
+	if !c.config.NoStore && id == "count" {
 		return c.handleCount(ctx)
 	}
 
@@ -263,6 +272,26 @@ func (c *Collection) handleGet(ctx *appcontext.Context) error {
 			return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
 		}
 		return ctx.WriteError(500, err.Error())
+	}
+	
+	// For noStore collections, skip database operations and just run events
+	if c.config.NoStore {
+		// Create simple data context with URL routing info
+		data := map[string]interface{}{
+			"url":   c.extractURLPath(ctx),
+			"parts": c.extractURLParts(ctx),
+		}
+		
+		// Run GET event
+		if err := c.runGetEvent(ctx, data); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+			}
+			return ctx.WriteError(500, err.Error())
+		}
+		
+		// Return the modified data
+		return ctx.WriteJSON(data)
 	}
 
 	if id != "" {
@@ -376,6 +405,31 @@ func (c *Collection) handlePost(ctx *appcontext.Context) error {
 			return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
 		}
 		return ctx.WriteError(500, err.Error())
+	}
+	
+	// For noStore collections, skip database operations and just run events
+	if c.config.NoStore {
+		// Create data context with URL routing info and body
+		data := map[string]interface{}{
+			"url":   c.extractURLPath(ctx),
+			"parts": c.extractURLParts(ctx),
+		}
+		
+		// Merge request body into data
+		for k, v := range ctx.Body {
+			data[k] = v
+		}
+		
+		// Run POST event
+		if err := c.runPostEvent(ctx, data); err != nil {
+			if scriptErr, ok := err.(*events.ScriptError); ok {
+				return ctx.WriteError(scriptErr.StatusCode, scriptErr.Message)
+			}
+			return ctx.WriteError(500, err.Error())
+		}
+		
+		// Return the modified data
+		return ctx.WriteJSON(data)
 	}
 
 	logging.Debug("Starting Go validation", fmt.Sprintf("collection:%s", c.name), map[string]interface{}{
@@ -1570,62 +1624,77 @@ func (c *Collection) runBeforeRequestEventOnly(ctx *appcontext.Context, eventCtx
 	return c.scriptManager.RunEvent(events.EventBeforeRequest, ctx, scriptContext)
 }
 
-func (c *Collection) runGetEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) error {
+func (c *Collection) runGetEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) (map[string]interface{}, error) {
 	scriptContext := c.createEnhancedScriptContext(ctx, eventCtx)
-	return c.scriptManager.RunEvent(events.EventGet, ctx, scriptContext)
+	err := c.scriptManager.RunEvent(events.EventGet, ctx, scriptContext)
+	return scriptContext, err
 }
 
-func (c *Collection) runPostEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) error {
+func (c *Collection) runPostEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) (map[string]interface{}, error) {
 	scriptContext := c.createEnhancedScriptContext(ctx, eventCtx)
-	return c.scriptManager.RunEvent(events.EventPost, ctx, scriptContext)
+	err := c.scriptManager.RunEvent(events.EventPost, ctx, scriptContext)
+	return scriptContext, err
 }
 
-func (c *Collection) runPutEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) error {
+func (c *Collection) runPutEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) (map[string]interface{}, error) {
 	scriptContext := c.createEnhancedScriptContext(ctx, eventCtx)
-	return c.scriptManager.RunEvent(events.EventPut, ctx, scriptContext)
+	err := c.scriptManager.RunEvent(events.EventPut, ctx, scriptContext)
+	return scriptContext, err
 }
 
-func (c *Collection) runDeleteEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) error {
+func (c *Collection) runDeleteEventOnly(ctx *appcontext.Context, eventCtx *EventOnlyContext) (map[string]interface{}, error) {
 	scriptContext := c.createEnhancedScriptContext(ctx, eventCtx)
-	return c.scriptManager.RunEvent(events.EventDelete, ctx, scriptContext)
+	err := c.scriptManager.RunEvent(events.EventDelete, ctx, scriptContext)
+	return scriptContext, err
 }
 
 // createEnhancedScriptContext creates the script context with dpd-event style functionality
 func (c *Collection) createEnhancedScriptContext(ctx *appcontext.Context, eventCtx *EventOnlyContext) map[string]interface{} {
 	scriptContext := map[string]interface{}{
-		// Core dpd-event compatibility
+		// Core dpd-event compatibility - just data, no functions
 		"url":   eventCtx.URL,
 		"parts": eventCtx.Parts,
 		"query": eventCtx.Query,
 		"body":  eventCtx.Body,
 		
-		// Helper functions (dpd-event style)
-		"setResult": func(result interface{}) {
-			eventCtx.Result = result
-		},
-		"getHeader": func(name string) interface{} {
-			if header, exists := eventCtx.Headers[strings.ToLower(name)]; exists {
-				return header
-			}
-			return nil
-		},
-		"setHeader": func(name string, value string) {
-			eventCtx.RespHeaders[name] = value
-			ctx.Response.Header().Set(name, value)
-		},
-		"setStatusCode": func(code interface{}) {
-			if statusCode, ok := code.(float64); ok {
-				eventCtx.StatusCode = int(statusCode)
-				ctx.Response.WriteHeader(int(statusCode))
-			} else if statusCode, ok := code.(int); ok {
-				eventCtx.StatusCode = statusCode
-				ctx.Response.WriteHeader(statusCode)
-			}
-		},
-		
 		// Standard context (for compatibility with existing events)
 		"this": eventCtx.Body,
+		
+		// Debug info
+		"_enhanced_context": true,
+		"_context_type": "noStore",
 	}
 	
 	return scriptContext
+}
+
+// Helper methods for URL extraction (dpd-event style)
+func (c *Collection) extractURLPath(ctx *appcontext.Context) string {
+	fullURL := ctx.URL
+	collectionPrefix := "/" + c.name
+	if strings.HasPrefix(fullURL, collectionPrefix) {
+		url := strings.TrimPrefix(fullURL, collectionPrefix)
+		if url == "" {
+			url = "/"
+		}
+		return url
+	}
+	return fullURL
+}
+
+func (c *Collection) extractURLParts(ctx *appcontext.Context) []string {
+	url := c.extractURLPath(ctx)
+	var parts []string
+	if url != "" && url != "/" {
+		parts = strings.Split(strings.Trim(url, "/"), "/")
+		// Filter out empty parts
+		filtered := make([]string, 0, len(parts))
+		for _, part := range parts {
+			if part != "" {
+				filtered = append(filtered, part)
+			}
+		}
+		parts = filtered
+	}
+	return parts
 }
