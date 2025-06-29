@@ -284,36 +284,36 @@ func extractModifiedData(v8ctx *v8.Context, sc *ScriptContext) error {
 		modifiedData[k] = v
 	}
 	
-	// Extract 'this' global modifications
-	thisValue, err := v8ctx.Global().Get("this")
-	if err == nil && thisValue != nil && !thisValue.IsUndefined() {
-		thisJSON, err := v8.JSONStringify(v8ctx, thisValue)
-		if err == nil {
-			logging.Debug("Extracted 'this' JSON from V8", "js-extraction", map[string]interface{}{
-				"thisJSON": thisJSON,
+	// Extract modifications from the global object itself
+	// Since JavaScript modifications like "this.status = 'Done'" add properties to global scope
+	global := v8ctx.Global()
+	globalJSON, err := v8.JSONStringify(v8ctx, global)
+	if err == nil {
+		logging.Debug("Extracted global JSON from V8", "js-extraction", map[string]interface{}{
+			"globalJSON": globalJSON,
+		})
+		var globalData bson.M
+		if json.Unmarshal([]byte(globalJSON), &globalData) == nil {
+			logging.Debug("Successfully parsed global data", "js-extraction", map[string]interface{}{
+				"globalDataKeys": getMapKeys(globalData),
+				"globalDataLen":  len(globalData),
 			})
-			var thisData bson.M
-			if json.Unmarshal([]byte(thisJSON), &thisData) == nil {
-				logging.Debug("Successfully parsed 'this' data", "js-extraction", map[string]interface{}{
-					"thisDataKeys": getMapKeys(thisData),
-					"thisDataLen":  len(thisData),
-				})
-				// Merge this.* modifications
-				for k, v := range thisData {
+			// Extract only the data properties we care about, not all global V8 stuff
+			for k, v := range globalData {
+				// Skip V8 internal properties and only take data-like properties
+				if k != "this" && k != "data" && k != "context" && k != "me" && 
+				   k != "query" && k != "internal" && k != "isRoot" && k != "dpd" && 
+				   k != "deployd" && k != "previous" && k != "console" {
 					modifiedData[k] = v
 				}
-			} else {
-				logging.Debug("Failed to unmarshal 'this' JSON", "js-extraction", map[string]interface{}{
-					"error": "unmarshal failed",
-				})
 			}
 		} else {
-			logging.Debug("Failed to stringify 'this' value", "js-extraction", map[string]interface{}{
-				"error": err.Error(),
+			logging.Debug("Failed to unmarshal global JSON", "js-extraction", map[string]interface{}{
+				"error": "unmarshal failed",
 			})
 		}
 	} else {
-		logging.Debug("Failed to get 'this' global or it's undefined", "js-extraction", map[string]interface{}{
+		logging.Debug("Failed to stringify global object", "js-extraction", map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
@@ -406,33 +406,117 @@ func setupV8Environment(v8ctx *v8.Context, sc *ScriptContext) error {
 
 // setDataObject converts bson.M to JavaScript and sets data/this
 func setDataObject(v8ctx *v8.Context, data bson.M) error {
-	dataJSON, _ := json.Marshal(data)
-	dataValue, err := v8.JSONParse(v8ctx, string(dataJSON))
+	isolate := v8ctx.Isolate()
+	
+	// Create a simple mutable JavaScript object with just the data properties
+	dataObj := v8.NewObjectTemplate(isolate)
+	dataInstance, err := dataObj.NewInstance(v8ctx)
 	if err != nil {
 		return err
 	}
-	v8ctx.Global().Set("data", dataValue)
-	v8ctx.Global().Set("this", dataValue)
+	
+	// Set each data property directly on this object
+	for k, v := range data {
+		val, err := createV8Value(isolate, v)
+		if err == nil {
+			dataInstance.Set(k, val)
+		}
+	}
+	
+	// Set 'this' as the global object itself - modifications go directly to global scope
+	// This way when JS does "this.status = 'Done'" it modifies the global scope
+	global := v8ctx.Global()
+	for k, v := range data {
+		val, err := createV8Value(isolate, v)
+		if err == nil {
+			global.Set(k, val)
+		}
+	}
+	
+	// Also set 'data' to the same object for compatibility
+	v8ctx.Global().Set("data", dataInstance)
 	
 	// Set common noStore collection variables as globals for easy access
 	if parts, ok := data["parts"]; ok {
-		partsJSON, _ := json.Marshal(parts)
-		partsValue, err := v8.JSONParse(v8ctx, string(partsJSON))
+		partsVal, err := createV8Value(isolate, parts)
 		if err == nil {
-			v8ctx.Global().Set("parts", partsValue)
+			v8ctx.Global().Set("parts", partsVal)
 		}
 	}
 	
 	if url, ok := data["url"]; ok {
-		if urlStr, ok := url.(string); ok {
-			urlValue, err := v8.NewValue(v8ctx.Isolate(), urlStr)
-			if err == nil {
-				v8ctx.Global().Set("url", urlValue)
-			}
+		urlVal, err := createV8Value(isolate, url)
+		if err == nil {
+			v8ctx.Global().Set("url", urlVal)
 		}
 	}
 	
 	return nil
+}
+
+// createV8Value creates a V8 value from a Go value recursively
+func createV8Value(isolate *v8.Isolate, goVal interface{}) (*v8.Value, error) {
+	switch val := goVal.(type) {
+	case nil:
+		return v8.Null(isolate), nil
+	case bool:
+		return v8.NewValue(isolate, val)
+	case int:
+		return v8.NewValue(isolate, val)
+	case int64:
+		return v8.NewValue(isolate, val)
+	case float64:
+		return v8.NewValue(isolate, val)
+	case string:
+		return v8.NewValue(isolate, val)
+	case []interface{}:
+		// Create JavaScript array
+		arrayTemplate := v8.NewObjectTemplate(isolate)
+		arrayInstance, err := arrayTemplate.NewInstance(nil)
+		if err != nil {
+			return nil, err
+		}
+		for i, item := range val {
+			itemVal, err := createV8Value(isolate, item)
+			if err == nil {
+				arrayInstance.SetIdx(uint32(i), itemVal)
+			}
+		}
+		lengthVal, err := v8.NewValue(isolate, len(val))
+		if err == nil {
+			arrayInstance.Set("length", lengthVal)
+		}
+		return arrayInstance.Value, nil
+	case map[string]interface{}, bson.M:
+		// Create JavaScript object
+		objTemplate := v8.NewObjectTemplate(isolate)
+		objInstance, err := objTemplate.NewInstance(nil)
+		if err != nil {
+			return nil, err
+		}
+		
+		var m map[string]interface{}
+		if bsonMap, ok := val.(bson.M); ok {
+			m = bsonMap
+		} else {
+			m = val.(map[string]interface{})
+		}
+		
+		for k, v := range m {
+			propVal, err := createV8Value(isolate, v)
+			if err == nil {
+				objInstance.Set(k, propVal)
+			}
+		}
+		return objInstance.Value, nil
+	default:
+		// Fallback: convert to JSON and parse
+		jsonBytes, err := json.Marshal(goVal)
+		if err != nil {
+			return v8.Undefined(isolate), nil
+		}
+		return v8.NewValue(isolate, string(jsonBytes))
+	}
 }
 
 // setupContextObject creates a JavaScript context object for Run(context) pattern
