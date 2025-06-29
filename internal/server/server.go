@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -229,6 +230,9 @@ func (s *Server) setupRoutes() {
 
 	// Serve dpd.js client library
 	s.httpMux.HandleFunc("/dpd.js", s.handleDpdJS)
+
+	// Serve public files
+	s.setupPublicFileServing()
 
 	// Root route handling
 	s.setupRootRoute()
@@ -1254,6 +1258,63 @@ func (s *Server) handleDpdJS(w http.ResponseWriter, r *http.Request) {
 	// Serve the dpd.js file
 	dpdJSPath := filepath.Join("web", "dpd.js")
 	http.ServeFile(w, r, dpdJSPath)
+}
+
+// setupPublicFileServing sets up static file serving from the public directory
+func (s *Server) setupPublicFileServing() {
+	publicDir := "public"
+	
+	// Check if public directory exists
+	if _, err := os.Stat(publicDir); os.IsNotExist(err) {
+		// Public directory doesn't exist, skip setup
+		return
+	}
+
+	// Create file server for public directory
+	fileServer := http.FileServer(http.Dir(publicDir))
+	
+	// Setup handler with security checks
+	s.httpMux.PathPrefix("/public/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only allow GET requests
+		if r.Method != "GET" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Remove /public prefix and clean the path
+		path := strings.TrimPrefix(r.URL.Path, "/public")
+		path = filepath.Clean(path)
+
+		// Security: Prevent directory traversal
+		if strings.Contains(path, "..") {
+			http.Error(w, "Invalid path", http.StatusBadRequest)
+			return
+		}
+
+		// Security: Don't serve hidden files
+		parts := strings.Split(path, "/")
+		for _, part := range parts {
+			if strings.HasPrefix(part, ".") {
+				http.Error(w, "Access denied", http.StatusForbidden)
+				return
+			}
+		}
+
+		// Log file access
+		fmt.Printf("📁 Serving public file: %s\n", path)
+
+		// Create new request with modified path
+		r2 := new(http.Request)
+		*r2 = *r
+		r2.URL = new(url.URL)
+		*r2.URL = *r.URL
+		r2.URL.Path = path
+
+		// Serve the file
+		fileServer.ServeHTTP(w, r2)
+	})
+
+	fmt.Printf("✅ Public file serving enabled at /public/\n")
 }
 
 // SetDashboardFS sets the embedded dashboard filesystem
