@@ -1,0 +1,8 @@
+{
+  "noStore": true,
+  "eventConfig": {
+    "get": {"enabled": true, "runtime": "js"},
+    "post": {"enabled": true, "runtime": "js"},
+    "beforerequest": {"enabled": true, "runtime": "js"}
+  }
+}

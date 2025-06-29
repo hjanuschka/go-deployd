@@ -9,6 +9,7 @@ Welcome to the Go-Deployd documentation! Go-Deployd is a modern API framework th
 - [Admin API](./admin-api.md) - Server administration endpoints
 - [Events System](./events-system.md) - Server-side business logic
 - [Database Configuration](./database-config.md) - MongoDB, MySQL, and SQLite setup
+- [Column-Based Storage](./column-based-storage.md) - High-performance SQLite/MySQL queries
 - [WebSocket & Real-time](./websocket-realtime.md) - Real-time event broadcasting
 - [dpd.js Client](./dpd-js-client.md) - JavaScript client library
 - [Advanced Queries](./advanced-queries.md) - MongoDB-style queries and SQL translation
@@ -103,10 +104,11 @@ Support for multiple database backends:
 - **MongoDB**: For document storage and horizontal scaling
 - **MySQL**: For relational data and enterprise deployments
 - **SQLite**: For development and single-server apps
+- **Column-based storage**: High-performance queries with native SQL indexes
 - Same API across all databases
 - Automatic query translation
 
-[Learn more →](./database-config.md)
+[Learn more →](./database-config.md) | [Column Storage →](./column-based-storage.md)
 
 ### 5. Authentication & Security
 

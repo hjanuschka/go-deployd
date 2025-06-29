@@ -8,7 +8,7 @@
 > Build JSON APIs in seconds with zero configuration. Focus on your frontend while Go-Deployd handles the backend.
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://golang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![WebSocket](https://img.shields.io/badge/WebSocket-Real--time-4CAF50?style=flat&logo=websocket)](./docs/websocket-realtime.md)
 [![SQLite](https://img.shields.io/badge/SQLite-3.0+-003B57?style=flat&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-4.4+-47A248?style=flat&logo=mongodb&logoColor=white)](https://www.mongodb.com/)

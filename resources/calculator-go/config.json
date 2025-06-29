@@ -1,0 +1,7 @@
+{
+  "noStore": true,
+  "eventConfig": {
+    "get": {"runtime": "go"},
+    "beforerequest": {"runtime": "go"}
+  }
+}

@@ -71,10 +71,14 @@ app.dpd.local
 main
 deployd
 
-# Database files
+# Database files (including SQLite variants)
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+deployd.sqlite*
 
 # PID files
 *.pid
@@ -89,6 +93,10 @@ resources/*/
 !resources/users/
 !resources/todo-js/
 !resources/todo-go/
+!resources/calculator/
+!resources/calculator-js/
+!resources/calculator-go/
+!resources/files/
 
 # Generated metrics file should be ignored
 resources/metrics.json

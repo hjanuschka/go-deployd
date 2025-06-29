@@ -1,0 +1,47 @@
+{
+  "type": "Collection",
+  "properties": {
+    "id": {
+      "type": "string",
+      "required": true
+    },
+    "filename": {
+      "type": "string",
+      "required": true
+    },
+    "originalName": {
+      "type": "string",
+      "required": true
+    },
+    "contentType": {
+      "type": "string",
+      "required": true
+    },
+    "size": {
+      "type": "number",
+      "required": true
+    },
+    "storageType": {
+      "type": "string",
+      "required": true
+    },
+    "path": {
+      "type": "string",
+      "required": true
+    },
+    "url": {
+      "type": "string",
+      "required": true
+    },
+    "uploadedAt": {
+      "type": "string",
+      "required": true
+    },
+    "uploadedBy": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "builtIn": true,
+  "description": "Built-in collection for file storage and management"
+}

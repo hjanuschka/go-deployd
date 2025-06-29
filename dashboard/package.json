@@ -54,5 +54,5 @@
     "admin"
   ],
   "author": "go-deployd",
-  "license": "Apache-2.0"
+  "license": "MIT"
 }
