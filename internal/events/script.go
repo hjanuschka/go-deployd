@@ -284,7 +284,7 @@ func extractModifiedData(v8ctx *v8.Context, sc *ScriptContext) error {
 		modifiedData[k] = v
 	}
 	
-	// First priority: Extract from context.data (Run() function pattern)
+	// Extract from context.data (unified Run() function pattern only)
 	contextValue, err := v8ctx.Global().Get("context")
 	if err == nil && contextValue != nil && !contextValue.IsUndefined() {
 		contextObj, err := contextValue.AsObject()
@@ -302,36 +302,8 @@ func extractModifiedData(v8ctx *v8.Context, sc *ScriptContext) error {
 							"contextDataKeys": getMapKeys(contextData),
 							"contextDataLen":  len(contextData),
 						})
-						// Use context.data as the source of truth
+						// Use context.data as the only source of truth
 						modifiedData = contextData
-					}
-				}
-			}
-		}
-	}
-	
-	// Fallback: Extract from global scope (this.* pattern for backward compatibility)
-	if len(modifiedData) == len(sc.data) {
-		// If context.data didn't provide new data, try global extraction
-		global := v8ctx.Global()
-		globalJSON, err := v8.JSONStringify(v8ctx, global)
-		if err == nil {
-			logging.Debug("Fallback: Extracted global JSON from V8", "js-extraction", map[string]interface{}{
-				"globalJSON": globalJSON,
-			})
-			var globalData bson.M
-			if json.Unmarshal([]byte(globalJSON), &globalData) == nil {
-				logging.Debug("Successfully parsed global data", "js-extraction", map[string]interface{}{
-					"globalDataKeys": getMapKeys(globalData),
-					"globalDataLen":  len(globalData),
-				})
-				// Extract only the data properties we care about, not all global V8 stuff
-				for k, v := range globalData {
-					// Skip V8 internal properties and only take data-like properties
-					if k != "this" && k != "data" && k != "context" && k != "me" && 
-					   k != "query" && k != "internal" && k != "isRoot" && k != "dpd" && 
-					   k != "deployd" && k != "previous" && k != "console" {
-						modifiedData[k] = v
 					}
 				}
 			}
@@ -352,7 +324,7 @@ func clearV8Context(v8ctx *v8.Context) error {
 	// Keep core V8 globals but clear application data
 	propertiesToClear := []string{
 		// Data objects
-		"this", "data", "context",
+		"data", "context",
 		// Common data fields that might leak
 		"id", "title", "description", "completed", "priority", "createdAt", "updatedAt",
 		"status", "formattedDate", "processedBy", "processedAt", "priorityLabel",

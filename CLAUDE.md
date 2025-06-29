@@ -24,7 +24,7 @@ func Run(ctx *context.Context) error {
 }
 ```
 
-**DO NOT use legacy `this.*` patterns in JavaScript - they are deprecated and unreliable.**
+**DO NOT use legacy `this.*` patterns in JavaScript - they are no longer supported.**
 
 ## Key Architecture
 - **Collections**: Resources with config.json (database-backed or noStore)

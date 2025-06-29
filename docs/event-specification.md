@@ -95,23 +95,23 @@ func Run(ctx *context.Context) error {
 }
 ```
 
-## Migration from Legacy Patterns
+## JavaScript Event Requirements
 
-### JavaScript Migration
-**Old pattern (deprecated):**
+### ONLY Supported Pattern
+**Required pattern:**
 ```javascript
-// DON'T USE - Legacy pattern
-this.status = "computed";
-this.processedAt = new Date();
-```
-
-**New pattern (required):**
-```javascript
-// USE THIS - Unified pattern
+// ONLY supported pattern - Run(context) function
 function Run(context) {
     context.data.status = "computed";
     context.data.processedAt = new Date();
 }
+```
+
+**Deprecated patterns (NO LONGER SUPPORTED):**
+```javascript
+// DON'T USE - Legacy this.* pattern removed
+this.status = "computed";
+this.processedAt = new Date();
 ```
 
 ### Benefits of Unified Pattern
@@ -146,5 +146,6 @@ curl localhost:2403/collection-go/endpoint
 ## Implementation Notes
 - V8 engine executes JavaScript with context isolation
 - Function wrapping preserves Run() in global scope
-- Data extraction happens automatically after execution
+- Data extraction only from context.data (no global scope fallback)
 - Context clearing prevents request data bleeding
+- Legacy this.* patterns are completely removed
