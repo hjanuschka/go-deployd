@@ -153,12 +153,12 @@ function Run(context) {
 // Validation script using unified Run(context) pattern
 function Run(context) {
 	if (!context.data.name || context.data.name.trim() === '') {
-		context.error('name', 'name field is required and cannot be empty');
+		context.cancel('name field is required and cannot be empty', 400);
 		return;
 	}
 
 	if (typeof context.data.value !== 'number' || context.data.value < 0) {
-		context.error('value', 'value must be a non-negative number');
+		context.cancel('value must be a non-negative number', 400);
 		return;
 	}
 
@@ -202,7 +202,9 @@ function Run(context) {
 
 		err = manager.RunEvent(events.EventValidate, ctx, invalidData)
 		assert.Error(t, err, "Invalid data should fail validation")
-		assert.Contains(t, err.Error(), "name field is required")
+		if err != nil {
+			assert.Contains(t, err.Error(), "name field is required")
+		}
 	})
 }
 
