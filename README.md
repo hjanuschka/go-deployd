@@ -9,6 +9,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![WebSocket](https://img.shields.io/badge/WebSocket-Real--time-4CAF50?style=flat&logo=websocket)](./docs/websocket-realtime.md)
 [![SQLite](https://img.shields.io/badge/SQLite-3.0+-003B57?style=flat&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-4.4+-47A248?style=flat&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=flat&logo=mysql&logoColor=white)](https://www.mysql.com/)
@@ -17,16 +18,18 @@
 
 ## ✨ What is Go-Deployd?
 
-Go-Deployd is a **blazing-fast, zero-configuration backend** that transforms a simple SQLite database into a full-featured REST API with a beautiful admin dashboard. Write business logic in JavaScript or Go, get instant hot-reload, and ship your app faster than ever.
+Go-Deployd is a **blazing-fast, zero-configuration backend** that transforms a simple SQLite database into a full-featured REST API with real-time WebSocket events and a beautiful admin dashboard. Write business logic in JavaScript or Go, get instant hot-reload, and ship your app faster than ever.
 
 ### 🎯 **Core Philosophy**
 
 - **⚡ Zero Dependencies** - SQLite built-in, no external database required
 - **🔥 Zero Config** - JSON APIs in seconds, not hours  
 - **🎨 Beautiful Dashboard** - Professional editor with syntax highlighting
+- **⚡ Real-time Events** - Built-in WebSocket support for live updates
 - **📊 Production Ready** - Built for scale with Go's performance
 - **🔒 Security First** - Built-in JWT authentication, validation, and CORS
 - **🌐 Multiple Databases** - SQLite (default), MongoDB, MySQL support
+- **🔍 MongoDB-style Queries** - Familiar query syntax across all databases
 
 ## 🚀 Quick Start (3 Commands)
 
@@ -44,10 +47,11 @@ make run_sqlite
 ```
 
 That's it! You now have:
-- ✅ A running REST API server
+- ✅ A running REST API server with real-time WebSocket events
 - ✅ SQLite database with sample collections (`users`, `todo-js`, `todo-go`)
-- ✅ Beautiful admin dashboard
-- ✅ JWT authentication system
+- ✅ Beautiful admin dashboard with comprehensive documentation
+- ✅ JWT authentication system with secure token handling
+- ✅ MongoDB-style queries across all database backends
 - ✅ API testing interface at `/self-test.html`
 
 ## 📋 Sample Collections Included
@@ -85,12 +89,49 @@ func Run(ctx *EventContext) error {
 
 Visit `http://localhost:2403/_dashboard` to access:
 
-- 📊 **Server Metrics** - Real-time performance stats
-- 🗃️ **Collection Management** - Create, edit schemas, browse data
-- 👥 **User Management** - Built-in user system with roles
-- 📝 **Event Editor** - Write JavaScript/Go events with syntax highlighting  
-- 📊 **Logs Viewer** - Real-time application logs with filtering
-- ⚙️ **Settings** - Configure security, email, and more
+- 📊 **Server Metrics** - Real-time performance stats and monitoring
+- 🗃️ **Collection Management** - Create, edit schemas, browse data with visual query builder
+- 👥 **User Management** - Built-in user system with JWT authentication
+- 📝 **Event Editor** - Write JavaScript/Go events with syntax highlighting and hot reload
+- 📊 **Logs Viewer** - Real-time application logs with filtering and search
+- ⚙️ **Settings** - Configure security, database connections, and more
+- 📚 **Documentation** - Comprehensive guides accessible from GitHub
+
+## 📚 Documentation
+
+Comprehensive documentation is available in the [docs/](./docs/) directory:
+
+- **[Getting Started Guide](./docs/index.md)** - Complete overview and quick start
+- **[Collections API](./docs/collections-api.md)** - REST API reference with examples
+- **[Authentication](./docs/authentication.md)** - JWT authentication and security
+- **[Events System](./docs/events-system.md)** - JavaScript and Go event handlers
+- **[WebSocket & Real-time](./docs/websocket-realtime.md)** - Real-time events and broadcasting
+- **[Database Configuration](./docs/database-config.md)** - MongoDB, MySQL, and SQLite setup
+- **[dpd.js Client](./docs/dpd-js-client.md)** - JavaScript client library
+- **[Advanced Queries](./docs/advanced-queries.md)** - MongoDB-style queries and SQL translation
+
+## ⚡ Real-time Features
+
+Go-Deployd includes built-in WebSocket support for real-time applications:
+
+```javascript
+// Connect to WebSocket for live updates
+const ws = new WebSocket('ws://localhost:2403/ws');
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === 'collection_change') {
+    console.log(`${data.action} in ${data.collection}:`, data.document);
+    // Update your UI in real-time!
+  }
+};
+```
+
+**Real-time Capabilities:**
+- 🔄 **Automatic Broadcasting** - Collection changes broadcast to all clients
+- 🎯 **Custom Events** - Emit custom events from server events with `emit()`
+- 🏗️ **Multi-server Scaling** - Redis support for horizontal scaling
+- 🔌 **Zero Configuration** - WebSocket works out of the box
 
 ## 💡 Example API Usage
 
@@ -113,6 +154,14 @@ curl "http://localhost:2403/todo-js?completed=true"
 
 # Sort by priority, limit results
 curl "http://localhost:2403/todo-js?\$sort[priority]=-1&\$limit=10"
+
+# MongoDB-style operators work across all databases
+curl "http://localhost:2403/todo-js?priority[\$gte]=5&title[\$regex]=urgent"
+
+# Complex queries with POST /query endpoint
+curl -X POST http://localhost:2403/todo-js/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": {"$or": [{"priority": {"$gte": 8}}, {"title": {"$regex": "urgent"}}]}}'
 ```
 
 ## 🔧 Advanced Usage
@@ -208,13 +257,37 @@ curl -X POST http://localhost:2403/auth/login \
 - `array` - Lists of values
 - `object` - Nested objects
 
-## 🔍 Query Features
+## 🔍 Advanced Query Features
 
-### MongoDB-Style Operators
+### MongoDB-Style Operators Across All Databases
 ```bash
-# Comparison operators
-curl "http://localhost:2403/todos?\$gt[priority]=1"
-curl "http://localhost:2403/todos?\$in[status]=todo,done"
+# Comparison operators (work with SQLite, MySQL, and MongoDB)
+curl "http://localhost:2403/todos?priority[\$gt]=1"
+curl "http://localhost:2403/todos?status[\$in]=todo,done"
+curl "http://localhost:2403/todos?title[\$regex]=urgent"
+
+# Complex nested queries
+curl -X POST http://localhost:2403/todos/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": {
+      "$and": [
+        {"priority": {"$gte": 5}},
+        {"$or": [
+          {"title": {"$regex": "urgent"}},
+          {"assignedTo": "admin"}
+        ]}
+      ]
+    }
+  }'
+
+# Force MongoDB queries (when using MongoDB backend)
+curl -X POST http://localhost:2403/todos/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": {"tags": {"$all": ["urgent", "important"]}},
+    "options": {"$forceMongo": true}
+  }'
 
 # Sorting and pagination
 curl "http://localhost:2403/todos?\$sort[createdAt]=-1&\$limit=5&\$skip=10"
@@ -230,6 +303,9 @@ curl "http://localhost:2403/todos/count"
 
 # Collection list
 curl "http://localhost:2403/collections"
+
+# Health check and server info
+curl "http://localhost:2403/_admin/info"
 ```
 
 ## 🛠️ Build & Deploy Commands
@@ -356,13 +432,16 @@ DEPLOYD_MASTER_KEY=your-secure-key ./bin/deployd
 - Zero-configuration philosophy
 
 ### What's Better
-- **10x Faster** - Go performance vs Node.js
+- **10x Faster** - Go performance vs Node.js with optimized query engines
 - **Zero Dependencies** - SQLite built-in, no MongoDB setup required
-- **Modern Dashboard** - React 18 with Chakra UI
-- **Hot Reload** - For both JavaScript AND Go events
-- **JWT Authentication** - Modern token-based auth
-- **Multi-Database** - SQLite, MongoDB, MySQL support
-- **Production Ready** - Built for scale with proper error handling
+- **Real-time Built-in** - WebSocket events with zero configuration
+- **Modern Dashboard** - React 18 with Chakra UI and comprehensive documentation
+- **Hot Reload** - For both JavaScript AND Go events with instant updates
+- **JWT Authentication** - Modern token-based auth with secure defaults
+- **Multi-Database** - SQLite, MongoDB, MySQL support with unified query API
+- **MongoDB-style Queries** - Familiar query syntax across all database backends
+- **Production Ready** - Built for scale with proper error handling and monitoring
+- **Developer Experience** - Visual query builder, comprehensive docs, and testing tools
 
 ## 🤝 Contributing
 
