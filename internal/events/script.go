@@ -573,7 +573,11 @@ func setupContextObject(v8ctx *v8.Context, sc *ScriptContext) error {
 		sc.cancelled = true
 		sc.cancelMsg = msg
 		sc.statusCode = statusCode
-		return nil
+
+		// Throw an exception to stop execution (same as global cancel function)
+		exception, _ := v8.NewValue(isolate, "CANCEL")
+		isolate.ThrowException(exception)
+		return v8.Undefined(isolate)
 	})
 	contextInstance.Set("cancel", cancelFunc.GetFunction(v8ctx))
 	
