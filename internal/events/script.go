@@ -258,22 +258,40 @@ func (s *Script) runTraditional(scriptCtx *ScriptContext) (*ScriptContext, error
 
 // extractModifiedData extracts the modified data object from V8 back to Go
 func extractModifiedData(v8ctx *v8.Context, sc *ScriptContext) error {
-	// Get the modified data object from JavaScript
+	// Start with original data
+	modifiedData := bson.M{}
+	for k, v := range sc.data {
+		modifiedData[k] = v
+	}
+	
+	// Extract 'this' global modifications
+	thisValue, err := v8ctx.Global().Get("this")
+	if err == nil && thisValue != nil && !thisValue.IsUndefined() {
+		thisJSON, err := v8.JSONStringify(v8ctx, thisValue)
+		if err == nil {
+			var thisData bson.M
+			if json.Unmarshal([]byte(thisJSON), &thisData) == nil {
+				// Merge this.* modifications
+				for k, v := range thisData {
+					modifiedData[k] = v
+				}
+			}
+		}
+	}
+	
+	// Extract 'data' global modifications  
 	dataValue, err := v8ctx.Global().Get("data")
-	if err != nil || dataValue == nil {
-		return err
-	}
-
-	// Convert back to JSON and then to Go map
-	dataJSON, err := v8.JSONStringify(v8ctx, dataValue)
-	if err != nil {
-		return err
-	}
-
-	// Parse JSON back to bson.M
-	var modifiedData bson.M
-	if err := json.Unmarshal([]byte(dataJSON), &modifiedData); err != nil {
-		return err
+	if err == nil && dataValue != nil && !dataValue.IsUndefined() {
+		dataJSON, err := v8.JSONStringify(v8ctx, dataValue)
+		if err == nil {
+			var dataData bson.M
+			if json.Unmarshal([]byte(dataJSON), &dataData) == nil {
+				// Merge data.* modifications
+				for k, v := range dataData {
+					modifiedData[k] = v
+				}
+			}
+		}
 	}
 
 	// Update the script context data
