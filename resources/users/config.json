@@ -9,12 +9,14 @@
       "type": "string",
       "required": true,
       "unique": true,
+      "index": true,
       "system": true
     },
     "email": {
       "type": "string",
       "required": true,
       "unique": true,
+      "index": true,
       "system": true
     },
     "password": {
@@ -61,6 +63,9 @@
       "type": "string",
       "order": 1
     }
+  },
+  "options": {
+    "useColumns": true
   },
   "allowAdditionalProperties": true,
   "isBuiltin": true

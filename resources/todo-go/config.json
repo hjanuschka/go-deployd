@@ -3,6 +3,7 @@
     "completed": {
       "type": "boolean",
       "default": false,
+      "index": true,
       "order": 2
     },
     "createdAt": {
@@ -30,8 +31,12 @@
     "title": {
       "type": "string",
       "required": true,
+      "index": true,
       "order": 1
     }
+  },
+  "options": {
+    "useColumns": true
   },
   "eventConfig": {
     "aftercommit": {
