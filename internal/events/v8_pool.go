@@ -225,10 +225,10 @@ func (pool *V8Pool) resetContext(eventCtx *V8EventContext) {
 	// Get all global property names to clear user-defined variables
 	globalObj := eventCtx.context.Global()
 
-	// Clear known deployd globals
+	// Clear known deployd globals (only context and data, no global functions)
 	deployGlobals := []string{
-		"data", "query", "me", "previous", "isRoot", "internal", "errors",
-		"cancelled", "error", "hide", "protect", "cancel", "isMe",
+		"data", "context", "previous", "internal", 
+		"cancelled", "hide", "protect",
 	}
 	for _, global := range deployGlobals {
 		globalObj.Delete(global)

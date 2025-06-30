@@ -331,10 +331,6 @@ func clearV8Context(v8ctx *v8.Context) error {
 		// NoStore collection fields  
 		"parts", "url", "operation", "operands", "result", "error", "usage",
 		"test", "timestamp", "cancelled", "event", "test_run_pattern",
-		// User/context fields
-		"me", "query", "internal", "isRoot", "previous",
-		// Deployd globals
-		"dpd", "deployd",
 	}
 	
 	// Delete each property from global context
@@ -364,22 +360,7 @@ func setupV8Environment(v8ctx *v8.Context, sc *ScriptContext) error {
 		return err
 	}
 
-	// Set up functions
-	if err := setupCancelFunctions(v8ctx, sc); err != nil {
-		return err
-	}
-
-	if err := setupValidationFunctions(v8ctx, sc); err != nil {
-		return err
-	}
-
-	if err := setupUserFunctions(v8ctx, sc); err != nil {
-		return err
-	}
-
-	if err := setupUtilityFunctions(v8ctx, sc); err != nil {
-		return err
-	}
+	// Note: All functions now available through context object only
 
 	if err := setupRequireFunction(v8ctx, sc); err != nil {
 		return err
@@ -581,108 +562,7 @@ func setupContextObject(v8ctx *v8.Context, sc *ScriptContext) error {
 	})
 	contextInstance.Set("cancel", cancelFunc.GetFunction(v8ctx))
 	
-	// Set the context object as global
-	v8ctx.Global().Set("context", contextInstance)
-	
-	return nil
-}
-
-// setupCancelFunctions sets up cancel(), cancelIf(), cancelUnless()
-func setupCancelFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
-	isolate := v8ctx.Isolate()
-
-	// cancel() function
-	cancelFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-		args := info.Args()
-		msg := "Request cancelled"
-		statusCode := 400
-
-		if len(args) > 0 {
-			msg = args[0].String()
-		}
-		if len(args) > 1 && args[1].IsNumber() {
-			statusCode = int(args[1].Integer())
-		}
-
-		sc.cancelled = true
-		sc.cancelMsg = msg
-		sc.statusCode = statusCode
-
-		// Throw an exception to stop execution
-		exception, _ := v8.NewValue(isolate, "CANCEL")
-		isolate.ThrowException(exception)
-		return v8.Undefined(isolate)
-	})
-	v8ctx.Global().Set("cancel", cancelFunc.GetFunction(v8ctx))
-
-	// cancelIf() function
-	cancelIfFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-		args := info.Args()
-		if len(args) == 0 {
-			return v8.Undefined(isolate)
-		}
-
-		condition := args[0].Boolean()
-		if condition {
-			msg := "Request cancelled"
-			statusCode := 400
-
-			if len(args) > 1 {
-				msg = args[1].String()
-			}
-			if len(args) > 2 && args[2].IsNumber() {
-				statusCode = int(args[2].Integer())
-			}
-
-			sc.cancelled = true
-			sc.cancelMsg = msg
-			sc.statusCode = statusCode
-
-			exception, _ := v8.NewValue(isolate, "CANCEL")
-			isolate.ThrowException(exception)
-		}
-		return v8.Undefined(isolate)
-	})
-	v8ctx.Global().Set("cancelIf", cancelIfFunc.GetFunction(v8ctx))
-
-	// cancelUnless() function
-	cancelUnlessFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-		args := info.Args()
-		if len(args) == 0 {
-			return v8.Undefined(isolate)
-		}
-
-		condition := args[0].Boolean()
-		if !condition {
-			msg := "Request cancelled"
-			statusCode := 400
-
-			if len(args) > 1 {
-				msg = args[1].String()
-			}
-			if len(args) > 2 && args[2].IsNumber() {
-				statusCode = int(args[2].Integer())
-			}
-
-			sc.cancelled = true
-			sc.cancelMsg = msg
-			sc.statusCode = statusCode
-
-			exception, _ := v8.NewValue(isolate, "CANCEL")
-			isolate.ThrowException(exception)
-		}
-		return v8.Undefined(isolate)
-	})
-	v8ctx.Global().Set("cancelUnless", cancelUnlessFunc.GetFunction(v8ctx))
-
-	return nil
-}
-
-// setupValidationFunctions sets up error(), hasErrors()
-func setupValidationFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
-	isolate := v8ctx.Isolate()
-
-	// error() function
+	// Add error method for validation
 	errorFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		args := info.Args()
 		if len(args) >= 2 {
@@ -692,26 +572,18 @@ func setupValidationFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 		}
 		return v8.Undefined(isolate)
 	})
-	v8ctx.Global().Set("error", errorFunc.GetFunction(v8ctx))
-
-	// hasErrors() function
+	contextInstance.Set("error", errorFunc.GetFunction(v8ctx))
+	
+	// Add hasErrors method
 	hasErrorsFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 		result, _ := v8.NewValue(isolate, len(sc.errors) > 0)
 		return result
 	})
-	v8ctx.Global().Set("hasErrors", hasErrorsFunc.GetFunction(v8ctx))
-
-	return nil
-}
-
-// setupUserFunctions sets up me, isMe(), query, isRoot
-func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
-	isolate := v8ctx.Isolate()
-
-	// me - current user
+	contextInstance.Set("hasErrors", hasErrorsFunc.GetFunction(v8ctx))
+	
+	// Add user context properties
 	var meValue *v8.Value
 	if sc.ctx.IsAuthenticated {
-		// Create user data from JWT authentication
 		userData := map[string]interface{}{
 			"id":       sc.ctx.UserID,
 			"username": sc.ctx.Username,
@@ -723,147 +595,26 @@ func setupUserFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
 	if meValue == nil {
 		meValue = v8.Null(isolate)
 	}
-	v8ctx.Global().Set("me", meValue)
-
-	// isMe() function
-	isMeFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-		args := info.Args()
-		if len(args) == 0 {
-			result, _ := v8.NewValue(isolate, false)
-			return result
+	contextInstance.Set("me", meValue)
+	
+	// Add query parameters
+	if sc.ctx.Query != nil {
+		queryJSON, _ := json.Marshal(sc.ctx.Query)
+		queryValue, err := v8.JSONParse(v8ctx, string(queryJSON))
+		if err == nil {
+			contextInstance.Set("query", queryValue)
 		}
-
-		id := args[0].String()
-		if sc.ctx.IsAuthenticated {
-			result, _ := v8.NewValue(isolate, sc.ctx.UserID == id)
-			return result
-		}
-		result, _ := v8.NewValue(isolate, false)
-		return result
-	})
-	v8ctx.Global().Set("isMe", isMeFunc.GetFunction(v8ctx))
-
-	// query - request query parameters
-	queryJSON, _ := json.Marshal(sc.ctx.Query)
-	queryValue, err := v8.JSONParse(v8ctx, string(queryJSON))
-	if err != nil {
-		return err
 	}
-	v8ctx.Global().Set("query", queryValue)
-
-	// internal and isRoot
-	internalValue, _ := v8.NewValue(isolate, false)
-	v8ctx.Global().Set("internal", internalValue)
-
-	isRootValue, _ := v8.NewValue(isolate, sc.ctx.IsRoot)
-	v8ctx.Global().Set("isRoot", isRootValue)
-
+	
+	// Set the context object as global
+	v8ctx.Global().Set("context", contextInstance)
+	
 	return nil
 }
 
-// setupUtilityFunctions sets up emit(), dpd, console, protect(), hide(), changed(), previous
-func setupUtilityFunctions(v8ctx *v8.Context, sc *ScriptContext) error {
-	isolate := v8ctx.Isolate()
 
-	// emit() function
-	emitFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-		args := info.Args()
-		argsSlice := make([]interface{}, len(args))
-		for i, arg := range args {
-			argsSlice[i] = arg.String()
-		}
 
-		source := "javascript"
-		if sc.ctx != nil && sc.ctx.Resource != nil {
-			source = fmt.Sprintf("js:%s", sc.ctx.Resource.GetName())
-		}
 
-		logging.GetLogger().WithComponent("events").Debug("JavaScript emit function called", logging.Fields{
-			"source": source,
-			"args":   argsSlice,
-		})
-		return v8.Undefined(isolate)
-	})
-	v8ctx.Global().Set("emit", emitFunc.GetFunction(v8ctx))
-
-	// dpd object
-	dpdObj := v8.NewObjectTemplate(isolate)
-	dpdValue, _ := dpdObj.NewInstance(v8ctx)
-	v8ctx.Global().Set("dpd", dpdValue)
-
-	// deployd object with logging
-	deployedObjTemplate := v8.NewObjectTemplate(isolate)
-	logFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-		args := info.Args()
-		if len(args) == 0 {
-			return v8.Undefined(isolate)
-		}
-
-		message := args[0].String()
-		var data map[string]interface{}
-
-		if len(args) >= 2 && args[1].IsObject() {
-			dataJSON, err := v8.JSONStringify(v8ctx, args[1])
-			if err == nil {
-				json.Unmarshal([]byte(dataJSON), &data)
-			}
-		}
-
-		source := "javascript"
-		if sc.ctx != nil && sc.ctx.Resource != nil {
-			source = fmt.Sprintf("js:%s", sc.ctx.Resource.GetName())
-		}
-
-		logging.Info(message, source, data)
-		return v8.Undefined(isolate)
-	})
-	deployedObjTemplate.Set("log", logFunc)
-	deployedObj, _ := deployedObjTemplate.NewInstance(v8ctx)
-	v8ctx.Global().Set("deployd", deployedObj)
-
-	// console.log
-	consoleObjTemplate := v8.NewObjectTemplate(isolate)
-	consoleLogFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-		args := info.Args()
-		argsSlice := make([]interface{}, len(args))
-		for i, arg := range args {
-			argsSlice[i] = arg.String()
-		}
-		message := fmt.Sprintf("JS Console: %v", argsSlice)
-		logging.Debug(message, "js-console", nil)
-		return v8.Undefined(isolate)
-	})
-	consoleObjTemplate.Set("log", consoleLogFunc)
-	consoleObj, _ := consoleObjTemplate.NewInstance(v8ctx)
-	v8ctx.Global().Set("console", consoleObj)
-
-	// protect() and hide() functions
-	protectFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-		args := info.Args()
-		if len(args) > 0 {
-			property := args[0].String()
-			delete(sc.data, property)
-		}
-		return v8.Undefined(isolate)
-	})
-	v8ctx.Global().Set("protect", protectFunc.GetFunction(v8ctx))
-	v8ctx.Global().Set("hide", protectFunc.GetFunction(v8ctx))
-
-	// changed() function
-	changedFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-		// TODO: Implement change tracking
-		result, _ := v8.NewValue(isolate, false)
-		return result
-	})
-	v8ctx.Global().Set("changed", changedFunc.GetFunction(v8ctx))
-
-	// previous object
-	previousObj := v8.NewObjectTemplate(isolate)
-	previousValue, _ := previousObj.NewInstance(v8ctx)
-	v8ctx.Global().Set("previous", previousValue)
-
-	return nil
-}
 
 // setupRequireFunction sets up require() with built-in modules and npm support
 func setupRequireFunction(v8ctx *v8.Context, sc *ScriptContext) error {
