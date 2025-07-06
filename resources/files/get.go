@@ -23,7 +23,7 @@ func Run(ctx *EventContext) error {
 		// Require authentication for listing files
 		if ctx.Me == nil || ctx.Me["id"] == nil {
 			ctx.Cancel("Authentication required to list files", 401)
-		return nil
+			return nil
 		}
 
 		// The files resource will automatically filter by user

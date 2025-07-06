@@ -8,10 +8,21 @@ go-deployd is a modern backend-as-a-service platform with event-driven architect
 
 ### JavaScript Events Pattern (REQUIRED)
 ```javascript
+// Synchronous event
 function Run(context) {
     // Modify context.data directly
     context.data.newField = "value";
     context.log("Event message");
+}
+
+// Async event (with async/await support)
+async function Run(context) {
+    try {
+        const user = await dpd.users.get(context.data.userId);
+        context.data.author = user;
+    } catch (err) {
+        context.error("userId", "User not found");
+    }
 }
 ```
 
@@ -54,6 +65,7 @@ context.log(message, data)           // Logging
 context.emit(event, data, room)      // WebSocket events  
 context.error(field, message)        // Add validation error
 context.hasErrors()                  // Check if errors exist
+context.hide(field)                  // Remove field from response
 ```
 
 #### Go EventContext Structure:
@@ -66,6 +78,7 @@ type EventContext struct {
     IsRoot   bool                   // Admin privileges
     Internal bool                   // Internal request flag
     Errors   map[string]string      // Validation errors
+    Dpd      *InternalClient        // Internal API access
     
     // Methods
     Cancel(message string, statusCode int) // Stop processing with error
@@ -83,49 +96,58 @@ type EventContext struct {
 - **V8 JavaScript Engine**: Isolated execution with context pooling
 - **Real-time**: WebSocket support for live updates
 - **Dashboard**: React-based admin interface at /_dashboard/
+- **Column Storage**: SQL databases can use `"useColumns": true` for better query performance
 
 ## Common Commands
 - **Development**: `npm run dev` (starts both Go server and dashboard)
 - **Testing**: `curl localhost:2403/collection/endpoint | jq`
-- **Build**: `go build -o bin/go-deployd cmd/main.go`
+- **Build**: `go build -o bin/go-deployd cmd/deployd/main.go`
+- **Go Only**: `go run cmd/deployd/main.go -dev -db-type sqlite`
 
 ## Event Development Guidelines
 1. Always use the unified Run(context) pattern
 2. **NEVER add `package main` to Go events** - handled by compile_wrapper.go
 3. Test events with curl after changes
-4. Check server logs for debugging: `tail -f test-server.log`
+4. Check server logs for debugging (development mode shows event logs)
 5. JavaScript events are isolated per request (no data leakage)
 6. Modify context.data for data changes in both JS and Go
 7. Go events are compiled as plugins using the wrapper system
+8. **ALWAYS return after ctx.Cancel()** to prevent further execution
+9. JavaScript async functions are supported - use `async function Run(context)`
+10. The dpd object dynamically creates collection proxies - no hardcoded list
 
 ## Internal API - Accessing Other Collections
 
 The internal API allows events to make HTTP-like requests to other collections,
 executing the full request pipeline including all events and validation.
 
-### JavaScript Events
-Access other collections using `dpd`:
+### JavaScript Events (Async/Await)
+Access other collections using `dpd` with promises:
 ```javascript
-function Run(context) {
-    // GET requests
-    const allUsers = dpd.users.get();  // Get all users
-    const user = dpd.users.get("user123");  // Get user by ID
-    const activeUsers = dpd.users.get({ active: true });  // Query users
-    
-    // POST request (create)
-    const newTodo = dpd.todos.post({
-        title: "New task",
-        userId: context.me.id,
-        completed: false
-    });
-    
-    // PUT request (update)
-    const updated = dpd.todos.put("todo123", {
-        completed: true
-    });
-    
-    // DELETE request
-    dpd.todos.del("todo123");
+async function Run(context) {
+    try {
+        // GET requests
+        const allUsers = await dpd.users.get();  // Get all users
+        const user = await dpd.users.get("user123");  // Get user by ID
+        const activeUsers = await dpd.users.get({ active: true });  // Query users
+        
+        // POST request (create)
+        const newTodo = await dpd.todos.post({
+            title: "New task",
+            userId: context.me.id,
+            completed: false
+        });
+        
+        // PUT request (update)
+        const updated = await dpd.todos.put("todo123", {
+            completed: true
+        });
+        
+        // DELETE request
+        await dpd.todos.del("todo123");
+    } catch (err) {
+        context.error("operation", err.message);
+    }
 }
 ```
 
@@ -173,6 +195,7 @@ Available methods:
 - Works with both regular and noStore collections
 - Returns same response as HTTP requests
 - Honors `$skipEvents` parameter to bypass event execution when needed
+- **Dynamic collection access** - dpd.anyCollectionName works automatically
 
 ### Event Execution
 The internal API runs the complete event pipeline:
@@ -184,7 +207,7 @@ The internal API runs the complete event pipeline:
 To skip events (useful to avoid infinite loops):
 ```javascript
 // JavaScript
-dpd.users.post({ name: "Admin", $skipEvents: true });
+await dpd.users.post({ name: "Admin", $skipEvents: true });
 
 // Go
 ctx.Dpd.Collection("users").Post(map[string]interface{}{
@@ -196,6 +219,62 @@ ctx.Dpd.Collection("users").Post(map[string]interface{}{
 **Important**: When an event in collection A triggers operations on collection B, 
 collection B's events will also run. Use `$skipEvents` to prevent infinite loops
 or unwanted cascading effects.
+
+## Best Practices for Event Handlers
+
+### 1. Error Handling
+```go
+// Always return after Cancel
+if !isValid {
+    ctx.Cancel("Invalid data", 400)
+    return nil  // CRITICAL: Must return
+}
+
+// Handle internal API errors gracefully
+user, err := ctx.Dpd.Collection("users").Get(userId, nil)
+if err != nil {
+    // Don't fail the whole request, handle gracefully
+    ctx.Log("User lookup failed", map[string]interface{}{"error": err.Error()})
+    ctx.Data["author"] = map[string]interface{}{"error": "User not found"}
+}
+```
+
+### 2. Input Validation
+```go
+// Type-safe validation with proper checks
+title, ok := ctx.Data["title"].(string)
+if !ok || strings.TrimSpace(title) == "" {
+    ctx.Error("title", "Title is required")
+}
+
+// Check HasErrors before proceeding
+if ctx.HasErrors() {
+    return nil
+}
+```
+
+### 3. Security Considerations
+- **Always validate file paths** to prevent directory traversal
+- **Check authentication** before sensitive operations
+- **Validate content types** for file uploads
+- **Use rate limiting** for expensive operations
+- **Hide sensitive fields** using ctx.Hide()
+
+### 4. Performance Tips
+- **Avoid N+1 queries** - batch fetch related data
+- **Use $limit** for large result sets
+- **Cache frequently accessed data** in context
+- **Use goroutines carefully** - V8 contexts are not thread-safe
+
+### 5. Logging Best Practices
+```go
+// Structured logging with context
+ctx.Log("Operation completed", map[string]interface{}{
+    "userId": ctx.Me["id"],
+    "action": "update",
+    "duration": time.Since(start).Milliseconds(),
+})
+```
 
 ## Go Event Examples
 ### Correct Go Event Structure
@@ -243,7 +322,7 @@ func Run(ctx *EventContext) error {
 - `/resources/collection-name/*.go` - Go events (NO package main!)
 - `/internal/events/` - Event system implementation
 - `/internal/events/compile_wrapper.go` - Go event compilation wrapper
-- `/internal/events/compile.go` - Event compilation logic
+- `/internal/events/script_dpd.go` - Dynamic dpd object implementation
 - `/resources/files/` - Built-in file storage with Go events
 - `/dashboard/` - Admin interface
 
@@ -270,3 +349,31 @@ Perfect for API endpoints without database storage:
 ```
 
 See calculator-js and calculator-go as reference implementations.
+
+## Known Issues & Workarounds
+
+### 1. CORS/Origin Checking
+**Issue**: WebSocket CheckOrigin returns true for all origins
+**Location**: `internal/server/server.go:160`
+**Workaround**: In production, implement proper origin validation
+
+### 2. Unimplemented Features
+- **RabbitMQ broker**: Use Redis or in-memory broker for now
+- **AWS SES**: Use SMTP for email sending
+
+### 3. Common Pitfalls
+- Forgetting to return after `ctx.Cancel()`
+- Not handling async errors in JavaScript events
+- Creating infinite loops with internal API calls
+- Not using `$skipEvents` when needed
+- Hardcoding collection names instead of dynamic access
+
+## Development Tips
+1. **Use `npm run dev`** for automatic recompilation
+2. **Check compilation errors** in the terminal, not just the API response
+3. **Use structured logging** for better debugging
+4. **Test with curl** for quick iteration
+5. **Monitor `metrics.json`** for performance data
+6. **Use column storage** (`useColumns: true`) for better SQL query performance
+7. **JavaScript events support async/await** - use it for cleaner code
+8. **The dpd object is dynamic** - any collection name works automatically

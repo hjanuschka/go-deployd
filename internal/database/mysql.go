@@ -442,13 +442,108 @@ func (s *MySQLStore) AddToSet(ctx context.Context, query QueryBuilder, addOps ma
 }
 
 func (s *MySQLStore) PopFirst(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
-	// For MySQL, we'll implement this by updating arrays manually
-	return &MySQLUpdateResult{modifiedCount: 0}, fmt.Errorf("PopFirst not yet implemented for MySQL")
+	return s.popArrayElements(ctx, query, fields, true)
 }
 
 func (s *MySQLStore) PopLast(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
-	// For MySQL, we'll implement this by updating arrays manually
-	return &MySQLUpdateResult{modifiedCount: 0}, fmt.Errorf("PopLast not yet implemented for MySQL")
+	return s.popArrayElements(ctx, query, fields, false)
+}
+
+// popArrayElements removes the first or last element from array fields
+func (s *MySQLStore) popArrayElements(ctx context.Context, query QueryBuilder, fields []string, popFirst bool) (UpdateResult, error) {
+	// Find documents matching the query
+	docs, err := s.Find(ctx, query, QueryOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to find documents for pop operation: %w", err)
+	}
+
+	if len(docs) == 0 {
+		return &MySQLUpdateResult{modifiedCount: 0}, nil
+	}
+
+	modifiedCount := int64(0)
+
+	// Update each document
+	for _, doc := range docs {
+		modified := false
+		
+		// Pop elements from specified fields
+		for _, field := range fields {
+			if value, exists := doc[field]; exists {
+				switch arr := value.(type) {
+				case []interface{}:
+					if len(arr) > 0 {
+						if popFirst {
+							// Remove first element
+							doc[field] = arr[1:]
+						} else {
+							// Remove last element
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				case []string:
+					if len(arr) > 0 {
+						if popFirst {
+							doc[field] = arr[1:]
+						} else {
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				case []int:
+					if len(arr) > 0 {
+						if popFirst {
+							doc[field] = arr[1:]
+						} else {
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				case []float64:
+					if len(arr) > 0 {
+						if popFirst {
+							doc[field] = arr[1:]
+						} else {
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				case []map[string]interface{}:
+					if len(arr) > 0 {
+						if popFirst {
+							doc[field] = arr[1:]
+						} else {
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				}
+			}
+		}
+
+		// Update the document if any field was modified
+		if modified {
+			// Update timestamp
+			doc["updatedAt"] = time.Now()
+			
+			// Serialize and update in database
+			jsonData, err := json.Marshal(doc)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal updated document: %w", err)
+			}
+
+			updateSQL := fmt.Sprintf("UPDATE `%s` SET data = ?, updatedAt = ? WHERE id = ?", s.tableName)
+			_, err = s.db.ExecContext(ctx, updateSQL, jsonData, doc["updatedAt"], doc["id"])
+			if err != nil {
+				return nil, fmt.Errorf("failed to update document: %w", err)
+			}
+
+			modifiedCount++
+		}
+	}
+
+	return &MySQLUpdateResult{modifiedCount: modifiedCount}, nil
 }
 
 func (s *MySQLStore) Upsert(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {

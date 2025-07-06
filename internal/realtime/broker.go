@@ -8,6 +8,7 @@ import (
 
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/logging"
+	"github.com/redis/go-redis/v9"
 )
 
 // MessageBroker defines the interface for message brokers
@@ -104,9 +105,12 @@ func (mb *MemoryBroker) IsConnected() bool {
 // RedisBroker implements a Redis-based message broker for multi-server deployments
 type RedisBroker struct {
 	config   *config.RedisConfig
-	client   interface{} // Redis client (would be *redis.Client in real implementation)
+	client   *redis.Client
+	pubsub   *redis.PubSub
 	handlers map[string]MessageHandler
 	mu       sync.RWMutex
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 // NewRedisBroker creates a new Redis message broker
@@ -118,54 +122,171 @@ func NewRedisBroker(config *config.RedisConfig) *RedisBroker {
 }
 
 func (rb *RedisBroker) Connect(ctx context.Context) error {
-	// TODO: Implement Redis connection
-	// This would require adding Redis dependency (github.com/go-redis/redis/v8)
-	logging.Info("Redis broker would connect here", "realtime", map[string]interface{}{
+	rb.ctx, rb.cancel = context.WithCancel(ctx)
+	
+	// Create Redis client
+	rb.client = redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%d", rb.config.Host, rb.config.Port),
+		Password: rb.config.Password,
+		DB:       rb.config.Database,
+	})
+	
+	// Test connection
+	if err := rb.client.Ping(rb.ctx).Err(); err != nil {
+		return fmt.Errorf("failed to connect to Redis: %w", err)
+	}
+	
+	// Create pubsub client
+	rb.pubsub = rb.client.Subscribe(rb.ctx)
+	
+	logging.Info("Redis broker connected", "realtime", map[string]interface{}{
 		"host": rb.config.Host,
 		"port": rb.config.Port,
+		"db":   rb.config.Database,
 	})
-	return fmt.Errorf("Redis broker not implemented yet - add redis dependency first")
+	
+	return nil
 }
 
 func (rb *RedisBroker) Disconnect() error {
-	// TODO: Implement Redis disconnection
+	if rb.cancel != nil {
+		rb.cancel()
+	}
+	
+	if rb.pubsub != nil {
+		if err := rb.pubsub.Close(); err != nil {
+			logging.Error("Failed to close Redis pubsub", "realtime", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}
+	
+	if rb.client != nil {
+		if err := rb.client.Close(); err != nil {
+			logging.Error("Failed to close Redis client", "realtime", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}
+	
+	logging.Info("Redis broker disconnected", "realtime", nil)
 	return nil
 }
 
 func (rb *RedisBroker) Publish(topic string, message *BrokerMessage) error {
-	// TODO: Implement Redis publish
-	data, err := json.Marshal(message)
-	if err != nil {
-		return err
+	if rb.client == nil {
+		return fmt.Errorf("Redis client not connected")
 	}
 	
-	key := rb.config.Prefix + topic
-	logging.Debug("Would publish to Redis", "realtime", map[string]interface{}{
-		"key":  key,
-		"data": string(data),
+	data, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	
+	channel := rb.config.Prefix + topic
+	
+	// Publish to Redis channel
+	if err := rb.client.Publish(rb.ctx, channel, data).Err(); err != nil {
+		return fmt.Errorf("failed to publish to Redis: %w", err)
+	}
+	
+	logging.Debug("Published to Redis", "realtime", map[string]interface{}{
+		"channel": channel,
+		"event":   message.Event,
+		"type":    message.Type,
 	})
+	
 	return nil
 }
 
 func (rb *RedisBroker) Subscribe(topic string, handler MessageHandler) error {
-	// TODO: Implement Redis subscribe
+	if rb.pubsub == nil {
+		return fmt.Errorf("Redis pubsub not connected")
+	}
+	
 	rb.mu.Lock()
-	defer rb.mu.Unlock()
 	rb.handlers[topic] = handler
+	rb.mu.Unlock()
+	
+	channel := rb.config.Prefix + topic
+	
+	// Subscribe to Redis channel
+	if err := rb.pubsub.Subscribe(rb.ctx, channel); err != nil {
+		return fmt.Errorf("failed to subscribe to Redis channel: %w", err)
+	}
+	
+	// Start listening for messages in a goroutine
+	go func() {
+		ch := rb.pubsub.Channel()
+		for msg := range ch {
+			var message BrokerMessage
+			if err := json.Unmarshal([]byte(msg.Payload), &message); err != nil {
+				logging.Error("Failed to unmarshal Redis message", "realtime", map[string]interface{}{
+					"error":   err.Error(),
+					"channel": msg.Channel,
+				})
+				continue
+			}
+			
+			// Get handler for topic
+			rb.mu.RLock()
+			handler, exists := rb.handlers[topic]
+			rb.mu.RUnlock()
+			
+			if exists && handler != nil {
+				if err := handler(&message); err != nil {
+					logging.Error("Redis broker handler error", "realtime", map[string]interface{}{
+						"topic": topic,
+						"error": err.Error(),
+					})
+				}
+			}
+		}
+	}()
+	
+	logging.Info("Subscribed to Redis channel", "realtime", map[string]interface{}{
+		"channel": channel,
+		"topic":   topic,
+	})
+	
 	return nil
 }
 
 func (rb *RedisBroker) Unsubscribe(topic string) error {
-	// TODO: Implement Redis unsubscribe
+	if rb.pubsub == nil {
+		return fmt.Errorf("Redis pubsub not connected")
+	}
+	
 	rb.mu.Lock()
-	defer rb.mu.Unlock()
 	delete(rb.handlers, topic)
+	rb.mu.Unlock()
+	
+	channel := rb.config.Prefix + topic
+	
+	// Unsubscribe from Redis channel
+	if err := rb.pubsub.Unsubscribe(rb.ctx, channel); err != nil {
+		return fmt.Errorf("failed to unsubscribe from Redis channel: %w", err)
+	}
+	
+	logging.Info("Unsubscribed from Redis channel", "realtime", map[string]interface{}{
+		"channel": channel,
+		"topic":   topic,
+	})
+	
 	return nil
 }
 
 func (rb *RedisBroker) IsConnected() bool {
-	// TODO: Check Redis connection status
-	return false
+	if rb.client == nil {
+		return false
+	}
+	
+	// Check connection with ping
+	if err := rb.client.Ping(rb.ctx).Err(); err != nil {
+		return false
+	}
+	
+	return true
 }
 
 // RabbitMQBroker implements a RabbitMQ-based message broker

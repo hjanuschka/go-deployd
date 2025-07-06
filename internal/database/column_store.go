@@ -921,11 +921,112 @@ func (s *ColumnStore) AddToSet(ctx context.Context, query QueryBuilder, addOps m
 }
 
 func (s *ColumnStore) PopFirst(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
-	return &SQLiteUpdateResult{modifiedCount: 0}, fmt.Errorf("PopFirst not yet implemented for ColumnStore")
+	return s.popArrayElements(ctx, query, fields, true)
 }
 
 func (s *ColumnStore) PopLast(ctx context.Context, query QueryBuilder, fields []string) (UpdateResult, error) {
-	return &SQLiteUpdateResult{modifiedCount: 0}, fmt.Errorf("PopLast not yet implemented for ColumnStore")
+	return s.popArrayElements(ctx, query, fields, false)
+}
+
+// popArrayElements removes the first or last element from array fields
+func (s *ColumnStore) popArrayElements(ctx context.Context, query QueryBuilder, fields []string, popFirst bool) (UpdateResult, error) {
+	// Find documents matching the query
+	docs, err := s.Find(ctx, query, QueryOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to find documents for pop operation: %w", err)
+	}
+
+	if len(docs) == 0 {
+		return &SQLiteUpdateResult{modifiedCount: 0}, nil
+	}
+
+	modifiedCount := int64(0)
+
+	// Update each document
+	for _, doc := range docs {
+		modified := false
+		
+		// Pop elements from specified fields
+		for _, field := range fields {
+			if value, exists := doc[field]; exists {
+				switch arr := value.(type) {
+				case []interface{}:
+					if len(arr) > 0 {
+						if popFirst {
+							// Remove first element
+							doc[field] = arr[1:]
+						} else {
+							// Remove last element
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				case []string:
+					if len(arr) > 0 {
+						if popFirst {
+							doc[field] = arr[1:]
+						} else {
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				case []int:
+					if len(arr) > 0 {
+						if popFirst {
+							doc[field] = arr[1:]
+						} else {
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				case []float64:
+					if len(arr) > 0 {
+						if popFirst {
+							doc[field] = arr[1:]
+						} else {
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				case []map[string]interface{}:
+					if len(arr) > 0 {
+						if popFirst {
+							doc[field] = arr[1:]
+						} else {
+							doc[field] = arr[:len(arr)-1]
+						}
+						modified = true
+					}
+				}
+			}
+		}
+
+		// Update the document if any field was modified
+		if modified {
+			// Update timestamp
+			doc["updatedAt"] = time.Now()
+			
+			// Separate data
+			columnValues, jsonData, err := s.separateData(doc)
+			if err != nil {
+				return nil, fmt.Errorf("failed to separate data: %w", err)
+			}
+
+			// Build and execute update SQL
+			sql, args, err := s.buildUpdateSQL(columnValues, jsonData, doc["id"])
+			if err != nil {
+				return nil, fmt.Errorf("failed to build update SQL: %w", err)
+			}
+
+			if _, err := s.db.ExecContext(ctx, sql, args...); err != nil {
+				return nil, fmt.Errorf("failed to update document: %w", err)
+			}
+
+			modifiedCount++
+		}
+	}
+
+	return &SQLiteUpdateResult{modifiedCount: modifiedCount}, nil
 }
 
 func (s *ColumnStore) Upsert(ctx context.Context, query QueryBuilder, update UpdateBuilder) (UpdateResult, error) {
