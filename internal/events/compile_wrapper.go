@@ -102,6 +102,20 @@ import (
 
 %s
 
+// InternalClient provides internal HTTP-like access to resources
+type InternalClient struct {
+	Collection func(name string) *CollectionClient
+}
+
+// CollectionClient provides methods for a specific collection
+type CollectionClient struct {
+	name string
+	Get  func(id string, query map[string]interface{}) (interface{}, error)
+	Post func(data map[string]interface{}) (interface{}, error)
+	Put  func(id string, data map[string]interface{}) (interface{}, error)
+	Delete func(id string) error
+}
+
 // deployd provides utility functions for event handlers
 var deployd = struct {
 	// Log writes a message to the application logs
@@ -149,6 +163,9 @@ type EventContext struct {
 	
 	// Hide removes a field from the response
 	hideFields []string
+	
+	// Dpd provides internal API access to collections
+	Dpd *InternalClient
 }
 
 // Error adds a validation error
@@ -201,6 +218,7 @@ func (h eventHandler) Run(ctx interface{}) error {
 		Cancel:   safeGetCancelField(v, "Cancel"),
 		Log:      safeGetLogField(v, "Log"),
 		Emit:     safeGetEmitField(v, "Emit"),
+		Dpd:      safeGetDpdField(v, "Dpd"),
 	}
 	
 	// Run the user's event handler
@@ -313,6 +331,100 @@ func safeGetEmitField(v reflect.Value, fieldName string) func(string, interface{
 		return emitFunc
 	}
 	return func(string, interface{}, ...string) {} // no-op function
+}
+
+func safeGetDpdField(v reflect.Value, fieldName string) *InternalClient {
+	val := getFieldValue(v, fieldName)
+	if val == nil {
+		return nil
+	}
+	// Use reflection to convert the interface to InternalClient
+	// The actual type from compile.go won't match our local type exactly
+	valV := reflect.ValueOf(val)
+	if valV.Kind() == reflect.Ptr && !valV.IsNil() {
+		// Try to find the Collection method
+		collectionMethod := valV.MethodByName("Collection")
+		if collectionMethod.IsValid() {
+			return &InternalClient{
+				Collection: func(name string) *CollectionClient {
+					// Call the original Collection function through reflection
+					results := collectionMethod.Call([]reflect.Value{reflect.ValueOf(name)})
+					if len(results) > 0 && !results[0].IsNil() {
+						clientV := results[0]
+						
+						// Extract methods from the returned client
+						return &CollectionClient{
+							name: name,
+							Get: func(id string, query map[string]interface{}) (interface{}, error) {
+								getMethod := clientV.MethodByName("Get")
+								if getMethod.IsValid() {
+									results := getMethod.Call([]reflect.Value{
+										reflect.ValueOf(id),
+										reflect.ValueOf(query),
+									})
+									if len(results) == 2 {
+										var err error
+										if !results[1].IsNil() {
+											err = results[1].Interface().(error)
+										}
+										return results[0].Interface(), err
+									}
+								}
+								return nil, nil
+							},
+							Post: func(data map[string]interface{}) (interface{}, error) {
+								postMethod := clientV.MethodByName("Post")
+								if postMethod.IsValid() {
+									results := postMethod.Call([]reflect.Value{
+										reflect.ValueOf(data),
+									})
+									if len(results) == 2 {
+										var err error
+										if !results[1].IsNil() {
+											err = results[1].Interface().(error)
+										}
+										return results[0].Interface(), err
+									}
+								}
+								return nil, nil
+							},
+							Put: func(id string, data map[string]interface{}) (interface{}, error) {
+								putMethod := clientV.MethodByName("Put")
+								if putMethod.IsValid() {
+									results := putMethod.Call([]reflect.Value{
+										reflect.ValueOf(id),
+										reflect.ValueOf(data),
+									})
+									if len(results) == 2 {
+										var err error
+										if !results[1].IsNil() {
+											err = results[1].Interface().(error)
+										}
+										return results[0].Interface(), err
+									}
+								}
+								return nil, nil
+							},
+							Delete: func(id string) error {
+								deleteMethod := clientV.MethodByName("Delete")
+								if deleteMethod.IsValid() {
+									results := deleteMethod.Call([]reflect.Value{
+										reflect.ValueOf(id),
+									})
+									if len(results) == 1 && !results[0].IsNil() {
+										return results[0].Interface().(error)
+									}
+								}
+								return nil
+							},
+						}
+					}
+					return nil
+				},
+			}
+		}
+	}
+	return nil
 }
 `
 

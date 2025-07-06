@@ -85,6 +85,12 @@ function Documentation() {
       description: 'MongoDB-style queries and SQL translation',
       icon: FiDatabase,
       url: 'https://github.com/hjanuschka/go-deployd/blob/main/docs/advanced-queries.md'
+    },
+    {
+      title: 'Internal API',
+      description: 'Access collections from events without HTTP requests',
+      icon: FiServer,
+      url: 'https://github.com/hjanuschka/go-deployd/blob/main/docs/internal-api.md'
     }
   ]
 
