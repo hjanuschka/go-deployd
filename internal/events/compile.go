@@ -31,6 +31,7 @@ type EventContext struct {
 	Log        func(message string, data ...map[string]interface{})
 	Emit       func(event string, data interface{}, room ...string) // Real-time event emission
 	Resource   interface{ GetName() string }
+	Dpd        *InternalAPI // Internal API for accessing other collections
 	hideFields []string
 }
 
@@ -230,10 +231,21 @@ func RunGoPluginWithEmitter(pluginPath string, ctx *context.Context, data map[st
 		Data:       data,
 		Errors:     make(map[string]string),
 		Query:      ctx.Query,
+		Method:     ctx.Method,
 		Internal:   false,
 		IsRoot:     ctx.IsRoot,
 		Resource:   ctx.Resource,
 		hideFields: make([]string, 0),
+	}
+	
+	// Set up internal API if router is available
+	if ctx.Router != nil {
+		router, ok := ctx.Router.(interface {
+			GetCollection(name string) *resources.Collection
+		})
+		if ok {
+			eventCtx.Dpd = NewInternalAPI(router)
+		}
 	}
 
 	if ctx.IsAuthenticated {

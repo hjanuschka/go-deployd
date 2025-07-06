@@ -98,6 +98,59 @@ type EventContext struct {
 6. Modify context.data for data changes in both JS and Go
 7. Go events are compiled as plugins using the wrapper system
 
+## Internal API - Accessing Other Collections
+
+### JavaScript Events
+Access other collections using `dpd` or `context.dpd`:
+```javascript
+function Run(context) {
+    // Find all active users
+    const activeUsers = dpd.users.find({ active: true });
+    
+    // Find one user by ID
+    const user = dpd.users.findOne({ id: "user123" });
+    
+    // Insert a new todo
+    const newTodo = dpd.todos.insert({
+        title: "New task",
+        userId: context.me.id,
+        completed: false
+    });
+}
+```
+
+### Go Events
+Access other collections using `ctx.Dpd`:
+```go
+func Run(ctx *EventContext) error {
+    // Find all active users
+    activeUsers, err := ctx.Dpd.Collection("users").Find(bson.M{"active": true})
+    if err != nil {
+        return err
+    }
+    
+    // Find one user by ID
+    user, err := ctx.Dpd.Collection("users").FindOne(bson.M{"id": "user123"})
+    
+    // Insert a new todo
+    newTodo, err := ctx.Dpd.Collection("todos").Insert(bson.M{
+        "title": "New task",
+        "userId": ctx.Me["id"],
+        "completed": false,
+    })
+    
+    return nil
+}
+```
+
+Available methods:
+- `find(query, options)` / `Find()` - Find multiple documents
+- `findOne(query)` / `FindOne()` - Find single document
+- `insert(data)` / `Insert()` - Create new document
+- `update(id, data)` / `Update()` - Update existing document
+- `delete(id)` / `Delete()` - Delete document
+- `count(query)` / `Count()` - Count matching documents
+
 ## Go Event Examples
 ### Correct Go Event Structure
 ```go

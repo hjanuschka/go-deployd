@@ -11,6 +11,7 @@ import (
 
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/logging"
+	"github.com/hjanuschka/go-deployd/internal/resources"
 	"go.mongodb.org/mongo-driver/bson"
 	v8 "rogchap.com/v8go"
 )
@@ -635,6 +636,11 @@ func setupContextObject(v8ctx *v8.Context, sc *ScriptContext) error {
 	})
 	contextInstance.Set("emit", emitFunc.GetFunction(v8ctx))
 	
+	// Add dpd object for internal API access
+	if err := setupDpdObject(v8ctx, sc); err != nil {
+		return err
+	}
+	
 	// Set the context object as global
 	v8ctx.Global().Set("context", contextInstance)
 	
@@ -971,4 +977,178 @@ func getMapKeys(data map[string]interface{}) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// setupDpdObject creates the dpd object for internal API access
+func setupDpdObject(v8ctx *v8.Context, sc *ScriptContext) error {
+	isolate := v8ctx.Isolate()
+	
+	// Create dpd object
+	dpdTemplate := v8.NewObjectTemplate(isolate)
+	dpd, err := dpdTemplate.NewInstance(v8ctx)
+	if err != nil {
+		return err
+	}
+	
+	// Get router from context if available
+	if sc.ctx != nil && sc.ctx.Router != nil {
+		// Create collection access proxies
+		router, ok := sc.ctx.Router.(interface {
+			GetCollection(name string) interface{ GetName() string }
+		})
+		if ok {
+			// Add common collections
+			collectionNames := []string{"users", "files", "todos"} // TODO: Get dynamic list
+			
+			for _, name := range collectionNames {
+				collection := router.GetCollection(name)
+				if collection != nil {
+					// Create collection proxy object
+					collTemplate := v8.NewObjectTemplate(isolate)
+					
+					// Add find method
+					findFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+						args := info.Args()
+						query := bson.M{}
+						options := bson.M{}
+						
+						// Parse query
+						if len(args) > 0 && args[0].IsObject() {
+							queryJSON, _ := v8.JSONStringify(v8ctx, args[0])
+							json.Unmarshal([]byte(queryJSON), &query)
+						}
+						
+						// Parse options
+						if len(args) > 1 && args[1].IsObject() {
+							optionsJSON, _ := v8.JSONStringify(v8ctx, args[1])
+							json.Unmarshal([]byte(optionsJSON), &options)
+						}
+						
+						// Execute actual collection query
+						if actualRouter, ok := router.(interface {
+							GetCollection(name string) *resources.Collection
+						}); ok {
+							if coll := actualRouter.GetCollection(name); coll != nil {
+								api := NewInternalAPI(actualRouter)
+								store := api.Collection(name)
+								
+								docs, err := store.Find(query, options)
+								if err != nil {
+									logging.Debug("dpd collection find error", "js-dpd", map[string]interface{}{
+										"collection": name,
+										"error":      err.Error(),
+									})
+									return v8.Null(isolate)
+								}
+								
+								// Convert to JSON and parse back to V8
+								docsJSON, _ := json.Marshal(docs)
+								result, _ := v8.JSONParse(v8ctx, string(docsJSON))
+								return result
+							}
+						}
+						
+						// Return empty array if collection not found
+						arr := v8.NewArray(isolate)
+						return arr.Value
+					})
+					collTemplate.Set("find", findFunc)
+					
+					// Add findOne method
+					findOneFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+						args := info.Args()
+						query := bson.M{}
+						
+						if len(args) > 0 && args[0].IsObject() {
+							queryJSON, _ := v8.JSONStringify(v8ctx, args[0])
+							json.Unmarshal([]byte(queryJSON), &query)
+						}
+						
+						// Execute actual collection query
+						if actualRouter, ok := router.(interface {
+							GetCollection(name string) *resources.Collection
+						}); ok {
+							if coll := actualRouter.GetCollection(name); coll != nil {
+								api := NewInternalAPI(actualRouter)
+								store := api.Collection(name)
+								
+								doc, err := store.FindOne(query)
+								if err != nil {
+									logging.Debug("dpd collection findOne error", "js-dpd", map[string]interface{}{
+										"collection": name,
+										"error":      err.Error(),
+									})
+									return v8.Null(isolate)
+								}
+								
+								// Convert to JSON and parse back to V8
+								docJSON, _ := json.Marshal(doc)
+								result, _ := v8.JSONParse(v8ctx, string(docJSON))
+								return result
+							}
+						}
+						
+						return v8.Null(isolate)
+					})
+					collTemplate.Set("findOne", findOneFunc)
+					
+					// Add insert method
+					insertFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+						args := info.Args()
+						data := bson.M{}
+						
+						if len(args) > 0 && args[0].IsObject() {
+							dataJSON, _ := v8.JSONStringify(v8ctx, args[0])
+							json.Unmarshal([]byte(dataJSON), &data)
+						}
+						
+						// Execute actual collection insert
+						if actualRouter, ok := router.(interface {
+							GetCollection(name string) *resources.Collection
+						}); ok {
+							if coll := actualRouter.GetCollection(name); coll != nil {
+								api := NewInternalAPI(actualRouter)
+								store := api.Collection(name)
+								
+								doc, err := store.Insert(data)
+								if err != nil {
+									logging.Debug("dpd collection insert error", "js-dpd", map[string]interface{}{
+										"collection": name,
+										"error":      err.Error(),
+									})
+									return v8.Null(isolate)
+								}
+								
+								// Convert to JSON and parse back to V8
+								docJSON, _ := json.Marshal(doc)
+								result, _ := v8.JSONParse(v8ctx, string(docJSON))
+								return result
+							}
+						}
+						
+						return v8.Null(isolate)
+					})
+					collTemplate.Set("insert", insertFunc)
+					
+					// Create collection instance and add to dpd
+					collInstance, _ := collTemplate.NewInstance(v8ctx)
+					dpd.Set(name, collInstance)
+				}
+			}
+		}
+	}
+	
+	// Set dpd as global
+	v8ctx.Global().Set("dpd", dpd)
+	
+	// Also add to context for consistency
+	contextValue, _ := v8ctx.Global().Get("context")
+	if contextValue != nil && !contextValue.IsUndefined() {
+		contextObj, _ := contextValue.AsObject()
+		if contextObj != nil {
+			contextObj.Set("dpd", dpd)
+		}
+	}
+	
+	return nil
 }
