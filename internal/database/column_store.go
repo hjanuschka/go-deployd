@@ -824,15 +824,67 @@ func (s *ColumnStore) documentsEqual(a, b map[string]interface{}) bool {
 	return string(aJSON) == string(bJSON)
 }
 
-// Additional StoreInterface methods to implement...
+// Remove deletes documents matching the query
 func (s *ColumnStore) Remove(ctx context.Context, query QueryBuilder) (DeleteResult, error) {
-	// Implementation similar to SQLiteStore.Remove
-	return &SQLiteDeleteResult{deletedCount: 0}, fmt.Errorf("Remove not yet implemented for ColumnStore")
+	// First count how many will be deleted
+	count, err := s.Count(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count documents to delete: %w", err)
+	}
+
+	if count == 0 {
+		return &SQLiteDeleteResult{deletedCount: 0}, nil
+	}
+
+	// Build DELETE query
+	deleteSQL := fmt.Sprintf("DELETE FROM \"%s\"", s.tableName)
+	args := []interface{}{}
+
+	// Add WHERE clause if query is provided
+	if query != nil {
+		whereClause, whereArgs := s.buildWhereClause(query)
+		if whereClause != "" {
+			deleteSQL += " WHERE " + whereClause
+			args = append(args, whereArgs...)
+		}
+	}
+
+	// Execute the delete
+	result, err := s.db.ExecContext(ctx, deleteSQL, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete documents: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return &SQLiteDeleteResult{deletedCount: rowsAffected}, nil
 }
 
 func (s *ColumnStore) Count(ctx context.Context, query QueryBuilder) (int64, error) {
-	// Implementation similar to SQLiteStore.Count
-	return 0, fmt.Errorf("Count not yet implemented for ColumnStore")
+	// Build COUNT query
+	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", s.tableName)
+	args := []interface{}{}
+
+	// Add WHERE clause if query is provided
+	if query != nil {
+		whereClause, whereArgs := s.buildWhereClause(query)
+		if whereClause != "" {
+			countSQL += " WHERE " + whereClause
+			args = append(args, whereArgs...)
+		}
+	}
+
+	// Execute the count query
+	var count int64
+	err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count documents: %w", err)
+	}
+
+	return count, nil
 }
 
 // Additional MongoDB-style operations...
