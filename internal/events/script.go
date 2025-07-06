@@ -3,6 +3,7 @@ package events
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/hjanuschka/go-deployd/internal/context"
 	"github.com/hjanuschka/go-deployd/internal/logging"
-	"github.com/hjanuschka/go-deployd/internal/resources"
 	"go.mongodb.org/mongo-driver/bson"
 	v8 "rogchap.com/v8go"
 )
@@ -993,147 +993,139 @@ func setupDpdObject(v8ctx *v8.Context, sc *ScriptContext) error {
 	// Get router from context if available
 	if sc.ctx != nil && sc.ctx.Router != nil {
 		// Create collection access proxies
-		router, ok := sc.ctx.Router.(interface {
-			GetCollection(name string) interface{ GetName() string }
-		})
-		if ok {
+		if httpRouter, ok := sc.ctx.Router.(http.Handler); ok {
 			// Add common collections
 			collectionNames := []string{"users", "files", "todos"} // TODO: Get dynamic list
 			
 			for _, name := range collectionNames {
-				collection := router.GetCollection(name)
-				if collection != nil {
+					collName := name // Capture for closure
 					// Create collection proxy object
 					collTemplate := v8.NewObjectTemplate(isolate)
 					
-					// Add find method
-					findFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+					// Add get method (list all or get by ID)
+					getFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 						args := info.Args()
-						query := bson.M{}
-						options := bson.M{}
+						var id string
+						var query map[string]interface{}
 						
-						// Parse query
-						if len(args) > 0 && args[0].IsObject() {
-							queryJSON, _ := v8.JSONStringify(v8ctx, args[0])
-							json.Unmarshal([]byte(queryJSON), &query)
-						}
-						
-						// Parse options
-						if len(args) > 1 && args[1].IsObject() {
-							optionsJSON, _ := v8.JSONStringify(v8ctx, args[1])
-							json.Unmarshal([]byte(optionsJSON), &options)
-						}
-						
-						// Execute actual collection query
-						if actualRouter, ok := router.(interface {
-							GetCollection(name string) *resources.Collection
-						}); ok {
-							if coll := actualRouter.GetCollection(name); coll != nil {
-								api := NewInternalAPI(actualRouter)
-								store := api.Collection(name)
-								
-								docs, err := store.Find(query, options)
-								if err != nil {
-									logging.Debug("dpd collection find error", "js-dpd", map[string]interface{}{
-										"collection": name,
-										"error":      err.Error(),
-									})
-									return v8.Null(isolate)
-								}
-								
-								// Convert to JSON and parse back to V8
-								docsJSON, _ := json.Marshal(docs)
-								result, _ := v8.JSONParse(v8ctx, string(docsJSON))
-								return result
+						// First arg can be ID (string) or query (object)
+						if len(args) > 0 {
+							if args[0].IsString() {
+								id = args[0].String()
+							} else if args[0].IsObject() {
+								queryJSON, _ := v8.JSONStringify(v8ctx, args[0])
+								json.Unmarshal([]byte(queryJSON), &query)
 							}
 						}
 						
-						// Return empty array if collection not found
-						arr := v8.NewArray(isolate)
-						return arr.Value
-					})
-					collTemplate.Set("find", findFunc)
-					
-					// Add findOne method
-					findOneFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-						args := info.Args()
-						query := bson.M{}
-						
-						if len(args) > 0 && args[0].IsObject() {
-							queryJSON, _ := v8.JSONStringify(v8ctx, args[0])
-							json.Unmarshal([]byte(queryJSON), &query)
+						// Execute internal GET request
+						api := NewInternalAPI(httpRouter, sc.ctx.Development)
+						result, err := api.Collection(collName).Get(id, query)
+						if err != nil {
+							logging.Debug("dpd collection get error", "js-dpd", map[string]interface{}{
+								"collection": collName,
+								"error":      err.Error(),
+							})
+							return v8.Null(isolate)
 						}
 						
-						// Execute actual collection query
-						if actualRouter, ok := router.(interface {
-							GetCollection(name string) *resources.Collection
-						}); ok {
-							if coll := actualRouter.GetCollection(name); coll != nil {
-								api := NewInternalAPI(actualRouter)
-								store := api.Collection(name)
-								
-								doc, err := store.FindOne(query)
-								if err != nil {
-									logging.Debug("dpd collection findOne error", "js-dpd", map[string]interface{}{
-										"collection": name,
-										"error":      err.Error(),
-									})
-									return v8.Null(isolate)
-								}
-								
-								// Convert to JSON and parse back to V8
-								docJSON, _ := json.Marshal(doc)
-								result, _ := v8.JSONParse(v8ctx, string(docJSON))
-								return result
-							}
-						}
-						
-						return v8.Null(isolate)
+						// Convert to JSON and parse back to V8
+						resultJSON, _ := json.Marshal(result)
+						v8Result, _ := v8.JSONParse(v8ctx, string(resultJSON))
+						return v8Result
 					})
-					collTemplate.Set("findOne", findOneFunc)
+					collTemplate.Set("get", getFunc)
 					
-					// Add insert method
-					insertFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+					// Add post method (create)
+					postFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
 						args := info.Args()
-						data := bson.M{}
+						var data interface{}
 						
 						if len(args) > 0 && args[0].IsObject() {
 							dataJSON, _ := v8.JSONStringify(v8ctx, args[0])
 							json.Unmarshal([]byte(dataJSON), &data)
 						}
 						
-						// Execute actual collection insert
-						if actualRouter, ok := router.(interface {
-							GetCollection(name string) *resources.Collection
-						}); ok {
-							if coll := actualRouter.GetCollection(name); coll != nil {
-								api := NewInternalAPI(actualRouter)
-								store := api.Collection(name)
-								
-								doc, err := store.Insert(data)
-								if err != nil {
-									logging.Debug("dpd collection insert error", "js-dpd", map[string]interface{}{
-										"collection": name,
-										"error":      err.Error(),
-									})
-									return v8.Null(isolate)
-								}
-								
-								// Convert to JSON and parse back to V8
-								docJSON, _ := json.Marshal(doc)
-								result, _ := v8.JSONParse(v8ctx, string(docJSON))
-								return result
-							}
+						// Execute internal POST request
+						api := NewInternalAPI(httpRouter, sc.ctx.Development)
+						result, err := api.Collection(collName).Post(data)
+						if err != nil {
+							logging.Debug("dpd collection post error", "js-dpd", map[string]interface{}{
+								"collection": collName,
+								"error":      err.Error(),
+							})
+							return v8.Null(isolate)
 						}
 						
-						return v8.Null(isolate)
+						// Convert to JSON and parse back to V8
+						resultJSON, _ := json.Marshal(result)
+						v8Result, _ := v8.JSONParse(v8ctx, string(resultJSON))
+						return v8Result
 					})
-					collTemplate.Set("insert", insertFunc)
+					collTemplate.Set("post", postFunc)
+					
+					// Add put method (update)
+					putFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+						args := info.Args()
+						var id string
+						var data interface{}
+						
+						if len(args) > 0 && args[0].IsString() {
+							id = args[0].String()
+						}
+						if len(args) > 1 && args[1].IsObject() {
+							dataJSON, _ := v8.JSONStringify(v8ctx, args[1])
+							json.Unmarshal([]byte(dataJSON), &data)
+						}
+						
+						// Execute internal PUT request
+						api := NewInternalAPI(httpRouter, sc.ctx.Development)
+						result, err := api.Collection(collName).Put(id, data)
+						if err != nil {
+							logging.Debug("dpd collection put error", "js-dpd", map[string]interface{}{
+								"collection": collName,
+								"error":      err.Error(),
+							})
+							return v8.Null(isolate)
+						}
+						
+						// Convert to JSON and parse back to V8
+						resultJSON, _ := json.Marshal(result)
+						v8Result, _ := v8.JSONParse(v8ctx, string(resultJSON))
+						return v8Result
+					})
+					collTemplate.Set("put", putFunc)
+					
+					// Add del method (delete)
+					delFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+						args := info.Args()
+						var id string
+						
+						if len(args) > 0 && args[0].IsString() {
+							id = args[0].String()
+						}
+						
+						// Execute internal DELETE request
+						api := NewInternalAPI(httpRouter, sc.ctx.Development)
+						result, err := api.Collection(collName).Delete(id)
+						if err != nil {
+							logging.Debug("dpd collection delete error", "js-dpd", map[string]interface{}{
+								"collection": collName,
+								"error":      err.Error(),
+							})
+							return v8.Null(isolate)
+						}
+						
+						// Convert to JSON and parse back to V8
+						resultJSON, _ := json.Marshal(result)
+						v8Result, _ := v8.JSONParse(v8ctx, string(resultJSON))
+						return v8Result
+					})
+					collTemplate.Set("del", delFunc)
 					
 					// Create collection instance and add to dpd
 					collInstance, _ := collTemplate.NewInstance(v8ctx)
 					dpd.Set(name, collInstance)
-				}
 			}
 		}
 	}

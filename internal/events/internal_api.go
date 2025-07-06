@@ -1,155 +1,164 @@
 package events
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"github.com/hjanuschka/go-deployd/internal/resources"
-	"go.mongodb.org/mongo-driver/bson"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 )
 
-// InternalStore provides internal access to collection data
-type InternalStore struct {
-	collection *resources.Collection
+// InternalClient provides internal HTTP-like access to resources
+type InternalClient struct {
+	router      http.Handler
+	development bool
 }
 
-// NewInternalStore creates a new internal store for a collection
-func NewInternalStore(collection *resources.Collection) *InternalStore {
-	return &InternalStore{
-		collection: collection,
+// NewInternalClient creates a new internal client
+func NewInternalClient(router http.Handler, development bool) *InternalClient {
+	return &InternalClient{
+		router:      router,
+		development: development,
 	}
 }
 
-// Find retrieves multiple documents based on query
-func (s *InternalStore) Find(query bson.M, options ...bson.M) ([]bson.M, error) {
-	if s.collection == nil {
-		return nil, fmt.Errorf("collection not found")
+// Get performs an internal GET request
+func (c *InternalClient) Get(path string, query ...map[string]interface{}) (interface{}, error) {
+	// Build query string
+	queryStr := ""
+	if len(query) > 0 && query[0] != nil {
+		params := []string{}
+		for k, v := range query[0] {
+			if jsonVal, err := json.Marshal(v); err == nil {
+				params = append(params, fmt.Sprintf("%s=%s", k, string(jsonVal)))
+			}
+		}
+		if len(params) > 0 {
+			queryStr = "?" + strings.Join(params, "&")
+		}
 	}
-	
-	// Apply options if provided
-	opts := bson.M{}
-	if len(options) > 0 {
-		opts = options[0]
-	}
-	
-	// Merge query with options
-	fullQuery := bson.M{}
-	for k, v := range query {
-		fullQuery[k] = v
-	}
-	for k, v := range opts {
-		fullQuery[k] = v
-	}
-	
-	// Use collection's internal Get method
-	result, err := s.collection.Get("", fullQuery)
+
+	req := httptest.NewRequest("GET", path+queryStr, nil)
+	return c.executeRequest(req)
+}
+
+// Post performs an internal POST request
+func (c *InternalClient) Post(path string, data interface{}) (interface{}, error) {
+	body, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-	
-	// Convert result to []bson.M
-	if docs, ok := result.([]bson.M); ok {
-		return docs, nil
-	}
-	
-	// Try single document
-	if doc, ok := result.(bson.M); ok {
-		return []bson.M{doc}, nil
-	}
-	
-	return nil, fmt.Errorf("unexpected result type")
+
+	req := httptest.NewRequest("POST", path, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	return c.executeRequest(req)
 }
 
-// FindOne retrieves a single document based on query
-func (s *InternalStore) FindOne(query bson.M) (bson.M, error) {
-	docs, err := s.Find(query, bson.M{"$limit": 1})
+// Put performs an internal PUT request
+func (c *InternalClient) Put(path string, data interface{}) (interface{}, error) {
+	body, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-	
-	if len(docs) > 0 {
-		return docs[0], nil
-	}
-	
-	return nil, fmt.Errorf("document not found")
+
+	req := httptest.NewRequest("PUT", path, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	return c.executeRequest(req)
 }
 
-// Insert creates a new document
-func (s *InternalStore) Insert(data bson.M) (bson.M, error) {
-	if s.collection == nil {
-		return nil, fmt.Errorf("collection not found")
-	}
-	
-	result, err := s.collection.Create(data)
-	if err != nil {
-		return nil, err
-	}
-	
-	if doc, ok := result.(bson.M); ok {
-		return doc, nil
-	}
-	
-	return nil, fmt.Errorf("unexpected result type")
+// Delete performs an internal DELETE request
+func (c *InternalClient) Delete(path string) (interface{}, error) {
+	req := httptest.NewRequest("DELETE", path, nil)
+	return c.executeRequest(req)
 }
 
-// Update modifies an existing document
-func (s *InternalStore) Update(id string, data bson.M) (bson.M, error) {
-	if s.collection == nil {
-		return nil, fmt.Errorf("collection not found")
+// executeRequest executes the internal request
+func (c *InternalClient) executeRequest(req *http.Request) (interface{}, error) {
+	// Create a response recorder
+	w := httptest.NewRecorder()
+
+	// Execute the request through the router
+	c.router.ServeHTTP(w, req)
+
+	// Get the response
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// Parse the response
+	var result interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		// If JSON decode fails, return the status
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return map[string]interface{}{"status": resp.StatusCode}, nil
+		}
+		return nil, fmt.Errorf("request failed with status %d", resp.StatusCode)
 	}
-	
-	result, err := s.collection.Update(id, data)
-	if err != nil {
-		return nil, err
+
+	// Check for errors in response
+	if respMap, ok := result.(map[string]interface{}); ok {
+		if errMsg, hasError := respMap["error"]; hasError {
+			if msg, ok := respMap["message"].(string); ok {
+				return nil, fmt.Errorf("%s", msg)
+			}
+			return nil, fmt.Errorf("request error: %v", errMsg)
+		}
 	}
-	
-	if doc, ok := result.(bson.M); ok {
-		return doc, nil
+
+	return result, nil
+}
+
+// CollectionClient provides collection-specific operations
+type CollectionClient struct {
+	client     *InternalClient
+	collection string
+}
+
+// Collection returns a client for a specific collection
+func (c *InternalClient) Collection(name string) *CollectionClient {
+	return &CollectionClient{
+		client:     c,
+		collection: name,
 	}
-	
-	return nil, fmt.Errorf("unexpected result type")
+}
+
+// Get retrieves documents or a specific document
+func (cc *CollectionClient) Get(id string, query ...map[string]interface{}) (interface{}, error) {
+	path := "/" + cc.collection
+	if id != "" {
+		path += "/" + id
+	}
+	return cc.client.Get(path, query...)
+}
+
+// Post creates a new document
+func (cc *CollectionClient) Post(data interface{}) (interface{}, error) {
+	return cc.client.Post("/"+cc.collection, data)
+}
+
+// Put updates a document
+func (cc *CollectionClient) Put(id string, data interface{}) (interface{}, error) {
+	return cc.client.Put("/"+cc.collection+"/"+id, data)
 }
 
 // Delete removes a document
-func (s *InternalStore) Delete(id string) error {
-	if s.collection == nil {
-		return fmt.Errorf("collection not found")
-	}
-	
-	_, err := s.collection.Delete(id)
-	return err
+func (cc *CollectionClient) Delete(id string) (interface{}, error) {
+	return cc.client.Delete("/" + cc.collection + "/" + id)
 }
 
-// Count returns the number of documents matching the query
-func (s *InternalStore) Count(query bson.M) (int64, error) {
-	docs, err := s.Find(query)
-	if err != nil {
-		return 0, err
-	}
-	
-	return int64(len(docs)), nil
-}
-
-// InternalAPI provides access to all collections
+// InternalAPI provides access to all collections (compatibility wrapper)
 type InternalAPI struct {
-	router interface {
-		GetCollection(name string) *resources.Collection
-	}
+	client *InternalClient
 }
 
 // NewInternalAPI creates a new internal API instance
-func NewInternalAPI(router interface {
-	GetCollection(name string) *resources.Collection
-}) *InternalAPI {
+func NewInternalAPI(router http.Handler, development bool) *InternalAPI {
 	return &InternalAPI{
-		router: router,
+		client: NewInternalClient(router, development),
 	}
 }
 
-// Collection returns an internal store for the named collection
-func (api *InternalAPI) Collection(name string) *InternalStore {
-	if api.router == nil {
-		return &InternalStore{collection: nil}
-	}
-	
-	collection := api.router.GetCollection(name)
-	return NewInternalStore(collection)
+// Collection returns a collection client
+func (api *InternalAPI) Collection(name string) *CollectionClient {
+	return api.client.Collection(name)
 }

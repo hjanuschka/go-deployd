@@ -100,22 +100,32 @@ type EventContext struct {
 
 ## Internal API - Accessing Other Collections
 
+The internal API allows events to make HTTP-like requests to other collections,
+executing the full request pipeline including all events and validation.
+
 ### JavaScript Events
-Access other collections using `dpd` or `context.dpd`:
+Access other collections using `dpd`:
 ```javascript
 function Run(context) {
-    // Find all active users
-    const activeUsers = dpd.users.find({ active: true });
+    // GET requests
+    const allUsers = dpd.users.get();  // Get all users
+    const user = dpd.users.get("user123");  // Get user by ID
+    const activeUsers = dpd.users.get({ active: true });  // Query users
     
-    // Find one user by ID
-    const user = dpd.users.findOne({ id: "user123" });
-    
-    // Insert a new todo
-    const newTodo = dpd.todos.insert({
+    // POST request (create)
+    const newTodo = dpd.todos.post({
         title: "New task",
         userId: context.me.id,
         completed: false
     });
+    
+    // PUT request (update)
+    const updated = dpd.todos.put("todo123", {
+        completed: true
+    });
+    
+    // DELETE request
+    dpd.todos.del("todo123");
 }
 ```
 
@@ -123,33 +133,69 @@ function Run(context) {
 Access other collections using `ctx.Dpd`:
 ```go
 func Run(ctx *EventContext) error {
-    // Find all active users
-    activeUsers, err := ctx.Dpd.Collection("users").Find(bson.M{"active": true})
-    if err != nil {
-        return err
-    }
+    // GET requests
+    allUsers, err := ctx.Dpd.Collection("users").Get("", nil)  // Get all
+    user, err := ctx.Dpd.Collection("users").Get("user123", nil)  // By ID
+    activeUsers, err := ctx.Dpd.Collection("users").Get("", map[string]interface{}{
+        "active": true,
+    })  // With query
     
-    // Find one user by ID
-    user, err := ctx.Dpd.Collection("users").FindOne(bson.M{"id": "user123"})
-    
-    // Insert a new todo
-    newTodo, err := ctx.Dpd.Collection("todos").Insert(bson.M{
+    // POST request (create)
+    newTodo, err := ctx.Dpd.Collection("todos").Post(map[string]interface{}{
         "title": "New task",
         "userId": ctx.Me["id"],
         "completed": false,
     })
     
-    return nil
+    // PUT request (update)
+    updated, err := ctx.Dpd.Collection("todos").Put("todo123", map[string]interface{}{
+        "completed": true,
+    })
+    
+    // DELETE request
+    _, err = ctx.Dpd.Collection("todos").Delete("todo123")
+    
+    return err
 }
 ```
 
 Available methods:
-- `find(query, options)` / `Find()` - Find multiple documents
-- `findOne(query)` / `FindOne()` - Find single document
-- `insert(data)` / `Insert()` - Create new document
-- `update(id, data)` / `Update()` - Update existing document
-- `delete(id)` / `Delete()` - Delete document
-- `count(query)` / `Count()` - Count matching documents
+- `get(id?)` / `Get()` - Get all documents or by ID
+- `get(query)` / `Get()` - Query documents
+- `post(data)` / `Post()` - Create new document
+- `put(id, data)` / `Put()` - Update existing document
+- `del(id)` / `Delete()` - Delete document
+
+### Key Features
+- Full HTTP semantics (GET, POST, PUT, DELETE)
+- Executes all events (validate, beforeRequest, get, post, put, delete, aftercommit)
+- Respects collection validation rules
+- Works with both regular and noStore collections
+- Returns same response as HTTP requests
+- Honors `$skipEvents` parameter to bypass event execution when needed
+
+### Event Execution
+The internal API runs the complete event pipeline:
+1. `beforeRequest` - Before any operation
+2. `validate` - For POST/PUT operations
+3. `get`/`post`/`put`/`delete` - Method-specific events
+4. `afterCommit` - After successful database operations
+
+To skip events (useful to avoid infinite loops):
+```javascript
+// JavaScript
+dpd.users.post({ name: "Admin", $skipEvents: true });
+
+// Go
+ctx.Dpd.Collection("users").Post(map[string]interface{}{
+    "name": "Admin",
+    "$skipEvents": true,
+})
+```
+
+**Important**: When an event in collection A triggers operations on collection B, 
+collection B's events will also run. Use `$skipEvents` to prevent infinite loops
+or unwanted cascading effects.
 
 ## Go Event Examples
 ### Correct Go Event Structure
