@@ -110,7 +110,7 @@ func (d *SQLiteDatabase) CreateStore(namespace string) StoreInterface {
 
 	if schema.UseColumns {
 		// Use column-based storage
-		fmt.Printf("DEBUG: Creating ColumnStore for collection '%s'\n", namespace)
+		// fmt.Printf("DEBUG: Creating ColumnStore for collection '%s'\n", namespace)
 		columnStore, err := NewColumnStore(namespace, d.db, d, d.schemaManager)
 		if err != nil {
 			// Log error but fall back to JSON store
@@ -123,12 +123,12 @@ func (d *SQLiteDatabase) CreateStore(namespace string) StoreInterface {
 			store.ensureTable()
 			return store
 		}
-		fmt.Printf("DEBUG: Successfully created ColumnStore for collection '%s'\n", namespace)
+		// fmt.Printf("DEBUG: Successfully created ColumnStore for collection '%s'\n", namespace)
 		return columnStore
 	}
 
 	// Use traditional JSON-based storage
-	fmt.Printf("DEBUG: Creating SQLiteStore (JSON-based) for collection '%s'\n", namespace)
+	// fmt.Printf("DEBUG: Creating SQLiteStore (JSON-based) for collection '%s'\n", namespace)
 	store := &SQLiteStore{
 		tableName: namespace,
 		db:        d.db,
@@ -537,7 +537,7 @@ func (s *SQLiteStore) buildWhereClause(query QueryBuilder) (string, []interface{
 		return "", nil
 	}
 
-	fmt.Printf("DEBUG: SQLiteStore processing query: %+v\n", queryMap)
+	// fmt.Printf("DEBUG: SQLiteStore processing query: %+v\n", queryMap)
 	sqlBuilder := NewSQLQueryBuilder()
 	s.convertMapToSQLQuery(queryMap, sqlBuilder)
 	return sqlBuilder.ToSQL()

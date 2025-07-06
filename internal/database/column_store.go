@@ -384,10 +384,10 @@ func (s *ColumnStore) buildWhereClause(query QueryBuilder) (string, []interface{
 	// Set the column checker so the SQLQueryBuilder knows which fields are columns
 	sqlBuilder.SetColumnChecker(s.hasColumn)
 	
-	// Debug logging
-	fmt.Printf("DEBUG: ColumnStore processing query: %+v\n", queryMap)
-	fmt.Printf("DEBUG: ColumnStore schema columns: %+v\n", s.schema.Columns)
-	fmt.Printf("DEBUG: ColumnStore UseColumns: %v\n", s.schema.UseColumns)
+	// Debug logging disabled to prevent server crashes
+	// fmt.Printf("DEBUG: ColumnStore processing query: %+v\n", queryMap)
+	// fmt.Printf("DEBUG: ColumnStore schema columns: %+v\n", s.schema.Columns)
+	// fmt.Printf("DEBUG: ColumnStore UseColumns: %v\n", s.schema.UseColumns)
 	
 	s.convertMapToColumnSQL(queryMap, sqlBuilder)
 	return sqlBuilder.ToSQL()

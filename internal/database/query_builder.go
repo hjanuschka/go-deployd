@@ -251,9 +251,9 @@ func (q *SQLQueryBuilder) ToSQL() (string, []interface{}) {
 
 	sql := strings.Join(whereParts, " AND ")
 	
-	// Debug logging - print the actual SQL being generated
-	fmt.Printf("DEBUG: SQLQueryBuilder generated SQL: %s\n", sql)
-	fmt.Printf("DEBUG: SQLQueryBuilder args: %v\n", args)
+	// Debug logging disabled to prevent server crashes
+	// fmt.Printf("DEBUG: SQLQueryBuilder generated SQL: %s\n", sql)
+	// fmt.Printf("DEBUG: SQLQueryBuilder args: %v\n", args)
 	
 	return sql, args
 }
@@ -264,13 +264,13 @@ func (q *SQLQueryBuilder) getFieldReference(field string) string {
 	if q.columnChecker != nil && q.columnChecker(field) {
 		// For direct column access, quote the field name to handle special characters
 		fieldRef := fmt.Sprintf("\"%s\"", field)
-		fmt.Printf("DEBUG: Field '%s' has column, using direct access: %s\n", field, fieldRef)
+		// fmt.Printf("DEBUG: Field '%s' has column, using direct access: %s\n", field, fieldRef)
 		return fieldRef
 	}
 	
 	// Default to JSON extraction for backward compatibility
 	fieldRef := fmt.Sprintf("JSON_EXTRACT(data, '$.%s')", field)
-	fmt.Printf("DEBUG: Field '%s' no column, using JSON extraction: %s\n", field, fieldRef)
+	// fmt.Printf("DEBUG: Field '%s' no column, using JSON extraction: %s\n", field, fieldRef)
 	return fieldRef
 }
 
