@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -226,7 +227,34 @@ func (s *Script) runTraditional(scriptCtx *ScriptContext) (*ScriptContext, error
 				})
 				runFuncObj, err := runFunc.AsFunction()
 				if err == nil {
-					_, err = runFuncObj.Call(v8ctx.Global(), contextObj)
+					result, err := runFuncObj.Call(v8ctx.Global(), contextObj)
+					if err == nil && result != nil {
+						// Check if the result is a Promise
+						if result.IsPromise() {
+							logging.Debug("Run() returned a Promise, waiting for resolution", "js-execution", nil)
+							promise, _ := result.AsPromise()
+							
+							// Run microtasks to allow promise resolution
+							maxIterations := 1000 // Prevent infinite loops
+							for i := 0; i < maxIterations && promise.State() == v8.Pending; i++ {
+								v8ctx.PerformMicrotaskCheckpoint()
+								runtime.Gosched() // Allow other goroutines to run
+							}
+							
+							// Check final promise state
+							if promise.State() == v8.Rejected {
+								rejectionVal := promise.Result()
+								if rejectionVal != nil {
+									err = fmt.Errorf("promise rejected: %v", rejectionVal)
+								} else {
+									err = fmt.Errorf("promise rejected")
+								}
+							} else if promise.State() == v8.Pending {
+								err = fmt.Errorf("promise timeout: async operation did not complete")
+							}
+							// If Fulfilled, continue normally
+						}
+					}
 				}
 			}
 		}
@@ -979,166 +1007,3 @@ func getMapKeys(data map[string]interface{}) []string {
 }
 
 // setupDpdObject creates the dpd object for internal API access
-func setupDpdObject(v8ctx *v8.Context, sc *ScriptContext) error {
-	isolate := v8ctx.Isolate()
-	
-	// Create dpd object
-	dpdTemplate := v8.NewObjectTemplate(isolate)
-	dpd, err := dpdTemplate.NewInstance(v8ctx)
-	if err != nil {
-		return err
-	}
-	
-	// Get router from context if available
-	if sc.ctx != nil && sc.ctx.HTTPHandler != nil {
-		// Create collection access proxies
-		httpRouter := sc.ctx.HTTPHandler
-		// Add common collections
-		collectionNames := []string{"users", "files", "todos"} // TODO: Get dynamic list
-		
-		for _, name := range collectionNames {
-					collName := name // Capture for closure
-					// Create collection proxy object
-					collTemplate := v8.NewObjectTemplate(isolate)
-					
-					// Add get method (list all or get by ID)
-					getFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-						args := info.Args()
-						var id string
-						var query map[string]interface{}
-						
-						// First arg can be ID (string) or query (object)
-						if len(args) > 0 {
-							if args[0].IsString() {
-								id = args[0].String()
-							} else if args[0].IsObject() {
-								queryJSON, _ := v8.JSONStringify(v8ctx, args[0])
-								json.Unmarshal([]byte(queryJSON), &query)
-							}
-						}
-						
-						// Execute internal GET request
-						api := NewInternalAPI(httpRouter, sc.ctx.Development)
-						result, err := api.Collection(collName).Get(id, query)
-						if err != nil {
-							logging.Debug("dpd collection get error", "js-dpd", map[string]interface{}{
-								"collection": collName,
-								"error":      err.Error(),
-							})
-							return v8.Null(isolate)
-						}
-						
-						// Convert to JSON and parse back to V8
-						resultJSON, _ := json.Marshal(result)
-						v8Result, _ := v8.JSONParse(v8ctx, string(resultJSON))
-						return v8Result
-					})
-					collTemplate.Set("get", getFunc)
-					
-					// Add post method (create)
-					postFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-						args := info.Args()
-						var data interface{}
-						
-						if len(args) > 0 && args[0].IsObject() {
-							dataJSON, _ := v8.JSONStringify(v8ctx, args[0])
-							json.Unmarshal([]byte(dataJSON), &data)
-						}
-						
-						// Execute internal POST request
-						api := NewInternalAPI(httpRouter, sc.ctx.Development)
-						result, err := api.Collection(collName).Post(data)
-						if err != nil {
-							logging.Debug("dpd collection post error", "js-dpd", map[string]interface{}{
-								"collection": collName,
-								"error":      err.Error(),
-							})
-							return v8.Null(isolate)
-						}
-						
-						// Convert to JSON and parse back to V8
-						resultJSON, _ := json.Marshal(result)
-						v8Result, _ := v8.JSONParse(v8ctx, string(resultJSON))
-						return v8Result
-					})
-					collTemplate.Set("post", postFunc)
-					
-					// Add put method (update)
-					putFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-						args := info.Args()
-						var id string
-						var data interface{}
-						
-						if len(args) > 0 && args[0].IsString() {
-							id = args[0].String()
-						}
-						if len(args) > 1 && args[1].IsObject() {
-							dataJSON, _ := v8.JSONStringify(v8ctx, args[1])
-							json.Unmarshal([]byte(dataJSON), &data)
-						}
-						
-						// Execute internal PUT request
-						api := NewInternalAPI(httpRouter, sc.ctx.Development)
-						result, err := api.Collection(collName).Put(id, data)
-						if err != nil {
-							logging.Debug("dpd collection put error", "js-dpd", map[string]interface{}{
-								"collection": collName,
-								"error":      err.Error(),
-							})
-							return v8.Null(isolate)
-						}
-						
-						// Convert to JSON and parse back to V8
-						resultJSON, _ := json.Marshal(result)
-						v8Result, _ := v8.JSONParse(v8ctx, string(resultJSON))
-						return v8Result
-					})
-					collTemplate.Set("put", putFunc)
-					
-					// Add del method (delete)
-					delFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
-						args := info.Args()
-						var id string
-						
-						if len(args) > 0 && args[0].IsString() {
-							id = args[0].String()
-						}
-						
-						// Execute internal DELETE request
-						api := NewInternalAPI(httpRouter, sc.ctx.Development)
-						result, err := api.Collection(collName).Delete(id)
-						if err != nil {
-							logging.Debug("dpd collection delete error", "js-dpd", map[string]interface{}{
-								"collection": collName,
-								"error":      err.Error(),
-							})
-							return v8.Null(isolate)
-						}
-						
-						// Convert to JSON and parse back to V8
-						resultJSON, _ := json.Marshal(result)
-						v8Result, _ := v8.JSONParse(v8ctx, string(resultJSON))
-						return v8Result
-					})
-					collTemplate.Set("del", delFunc)
-					
-			// Create collection instance and add to dpd
-			collInstance, _ := collTemplate.NewInstance(v8ctx)
-			dpd.Set(name, collInstance)
-		}
-	}
-	
-	// Set dpd as global
-	v8ctx.Global().Set("dpd", dpd)
-	
-	// Also add to context for consistency
-	contextValue, _ := v8ctx.Global().Get("context")
-	if contextValue != nil && !contextValue.IsUndefined() {
-		contextObj, _ := contextValue.AsObject()
-		if contextObj != nil {
-			contextObj.Set("dpd", dpd)
-		}
-	}
-	
-	return nil
-}

@@ -237,25 +237,73 @@ func Run(ctx *EventContext) error {
 
 ## JavaScript Examples
 
+JavaScript events support async/await for working with the internal API:
+
 ```javascript
-// In posts/get.js
-function Run(context) {
-    // Enrich with author data
-    if (context.data.userId) {
-        dpd.users.get(context.data.userId)
-            .then(user => {
-                context.data.author = {
-                    id: user.id,
-                    username: user.username,
-                    email: user.email
-                };
-            })
-            .catch(err => {
-                context.log("Failed to fetch author", {error: err.message});
-            });
+// Using async/await with internal API
+async function Run(context) {
+    // Check if we have a userId to enrich
+    if (!context.data.userId) {
+        return;
+    }
+    
+    try {
+        // Use await to fetch user data
+        const user = await dpd.users.get(context.data.userId);
+        
+        // Add author information
+        context.data.author = {
+            id: user.id,
+            username: user.username,
+            email: user.email
+        };
+        
+        context.log("Enriched post with author data", {
+            username: user.username
+        });
+    } catch (err) {
+        context.log("Failed to fetch author", {error: err.message});
+        context.data.author = {
+            error: "User not found"
+        };
     }
 }
 ```
+
+### Multiple Async Operations
+
+```javascript
+async function Run(context) {
+    try {
+        // Fetch multiple related documents
+        const [author, category] = await Promise.all([
+            dpd.users.get(context.data.userId),
+            dpd.categories.get(context.data.categoryId)
+        ]);
+        
+        // Enrich with both
+        context.data.author = {
+            id: author.id,
+            username: author.username
+        };
+        
+        context.data.category = {
+            id: category.id,
+            name: category.name
+        };
+    } catch (err) {
+        context.error("fetch", "Failed to fetch related data");
+    }
+}
+```
+
+### Important Notes about Async Events
+
+1. **Always use `async function Run(context)`** when using await
+2. **The event system will wait** for the promise to resolve before continuing
+3. **Timeouts apply** - very long operations may timeout
+4. **Error handling** - use try/catch blocks for proper error handling
+5. **Promise.all** - use for parallel operations
 
 ## Best Practices
 
