@@ -2,6 +2,10 @@ package events
 
 import (
 	"encoding/json"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	v8 "rogchap.com/v8go"
 	"github.com/hjanuschka/go-deployd/internal/logging"
 )
@@ -29,11 +33,19 @@ func setupDpdObject(v8ctx *v8.Context, sc *ScriptContext) error {
 		}
 		
 		collectionName := args[0].String()
-		return createCollectionProxy(v8ctx, sc, httpRouter, collectionName)
+		return createCollectionProxy(v8ctx, sc, httpRouter.(http.Handler), collectionName)
 	})
 	
 	// Set the factory function globally (temporarily)
 	v8ctx.Global().Set("__createDpdCollection", createCollectionFunc.GetFunction(v8ctx))
+	
+	// Pass list of known collections if available
+	collectionList := getAvailableCollections(sc)
+	if len(collectionList) > 0 {
+		// Convert to JavaScript array
+		jsArray, _ := v8.NewValue(isolate, collectionList)
+		v8ctx.Global().Set("__knownCollections", jsArray)
+	}
 	
 	// Use JavaScript Proxy to create dynamic property access
 	proxyScript := `
@@ -60,14 +72,19 @@ func setupDpdObject(v8ctx *v8.Context, sc *ScriptContext) error {
 			}
 		});
 		
-		// Pre-populate common collections for better developer experience
-		// These will show up in console.log(dpd) and IDE autocomplete
-		['users', 'files', 'posts'].forEach(name => {
-			dpd[name] = __createDpdCollection(name);
-		});
+		// Pre-populate known collections if provided by the server
+		// This helps with IDE autocomplete and console.log(dpd)
+		if (typeof __knownCollections !== 'undefined' && Array.isArray(__knownCollections)) {
+			__knownCollections.forEach(name => {
+				if (typeof name === 'string') {
+					dpd[name] = __createDpdCollection(name);
+				}
+			});
+		}
 		
-		// Clean up the temporary function
+		// Clean up the temporary functions
 		delete globalThis.__createDpdCollection;
+		delete globalThis.__knownCollections;
 		
 		// Return dpd for assignment
 		dpd;
@@ -97,7 +114,7 @@ func setupDpdObject(v8ctx *v8.Context, sc *ScriptContext) error {
 }
 
 // createCollectionProxy creates a proxy object for a specific collection
-func createCollectionProxy(v8ctx *v8.Context, sc *ScriptContext, httpRouter interface{}, collectionName string) *v8.Value {
+func createCollectionProxy(v8ctx *v8.Context, sc *ScriptContext, httpRouter http.Handler, collectionName string) *v8.Value {
 	isolate := v8ctx.Isolate()
 	
 	// Create collection proxy object
@@ -253,7 +270,7 @@ func createCollectionProxy(v8ctx *v8.Context, sc *ScriptContext, httpRouter inte
 		
 		// Execute internal DELETE request
 		api := NewInternalAPI(httpRouter, sc.ctx.Development)
-		err = api.Collection(collectionName).Delete(id)
+		_, err = api.Collection(collectionName).Delete(id)
 		if err != nil {
 			logging.Debug("dpd collection delete error", "js-dpd", map[string]interface{}{
 				"collection": collectionName,
@@ -278,4 +295,49 @@ func createCollectionProxy(v8ctx *v8.Context, sc *ScriptContext, httpRouter inte
 	}
 	
 	return collInstance.Value
+}
+
+// getAvailableCollections returns a list of available collection names
+func getAvailableCollections(sc *ScriptContext) []string {
+	// Try to get collections from the resource path
+	collections := []string{}
+	
+	// If we have a resource, we know at least its collection exists
+	if sc.ctx != nil && sc.ctx.Resource != nil {
+		resourceName := sc.ctx.Resource.GetName()
+		if resourceName != "" {
+			collections = append(collections, resourceName)
+		}
+	}
+	
+	// Try to discover collections from the resources directory
+	// This is a best-effort approach
+	resourcesPath := "resources"
+	if entries, err := os.ReadDir(resourcesPath); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				// Check if it has a config.json file (indicating it's a collection)
+				configPath := filepath.Join(resourcesPath, entry.Name(), "config.json")
+				if _, err := os.Stat(configPath); err == nil {
+					name := entry.Name()
+					// Skip special directories
+					if !strings.HasPrefix(name, ".") && name != "metrics.json" {
+						collections = append(collections, name)
+					}
+				}
+			}
+		}
+	}
+	
+	// Remove duplicates
+	seen := make(map[string]bool)
+	unique := []string{}
+	for _, col := range collections {
+		if !seen[col] {
+			seen[col] = true
+			unique = append(unique, col)
+		}
+	}
+	
+	return unique
 }
