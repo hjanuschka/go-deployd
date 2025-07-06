@@ -23,6 +23,7 @@ type EventContext struct {
 	Query      map[string]interface{}
 	Me         map[string]interface{}
 	Previous   map[string]interface{} // For PUT requests
+	Method     string                 // HTTP method (GET, POST, etc.)
 	IsRoot     bool
 	Internal   bool
 	Errors     map[string]string

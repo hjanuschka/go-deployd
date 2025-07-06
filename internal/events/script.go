@@ -606,6 +606,35 @@ func setupContextObject(v8ctx *v8.Context, sc *ScriptContext) error {
 		}
 	}
 	
+	// Add isRoot property
+	isRootValue, _ := v8.NewValue(isolate, sc.ctx.IsRoot)
+	contextInstance.Set("isRoot", isRootValue)
+	
+	// Add method property (HTTP method)
+	methodValue, _ := v8.NewValue(isolate, sc.ctx.Method)
+	contextInstance.Set("method", methodValue)
+	
+	// Add emit method
+	emitFunc := v8.NewFunctionTemplate(isolate, func(info *v8.FunctionCallbackInfo) *v8.Value {
+		args := info.Args()
+		argsSlice := make([]interface{}, len(args))
+		for i, arg := range args {
+			argsSlice[i] = arg.String()
+		}
+
+		source := "javascript"
+		if sc.ctx != nil && sc.ctx.Resource != nil {
+			source = fmt.Sprintf("js:%s", sc.ctx.Resource.GetName())
+		}
+
+		logging.GetLogger().WithComponent("events").Debug("JavaScript emit function called", logging.Fields{
+			"source": source,
+			"args":   argsSlice,
+		})
+		return v8.Undefined(isolate)
+	})
+	contextInstance.Set("emit", emitFunc.GetFunction(v8ctx))
+	
 	// Set the context object as global
 	v8ctx.Global().Set("context", contextInstance)
 	

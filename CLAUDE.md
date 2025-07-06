@@ -37,7 +37,26 @@ func Run(ctx *EventContext) error {
    - The `Run(ctx *EventContext) error` function
    - Any helper functions
 
-### EventContext Structure
+### EventContext Structure (JavaScript & Go)
+Both JavaScript and Go events use the same context API:
+
+#### JavaScript Context Properties & Methods:
+```javascript
+context.data      // Document being processed (mutable)
+context.query     // Query parameters
+context.me        // Current user object (null if not authenticated)
+context.method    // HTTP method (GET, POST, etc.)
+context.isRoot    // Admin privileges (boolean)
+
+// Methods
+context.cancel(message, statusCode)  // Stop execution with error
+context.log(message, data)           // Logging
+context.emit(event, data, room)      // WebSocket events  
+context.error(field, message)        // Add validation error
+context.hasErrors()                  // Check if errors exist
+```
+
+#### Go EventContext Structure:
 ```go
 type EventContext struct {
     Data     map[string]interface{} // Document being processed
@@ -54,6 +73,7 @@ type EventContext struct {
     Emit(event string, data interface{}, room ...string) // WebSocket events
     Error(field, message string)          // Add validation error
     Hide(field string)                    // Remove field from response
+    HasErrors() bool                      // Check if validation errors exist
 }
 ```
 
