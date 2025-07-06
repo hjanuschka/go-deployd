@@ -191,7 +191,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		IsAuthenticated: isAuthenticated,
 	}
 	ctx := context.New(req, w, resource, authData, r.development)
-	ctx.Router = r
+	// Set the router as the http.Handler for internal API access
+	ctx.HTTPHandler = r
 
 	// Handle the request
 	if err := resource.Handle(ctx); err != nil {

@@ -3,7 +3,6 @@ package events
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -991,13 +990,13 @@ func setupDpdObject(v8ctx *v8.Context, sc *ScriptContext) error {
 	}
 	
 	// Get router from context if available
-	if sc.ctx != nil && sc.ctx.Router != nil {
+	if sc.ctx != nil && sc.ctx.HTTPHandler != nil {
 		// Create collection access proxies
-		if httpRouter, ok := sc.ctx.Router.(http.Handler); ok {
-			// Add common collections
-			collectionNames := []string{"users", "files", "todos"} // TODO: Get dynamic list
-			
-			for _, name := range collectionNames {
+		httpRouter := sc.ctx.HTTPHandler
+		// Add common collections
+		collectionNames := []string{"users", "files", "todos"} // TODO: Get dynamic list
+		
+		for _, name := range collectionNames {
 					collName := name // Capture for closure
 					// Create collection proxy object
 					collTemplate := v8.NewObjectTemplate(isolate)
@@ -1123,10 +1122,9 @@ func setupDpdObject(v8ctx *v8.Context, sc *ScriptContext) error {
 					})
 					collTemplate.Set("del", delFunc)
 					
-					// Create collection instance and add to dpd
-					collInstance, _ := collTemplate.NewInstance(v8ctx)
-					dpd.Set(name, collInstance)
-			}
+			// Create collection instance and add to dpd
+			collInstance, _ := collTemplate.NewInstance(v8ctx)
+			dpd.Set(name, collInstance)
 		}
 	}
 	

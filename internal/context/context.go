@@ -24,6 +24,8 @@ type Context struct {
 	IsRoot          bool
 	IsAuthenticated bool
 	ctx             context.Context
+	// Internal API support
+	HTTPHandler http.Handler
 }
 
 type Resource interface {

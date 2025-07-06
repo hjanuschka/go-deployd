@@ -2,7 +2,6 @@ package events
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -239,11 +238,9 @@ func RunGoPluginWithEmitter(pluginPath string, ctx *context.Context, data map[st
 		hideFields: make([]string, 0),
 	}
 	
-	// Set up internal API if router is available
-	if ctx.Router != nil {
-		if router, ok := ctx.Router.(http.Handler); ok {
-			eventCtx.Dpd = NewInternalAPI(router, ctx.Development)
-		}
+	// Set up internal API if HTTPHandler is available
+	if ctx.HTTPHandler != nil {
+		eventCtx.Dpd = NewInternalAPI(ctx.HTTPHandler, ctx.Development)
 	}
 
 	if ctx.IsAuthenticated {
