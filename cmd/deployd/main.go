@@ -1,206 +1,58 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"os"
-	"os/exec"
-	"os/signal"
-	"path/filepath"
-	"strings"
-	"syscall"
-	"time"
 
-	"github.com/hjanuschka/go-deployd/internal/logging"
 	"github.com/hjanuschka/go-deployd/internal/server"
 )
 
 func main() {
 	var (
-		port   = flag.Int("port", 2403, "server port")
-		dbType = flag.String("db-type", "mongodb", "database type (mongodb, sqlite, mysql, postgres)")
-		dbHost = flag.String("db-host", "localhost", "database host")
-		dbPort = flag.Int("db-port", 0, "database port (0 = use default for db-type)")
-		dbName = flag.String("db-name", "deployd", "database name")
-		dbUser = flag.String("db-user", "", "database username")
-		dbPass = flag.String("db-pass", "", "database password")
-		dbSSL  = flag.Bool("db-ssl", false, "enable SSL for database connection")
-		config = flag.String("config", "", "configuration file path")
-		dev    = flag.Bool("dev", false, "development mode")
+		port       = flag.Int("port", 2403, "Server port")
+		dbType     = flag.String("db-type", "mongodb", "Database type (mongodb, sqlite, mysql, postgres)")
+		dbHost     = flag.String("db-host", "localhost", "Database host")
+		dbPort     = flag.Int("db-port", 27017, "Database port")
+		dbName     = flag.String("db-name", "deployd", "Database name")
+		dbUsername = flag.String("db-username", "", "Database username")
+		dbPassword = flag.String("db-password", "", "Database password")
+		dbSSL      = flag.Bool("db-ssl", false, "Use SSL for database connection")
+		configPath = flag.String("config", "./", "Path to configuration directory")
+		dev        = flag.Bool("dev", false, "Development mode")
 	)
+
 	flag.Parse()
 
-	// Set default ports based on database type
-	if *dbPort == 0 {
-		switch *dbType {
-		case "mongodb":
-			*dbPort = 27017
-		case "mysql":
-			*dbPort = 3306
-		case "postgres":
-			*dbPort = 5432
-		case "sqlite":
-			*dbPort = 0 // SQLite doesn't use ports
-		}
-	}
-
-	// Initialize logging early for startup messages
-	// Use environment variable for log level, with dev mode override
-	logLevel := logging.INFO
-	if *dev {
-		logLevel = logging.DEBUG
-	}
-
-	// Check for LOG_LEVEL environment variable override
-	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
-		switch strings.ToUpper(envLevel) {
-		case "DEBUG":
-			logLevel = logging.DEBUG
-		case "INFO":
-			logLevel = logging.INFO
-		case "WARN", "WARNING":
-			logLevel = logging.WARN
-		case "ERROR":
-			logLevel = logging.ERROR
-		}
-	}
-
-	logging.InitializeLogger(logging.Config{
-		LogDir:    "./logs",
-		DevMode:   *dev,
-		MinLevel:  logLevel,
-		Component: "main",
-	})
-
-	logger := logging.GetLogger()
-	logger.Info("Starting go-deployd server", logging.Fields{
-		"port":             *port,
-		"database_type":    *dbType,
-		"development_mode": *dev,
-	})
-
-	if *dbType == "sqlite" {
-		logger.Info("Using SQLite database", logging.Fields{
-			"database_file": *dbName,
-		})
-	} else {
-		logger.Info("Using network database", logging.Fields{
-			"database_type": *dbType,
-			"host":          *dbHost,
-			"port":          *dbPort,
-			"database":      *dbName,
-		})
-	}
-
-	// Ensure js-sandbox has npm modules installed for JavaScript events
-	checkJSSandboxModules()
-
-	srv, err := server.New(&server.Config{
+	config := &server.Config{
 		Port:             *port,
 		DatabaseType:     *dbType,
 		DatabaseHost:     *dbHost,
 		DatabasePort:     *dbPort,
 		DatabaseName:     *dbName,
-		DatabaseUsername: *dbUser,
-		DatabasePassword: *dbPass,
+		DatabaseUsername: *dbUsername,
+		DatabasePassword: *dbPassword,
 		DatabaseSSL:      *dbSSL,
-		ConfigPath:       *config,
+		ConfigPath:       *configPath,
 		Development:      *dev,
-	})
+	}
 
-	// For now, skip embedded dashboard - will implement later
+	srv, err := server.New(config)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 
-	httpServer := &http.Server{
-		Addr:         fmt.Sprintf(":%d", *port),
-		Handler:      srv,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+	fmt.Printf("🚀 go-deployd starting on port %d\n", config.Port)
+	fmt.Printf("📊 Database: %s\n", config.DatabaseType)
+	if config.Development {
+		fmt.Println("🔧 Development mode enabled")
 	}
 
-	// Create listener with SO_REUSEADDR
-	listener, err := net.Listen("tcp", httpServer.Addr)
-	if err != nil {
-		log.Fatalf("Failed to create listener: %v", err)
-	}
-
-	go func() {
-		logging.GetLogger().Info("Server listening", logging.Fields{
-			"url": fmt.Sprintf("http://localhost:%d", *port),
-		})
-		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
-		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	logging.GetLogger().Info("Shutting down server")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Shutdown HTTP server gracefully
-	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Printf("HTTP server forced to shutdown: %v", err)
-	}
-
-	// Close the listener
-	if err := listener.Close(); err != nil {
-		log.Printf("Error closing listener: %v", err)
-	}
-
-	// Close server resources (database, websockets, etc.)
-	if err := srv.Close(); err != nil {
-		log.Printf("Error closing server resources: %v", err)
-	}
-
-	logging.GetLogger().Info("Server gracefully stopped")
-	logging.Shutdown()
-}
-
-// checkJSSandboxModules ensures npm modules are installed for JavaScript event handlers
-func checkJSSandboxModules() {
-	jsSandboxDir := "js-sandbox"
-	nodeModulesDir := filepath.Join(jsSandboxDir, "node_modules")
-	packageJSONPath := filepath.Join(jsSandboxDir, "package.json")
-
-	// Check if js-sandbox directory exists
-	if _, err := os.Stat(jsSandboxDir); os.IsNotExist(err) {
-		return // No js-sandbox, skip
-	}
-
-	// Check if package.json exists
-	if _, err := os.Stat(packageJSONPath); os.IsNotExist(err) {
-		return // No package.json, skip
-	}
-
-	// Check if node_modules exists
-	if _, err := os.Stat(nodeModulesDir); os.IsNotExist(err) {
-		logging.GetLogger().Info("Installing JavaScript event handler dependencies")
-
-		// Run npm install in js-sandbox directory
-		cmd := exec.Command("npm", "install")
-		cmd.Dir = jsSandboxDir
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if err := cmd.Run(); err != nil {
-			logging.GetLogger().Warn("Failed to install js-sandbox dependencies", logging.Fields{
-				"error":  err.Error(),
-				"impact": "JavaScript events may not have access to npm modules",
-			})
-		} else {
-			logging.GetLogger().Info("JavaScript event handler dependencies installed")
-		}
+	addr := fmt.Sprintf(":%d", config.Port)
+	fmt.Printf("🌐 Server listening on http://localhost%s\n", addr)
+	
+	if err := http.ListenAndServe(addr, srv); err != nil {
+		log.Fatalf("Server failed: %v", err)
 	}
 }

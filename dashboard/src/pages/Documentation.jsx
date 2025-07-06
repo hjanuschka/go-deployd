@@ -91,6 +91,12 @@ function Documentation() {
       description: 'Access collections from events without HTTP requests',
       icon: FiServer,
       url: 'https://github.com/hjanuschka/go-deployd/blob/main/docs/internal-api.md'
+    },
+    {
+      title: 'Message Brokers',
+      description: 'Redis and RabbitMQ brokers for multi-server deployments',
+      icon: FiServer,
+      url: 'https://github.com/hjanuschka/go-deployd/blob/main/docs/message-brokers.md'
     }
   ]
 

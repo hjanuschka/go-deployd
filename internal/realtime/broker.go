@@ -8,6 +8,7 @@ import (
 
 	"github.com/hjanuschka/go-deployd/internal/config"
 	"github.com/hjanuschka/go-deployd/internal/logging"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -289,54 +290,307 @@ func (rb *RedisBroker) IsConnected() bool {
 	return true
 }
 
-// RabbitMQBroker implements a RabbitMQ-based message broker
+// RabbitMQBroker implements a RabbitMQ-based message broker with fanout exchange
 type RabbitMQBroker struct {
-	config *config.RabbitConfig
-	conn   interface{} // RabbitMQ connection (would be *amqp.Connection in real implementation)
-	mu     sync.RWMutex
+	config       *config.RabbitConfig
+	conn         *amqp.Connection
+	channel      *amqp.Channel
+	exchange     string
+	queue        *amqp.Queue
+	consumers    map[string]<-chan amqp.Delivery
+	handlers     map[string]MessageHandler
+	mu           sync.RWMutex
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 // NewRabbitMQBroker creates a new RabbitMQ message broker
 func NewRabbitMQBroker(config *config.RabbitConfig) *RabbitMQBroker {
 	return &RabbitMQBroker{
-		config: config,
+		config:    config,
+		exchange:  config.Exchange,
+		consumers: make(map[string]<-chan amqp.Delivery),
+		handlers:  make(map[string]MessageHandler),
 	}
 }
 
 func (rmq *RabbitMQBroker) Connect(ctx context.Context) error {
-	// TODO: Implement RabbitMQ connection
-	// This would require adding RabbitMQ dependency (github.com/streadway/amqp)
-	logging.Info("RabbitMQ broker would connect here", "realtime", map[string]interface{}{
+	rmq.ctx, rmq.cancel = context.WithCancel(ctx)
+	
+	// Build connection URL
+	connURL := fmt.Sprintf("amqp://%s:%s@%s:%d%s",
+		rmq.config.Username,
+		rmq.config.Password,
+		rmq.config.Host,
+		rmq.config.Port,
+		rmq.config.VHost)
+	
+	// Connect to RabbitMQ
+	conn, err := amqp.Dial(connURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
+	}
+	rmq.conn = conn
+	
+	// Create channel
+	channel, err := conn.Channel()
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("failed to create channel: %w", err)
+	}
+	rmq.channel = channel
+	
+	// Declare fanout exchange
+	err = channel.ExchangeDeclare(
+		rmq.exchange, // name
+		"fanout",     // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
+	if err != nil {
+		channel.Close()
+		conn.Close()
+		return fmt.Errorf("failed to declare exchange: %w", err)
+	}
+	
+	// Declare exclusive queue for this server
+	queue, err := channel.QueueDeclare(
+		"",    // name (auto-generate)
+		false, // durable
+		false, // delete when unused
+		true,  // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	if err != nil {
+		channel.Close()
+		conn.Close()
+		return fmt.Errorf("failed to declare queue: %w", err)
+	}
+	rmq.queue = &queue
+	
+	// Bind queue to exchange
+	err = channel.QueueBind(
+		queue.Name,   // queue name
+		"",           // routing key (not used for fanout)
+		rmq.exchange, // exchange
+		false,        // no-wait
+		nil,          // arguments
+	)
+	if err != nil {
+		channel.Close()
+		conn.Close()
+		return fmt.Errorf("failed to bind queue: %w", err)
+	}
+	
+	logging.Info("RabbitMQ broker connected", "realtime", map[string]interface{}{
 		"host":     rmq.config.Host,
 		"port":     rmq.config.Port,
-		"exchange": rmq.config.Exchange,
+		"exchange": rmq.exchange,
+		"queue":    queue.Name,
 	})
-	return fmt.Errorf("RabbitMQ broker not implemented yet - add amqp dependency first")
+	
+	return nil
 }
 
 func (rmq *RabbitMQBroker) Disconnect() error {
-	// TODO: Implement RabbitMQ disconnection
+	if rmq.cancel != nil {
+		rmq.cancel()
+	}
+	
+	// Close all consumers
+	rmq.mu.Lock()
+	for topic := range rmq.consumers {
+		if rmq.channel != nil {
+			if err := rmq.channel.Cancel(topic, false); err != nil {
+				logging.Error("Failed to cancel RabbitMQ consumer", "realtime", map[string]interface{}{
+					"topic": topic,
+					"error": err.Error(),
+				})
+			}
+		}
+	}
+	rmq.consumers = make(map[string]<-chan amqp.Delivery)
+	rmq.mu.Unlock()
+	
+	if rmq.channel != nil {
+		if err := rmq.channel.Close(); err != nil {
+			logging.Error("Failed to close RabbitMQ channel", "realtime", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}
+	
+	if rmq.conn != nil {
+		if err := rmq.conn.Close(); err != nil {
+			logging.Error("Failed to close RabbitMQ connection", "realtime", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}
+	
+	logging.Info("RabbitMQ broker disconnected", "realtime", nil)
 	return nil
 }
 
 func (rmq *RabbitMQBroker) Publish(topic string, message *BrokerMessage) error {
-	// TODO: Implement RabbitMQ publish
+	if rmq.channel == nil {
+		return fmt.Errorf("RabbitMQ channel not connected")
+	}
+	
+	// Serialize message
+	data, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	
+	// Create AMQP message with topic as a header
+	msg := amqp.Publishing{
+		ContentType: "application/json",
+		Body:        data,
+		Headers: amqp.Table{
+			"topic": topic,
+		},
+	}
+	
+	// Publish to fanout exchange
+	err = rmq.channel.PublishWithContext(
+		rmq.ctx,
+		rmq.exchange, // exchange
+		"",           // routing key (ignored for fanout)
+		false,        // mandatory
+		false,        // immediate
+		msg,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to publish to RabbitMQ: %w", err)
+	}
+	
+	logging.Debug("Published to RabbitMQ", "realtime", map[string]interface{}{
+		"exchange": rmq.exchange,
+		"topic":    topic,
+		"event":    message.Event,
+		"type":     message.Type,
+	})
+	
 	return nil
 }
 
 func (rmq *RabbitMQBroker) Subscribe(topic string, handler MessageHandler) error {
-	// TODO: Implement RabbitMQ subscribe
+	if rmq.channel == nil || rmq.queue == nil {
+		return fmt.Errorf("RabbitMQ not connected")
+	}
+	
+	rmq.mu.Lock()
+	rmq.handlers[topic] = handler
+	rmq.mu.Unlock()
+	
+	// Only create one consumer for all topics (fanout receives all messages)
+	if len(rmq.consumers) == 0 {
+		// Start consuming from queue
+		messages, err := rmq.channel.Consume(
+			rmq.queue.Name, // queue
+			"",             // consumer tag (auto-generate)
+			true,           // auto-ack
+			true,           // exclusive
+			false,          // no-local
+			false,          // no-wait
+			nil,            // args
+		)
+		if err != nil {
+			return fmt.Errorf("failed to start consuming: %w", err)
+		}
+		
+		rmq.mu.Lock()
+		rmq.consumers["_default"] = messages
+		rmq.mu.Unlock()
+		
+		// Start message processor
+		go rmq.processMessages(messages)
+	}
+	
+	logging.Info("Subscribed to RabbitMQ topic", "realtime", map[string]interface{}{
+		"topic":    topic,
+		"exchange": rmq.exchange,
+		"queue":    rmq.queue.Name,
+	})
+	
 	return nil
 }
 
+// processMessages handles incoming messages from RabbitMQ
+func (rmq *RabbitMQBroker) processMessages(messages <-chan amqp.Delivery) {
+	for msg := range messages {
+		// Extract topic from headers
+		var topic string
+		if topicHeader, exists := msg.Headers["topic"]; exists {
+			topic, _ = topicHeader.(string)
+		}
+		
+		// Unmarshal message
+		var message BrokerMessage
+		if err := json.Unmarshal(msg.Body, &message); err != nil {
+			logging.Error("Failed to unmarshal RabbitMQ message", "realtime", map[string]interface{}{
+				"error": err.Error(),
+				"body":  string(msg.Body),
+			})
+			continue
+		}
+		
+		// Get handler for topic
+		rmq.mu.RLock()
+		handler, exists := rmq.handlers[topic]
+		rmq.mu.RUnlock()
+		
+		if exists && handler != nil {
+			if err := handler(&message); err != nil {
+				logging.Error("RabbitMQ broker handler error", "realtime", map[string]interface{}{
+					"topic": topic,
+					"error": err.Error(),
+				})
+			}
+		}
+	}
+}
+
 func (rmq *RabbitMQBroker) Unsubscribe(topic string) error {
-	// TODO: Implement RabbitMQ unsubscribe
+	rmq.mu.Lock()
+	delete(rmq.handlers, topic)
+	
+	// If no more handlers, stop consuming
+	if len(rmq.handlers) == 0 && len(rmq.consumers) > 0 {
+		if rmq.channel != nil {
+			if err := rmq.channel.Cancel("_default", false); err != nil {
+				logging.Error("Failed to cancel RabbitMQ consumer", "realtime", map[string]interface{}{
+					"error": err.Error(),
+				})
+			}
+		}
+		rmq.consumers = make(map[string]<-chan amqp.Delivery)
+	}
+	rmq.mu.Unlock()
+	
+	logging.Info("Unsubscribed from RabbitMQ topic", "realtime", map[string]interface{}{
+		"topic": topic,
+	})
+	
 	return nil
 }
 
 func (rmq *RabbitMQBroker) IsConnected() bool {
-	// TODO: Check RabbitMQ connection status
-	return false
+	if rmq.conn == nil || rmq.channel == nil {
+		return false
+	}
+	
+	// Check if connection is closed
+	if rmq.conn.IsClosed() {
+		return false
+	}
+	
+	return true
 }
 
 // BrokerFactory creates message brokers based on configuration

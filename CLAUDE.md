@@ -358,7 +358,6 @@ See calculator-js and calculator-go as reference implementations.
 **Workaround**: In production, implement proper origin validation
 
 ### 2. Unimplemented Features
-- **RabbitMQ broker**: Use Redis or in-memory broker for now
 - **AWS SES**: Use SMTP for email sending
 
 ### 3. Common Pitfalls
