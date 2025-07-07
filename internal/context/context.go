@@ -268,6 +268,15 @@ func (c *Context) processFileUpload(fileHeader *multipart.FileHeader) error {
 	c.Body["url"] = fileURL
 	c.Body["uploadedAt"] = time.Now().Format(time.RFC3339)
 	
+	// Set uploadedBy based on authentication
+	if c.IsAuthenticated && c.UserID != "" {
+		c.Body["uploadedBy"] = c.UserID
+	} else if c.IsRoot {
+		c.Body["uploadedBy"] = "admin"
+	} else {
+		c.Body["uploadedBy"] = "anonymous"
+	}
+	
 	return nil
 }
 
