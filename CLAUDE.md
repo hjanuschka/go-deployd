@@ -358,7 +358,7 @@ See calculator-js and calculator-go as reference implementations.
 **Workaround**: In production, implement proper origin validation
 
 ### 2. Unimplemented Features
-- **AWS SES**: Use SMTP for email sending
+- None currently
 
 ### 3. Common Pitfalls
 - Forgetting to return after `ctx.Cancel()`
