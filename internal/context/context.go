@@ -2,10 +2,17 @@ package context
 
 import (
 	"context"
+	"crypto/md5"
 	"encoding/json"
+	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Context struct {
@@ -156,6 +163,124 @@ func (c *Context) parseBody() {
 				}
 			}
 		}
+	} else if strings.Contains(contentType, "multipart/form-data") {
+		c.parseMultipartForm()
+	}
+}
+
+func (c *Context) parseMultipartForm() {
+	// Parse multipart form with 32MB max memory
+	err := c.Request.ParseMultipartForm(32 << 20)
+	if err != nil {
+		return
+	}
+
+	// Handle form fields
+	if c.Request.MultipartForm.Value != nil {
+		for key, values := range c.Request.MultipartForm.Value {
+			if len(values) == 1 {
+				c.Body[key] = values[0]
+			} else {
+				c.Body[key] = values
+			}
+		}
+	}
+
+	// Handle file uploads
+	if c.Request.MultipartForm.File != nil {
+		for fieldName, files := range c.Request.MultipartForm.File {
+			if len(files) == 0 {
+				continue
+			}
+
+			// For files collection, we expect the file field to be named "file"
+			if fieldName == "file" && len(files) == 1 {
+				if err := c.processFileUpload(files[0]); err != nil {
+					// Log error but continue processing
+					continue
+				}
+			} else {
+				// Handle multiple files or other field names
+				var fileInfos []map[string]interface{}
+				for _, fileHeader := range files {
+					if fileInfo := c.createFileInfo(fileHeader); fileInfo != nil {
+						fileInfos = append(fileInfos, fileInfo)
+					}
+				}
+				if len(fileInfos) > 0 {
+					c.Body[fieldName] = fileInfos
+				}
+			}
+		}
+	}
+}
+
+func (c *Context) processFileUpload(fileHeader *multipart.FileHeader) error {
+	// Open the uploaded file
+	file, err := fileHeader.Open()
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Create uploads directory if it doesn't exist
+	uploadsDir := "uploads"
+	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+		return err
+	}
+
+	// Generate unique filename
+	hash := md5.New()
+	hash.Write([]byte(fmt.Sprintf("%s_%d", fileHeader.Filename, time.Now().UnixNano())))
+	hashString := fmt.Sprintf("%x", hash.Sum(nil))
+	
+	// Keep original extension
+	ext := filepath.Ext(fileHeader.Filename)
+	filename := hashString + ext
+	filePath := filepath.Join(uploadsDir, filename)
+
+	// Create the destination file
+	dst, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	// Copy file contents
+	size, err := io.Copy(dst, file)
+	if err != nil {
+		// Clean up partial file
+		os.Remove(filePath)
+		return err
+	}
+
+	// Generate file URL (relative to server root)
+	fileURL := "/" + filePath
+
+	// Create file metadata for the files collection
+	c.Body["id"] = hashString
+	c.Body["filename"] = filename
+	c.Body["originalName"] = fileHeader.Filename
+	c.Body["contentType"] = fileHeader.Header.Get("Content-Type")
+	c.Body["size"] = float64(size) // Use float64 for JSON compatibility
+	c.Body["storageType"] = "local"
+	c.Body["path"] = filePath
+	c.Body["url"] = fileURL
+	c.Body["uploadedAt"] = time.Now().Format(time.RFC3339)
+	
+	return nil
+}
+
+func (c *Context) createFileInfo(fileHeader *multipart.FileHeader) map[string]interface{} {
+	if fileHeader == nil {
+		return nil
+	}
+
+	// For non-files collection uploads, just return basic info
+	return map[string]interface{}{
+		"filename":     fileHeader.Filename,
+		"contentType":  fileHeader.Header.Get("Content-Type"),
+		"size":         fileHeader.Size,
 	}
 }
 
