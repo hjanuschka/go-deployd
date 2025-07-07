@@ -8,8 +8,8 @@ func Run(ctx *EventContext) error {
 		return nil // Only validate POST requests (uploads)
 	}
 	
-	// Example: Require authentication before processing
-	if ctx.Me == nil || ctx.Me["id"] == nil {
+	// Require authentication (either user auth or master key)
+	if (ctx.Me == nil || ctx.Me["id"] == nil) && !ctx.IsRoot {
 		ctx.Cancel("Authentication required for file uploads", 401)
 		return nil
 	}
@@ -18,19 +18,29 @@ func Run(ctx *EventContext) error {
 	// This is useful for early rejection before processing large files
 	if !ctx.IsRoot {
 		// Non-admin users have restrictions
-		ctx.Log("File upload attempt by regular user", map[string]interface{}{
-			"userId": ctx.Me["id"],
+		logData := map[string]interface{}{
 			"method": ctx.Method,
-		})
+		}
+		if ctx.Me != nil && ctx.Me["id"] != nil {
+			logData["userId"] = ctx.Me["id"]
+		}
+		ctx.Log("File upload attempt by regular user", logData)
 	}
 	
 	// Example: Rate limiting based on user
 	// You could implement rate limiting logic here
 	
-	ctx.Log("File upload request validated", map[string]interface{}{
-		"userId": ctx.Me["id"],
+	// Log based on authentication method
+	logData := map[string]interface{}{
 		"method": ctx.Method,
-	})
+		"isRoot": ctx.IsRoot,
+	}
+	
+	if ctx.Me != nil && ctx.Me["id"] != nil {
+		logData["userId"] = ctx.Me["id"]
+	}
+	
+	ctx.Log("File upload request validated", logData)
 	
 	return nil
 }

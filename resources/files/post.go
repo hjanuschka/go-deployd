@@ -34,15 +34,21 @@ func Run(ctx *EventContext) error {
 	// 	}
 	// }
 
-	// Require authentication for uploads
-	if ctx.Me == nil || ctx.Me["id"] == nil {
+	// Require authentication for uploads (either user auth or master key)
+	if (ctx.Me == nil || ctx.Me["id"] == nil) && !ctx.IsRoot {
 		ctx.Cancel("Authentication required for file uploads", 401)
 		return nil
 	}
 
 	// Add custom metadata
 	ctx.Data["uploadedAt"] = "now" // Will be set by storage manager
-	ctx.Data["uploadedBy"] = ctx.Me["id"]
+	
+	// Set uploadedBy based on authentication method
+	if ctx.Me != nil && ctx.Me["id"] != nil {
+		ctx.Data["uploadedBy"] = ctx.Me["id"]
+	} else if ctx.IsRoot {
+		ctx.Data["uploadedBy"] = "admin" // Master key upload
+	}
 
 	// Sanitize filename
 	if originalName, ok := ctx.Data["originalName"].(string); ok {
