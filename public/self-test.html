@@ -2116,7 +2116,12 @@ logOutput('⏳ Attempting username/password authentication...');`
             const uploadStatus = document.getElementById('uploadStatus');
             const uploadPercent = document.getElementById('uploadPercent');
             
+            // Show progress immediately
             uploadProgress.style.display = 'block';
+            progressBar.style.width = '0%';
+            uploadPercent.textContent = '0%';
+            uploadStatus.textContent = `Preparing to upload ${files.length} file(s)...`;
+            
             let completedFiles = 0;
             
             for (const file of files) {
@@ -2137,7 +2142,9 @@ logOutput('⏳ Attempting username/password authentication...');`
                         console.log('Upload successful:', result);
                         addToRequestHistory('POST', '/files', response.status, 0, file.name);
                     } else {
-                        console.error('Upload failed:', response.statusText);
+                        const errorText = await response.text();
+                        console.error('Upload failed:', response.statusText, errorText);
+                        uploadStatus.textContent = `Failed: ${file.name} - ${response.statusText}`;
                         addToRequestHistory('POST', '/files', response.status, 0, `Failed: ${file.name}`);
                     }
                 } catch (error) {
@@ -2156,6 +2163,12 @@ logOutput('⏳ Attempting username/password authentication...');`
             // Hide progress after 2 seconds and refresh file list
             setTimeout(() => {
                 uploadProgress.style.display = 'none';
+                // Reset the progress bar for next upload
+                progressBar.style.width = '0%';
+                uploadPercent.textContent = '0%';
+                uploadStatus.textContent = 'Uploading...';
+                // Clear the file input
+                document.getElementById('fileInput').value = '';
                 refreshFileList();
             }, 2000);
         }
