@@ -133,8 +133,8 @@ coverage/
 # Build logs
 *.log
 
-# Web dashboard build assets (old versions)
-web/dashboard/assets/index-*.js
+# Built dashboard files (should not be committed)
+public/_dashboard/
 
 # Excluded from linting - moved to avoid compilation issues
 .excluded/

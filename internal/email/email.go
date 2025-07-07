@@ -8,10 +8,10 @@ import (
 	"net/smtp"
 	"time"
 
-	// "github.com/aws/aws-sdk-go/aws"
-	// "github.com/aws/aws-sdk-go/aws/credentials"
-	// "github.com/aws/aws-sdk-go/aws/session"
-	// "github.com/aws/aws-sdk-go/service/ses"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ses"
 	"github.com/hjanuschka/go-deployd/internal/config"
 )
 
@@ -156,58 +156,53 @@ func (e *EmailService) sendViaSMTP(to, subject, textBody, htmlBody string) error
 
 // sendViaSES sends email via AWS SES
 func (e *EmailService) sendViaSES(to, subject, textBody, htmlBody string) error {
-	// TODO: Implement SES after installing AWS SDK
-	return fmt.Errorf("SES support temporarily disabled - please use SMTP provider")
+	if e.config.SES.AccessKeyID == "" || e.config.SES.SecretAccessKey == "" {
+		return fmt.Errorf("AWS SES credentials not configured")
+	}
 
-	/*
-		if e.config.SES.AccessKeyID == "" || e.config.SES.SecretAccessKey == "" {
-			return fmt.Errorf("AWS SES credentials not configured")
-		}
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String(e.config.SES.Region),
+		Credentials: credentials.NewStaticCredentials(
+			e.config.SES.AccessKeyID,
+			e.config.SES.SecretAccessKey,
+			"",
+		),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create AWS session: %w", err)
+	}
 
-		sess, err := session.NewSession(&aws.Config{
-			Region: aws.String(e.config.SES.Region),
-			Credentials: credentials.NewStaticCredentials(
-				e.config.SES.AccessKeyID,
-				e.config.SES.SecretAccessKey,
-				"",
-			),
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create AWS session: %w", err)
-		}
+	svc := ses.New(sess)
 
-		svc := ses.New(sess)
-
-		input := &ses.SendEmailInput{
-			Destination: &ses.Destination{
-				ToAddresses: []*string{aws.String(to)},
-			},
-			Message: &ses.Message{
-				Body: &ses.Body{
-					Html: &ses.Content{
-						Charset: aws.String("UTF-8"),
-						Data:    aws.String(htmlBody),
-					},
-					Text: &ses.Content{
-						Charset: aws.String("UTF-8"),
-						Data:    aws.String(textBody),
-					},
-				},
-				Subject: &ses.Content{
+	input := &ses.SendEmailInput{
+		Destination: &ses.Destination{
+			ToAddresses: []*string{aws.String(to)},
+		},
+		Message: &ses.Message{
+			Body: &ses.Body{
+				Html: &ses.Content{
 					Charset: aws.String("UTF-8"),
-					Data:    aws.String(subject),
+					Data:    aws.String(htmlBody),
+				},
+				Text: &ses.Content{
+					Charset: aws.String("UTF-8"),
+					Data:    aws.String(textBody),
 				},
 			},
-			Source: aws.String(fmt.Sprintf("%s <%s>", e.config.FromName, e.config.From)),
-		}
+			Subject: &ses.Content{
+				Charset: aws.String("UTF-8"),
+				Data:    aws.String(subject),
+			},
+		},
+		Source: aws.String(fmt.Sprintf("%s <%s>", e.config.FromName, e.config.From)),
+	}
 
-		_, err = svc.SendEmail(input)
-		if err != nil {
-			return fmt.Errorf("failed to send email via SES: %w", err)
-		}
+	_, err = svc.SendEmail(input)
+	if err != nil {
+		return fmt.Errorf("failed to send email via SES: %w", err)
+	}
 
-		return nil
-	*/
+	return nil
 }
 
 // TestEmail sends a test email to verify configuration

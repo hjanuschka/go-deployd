@@ -12,8 +12,8 @@ import (
 
 // setupDashboardRoutes sets up dashboard routes with embedded fallback
 func (s *Server) setupDashboardRoutes(dashboardFS ...embed.FS) {
-	// Check if web/dashboard exists (development mode)
-	dashboardPath := filepath.Join("web", "dashboard")
+	// Check if public/_dashboard exists (built dashboard)
+	dashboardPath := filepath.Join("public", "_dashboard")
 	if _, err := os.Stat(dashboardPath); err == nil {
 		// Development mode - use filesystem
 		s.httpMux.PathPrefix("/_dashboard/").HandlerFunc(s.serveDashboardWithAuth(dashboardPath))
@@ -23,7 +23,7 @@ func (s *Server) setupDashboardRoutes(dashboardFS ...embed.FS) {
 	} else {
 		// Fallback - serve 404
 		s.httpMux.PathPrefix("/_dashboard/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "Dashboard not available", http.StatusNotFound)
+			http.Error(w, "Dashboard not available - run 'npm run build' to generate dashboard", http.StatusNotFound)
 		})
 	}
 }
@@ -31,9 +31,9 @@ func (s *Server) setupDashboardRoutes(dashboardFS ...embed.FS) {
 // serveDashboardEmbedded serves dashboard from embedded filesystem
 func (s *Server) serveDashboardEmbedded(dashboardFS embed.FS) http.HandlerFunc {
 	// Get the subdirectory from the embedded filesystem
-	dashboardSubFS, err := fs.Sub(dashboardFS, "web/dashboard")
+	dashboardSubFS, err := fs.Sub(dashboardFS, "public/_dashboard")
 	if err != nil {
-		// Try without web prefix
+		// Try without public prefix
 		dashboardSubFS = dashboardFS
 	}
 

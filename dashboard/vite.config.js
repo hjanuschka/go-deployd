@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => ({
     }
   },
   build: {
-    outDir: '../web/dashboard',
+    outDir: '../public/_dashboard',
     emptyOutDir: true,
     // Enhanced development build with debug symbols
     ...(mode === 'development' && {

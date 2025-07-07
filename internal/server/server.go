@@ -1243,9 +1243,16 @@ func (s *Server) handleSelfTest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET")
 
-	// Serve the self-test.html file
-	selfTestPath := filepath.Join("web", "self-test.html")
-	http.ServeFile(w, r, selfTestPath)
+	// Try to serve from filesystem first
+	selfTestPath := filepath.Join("public", "self-test.html")
+	if _, err := os.Stat(selfTestPath); err == nil {
+		http.ServeFile(w, r, selfTestPath)
+		return
+	}
+
+	// Fallback to embedded version
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(SelfTestHTMLContent))
 }
 
 // handleDpdJS serves the dpd.js client library
@@ -1253,11 +1260,17 @@ func (s *Server) handleDpdJS(w http.ResponseWriter, r *http.Request) {
 	// Enable CORS
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET")
-	w.Header().Set("Content-Type", "application/javascript")
 
-	// Serve the dpd.js file
-	dpdJSPath := filepath.Join("web", "dpd.js")
-	http.ServeFile(w, r, dpdJSPath)
+	// Try to serve from filesystem first
+	dpdJSPath := filepath.Join("public", "dpd.js")
+	if _, err := os.Stat(dpdJSPath); err == nil {
+		http.ServeFile(w, r, dpdJSPath)
+		return
+	}
+
+	// Fallback to embedded version
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Write([]byte(DpdJSContent))
 }
 
 // setupPublicFileServing sets up static file serving from the public directory
