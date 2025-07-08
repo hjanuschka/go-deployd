@@ -234,6 +234,9 @@ func (s *Server) setupRoutes() {
 	// Serve public files
 	s.setupPublicFileServing()
 
+	// Serve uploaded files
+	s.setupUploadsFileServing()
+
 	// Root route handling
 	s.setupRootRoute()
 
@@ -1328,6 +1331,69 @@ func (s *Server) setupPublicFileServing() {
 	})
 
 	fmt.Printf("✅ Public file serving enabled at /public/\n")
+}
+
+// setupUploadsFileServing sets up static file serving from the uploads directory
+func (s *Server) setupUploadsFileServing() {
+	uploadsDir := "uploads"
+	
+	// Check if uploads directory exists
+	if _, err := os.Stat(uploadsDir); os.IsNotExist(err) {
+		// Create uploads directory if it doesn't exist
+		if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+			fmt.Printf("❌ Failed to create uploads directory: %v\n", err)
+			return
+		}
+	}
+
+	// Create file server for uploads directory
+	fileServer := http.FileServer(http.Dir(uploadsDir))
+	
+	// Setup handler with security checks
+	s.httpMux.PathPrefix("/uploads/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only allow GET requests
+		if r.Method != "GET" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Remove /uploads prefix and clean the path
+		path := strings.TrimPrefix(r.URL.Path, "/uploads")
+		path = filepath.Clean(path)
+
+		// Security: Prevent directory traversal
+		if strings.Contains(path, "..") {
+			http.Error(w, "Invalid path", http.StatusBadRequest)
+			return
+		}
+
+		// Security: Don't serve hidden files
+		parts := strings.Split(path, "/")
+		for _, part := range parts {
+			if strings.HasPrefix(part, ".") {
+				http.Error(w, "Access denied", http.StatusForbidden)
+				return
+			}
+		}
+
+		// Log file access
+		logging.Info("Serving uploaded file", "uploads", map[string]interface{}{
+			"path": path,
+			"ip":   r.RemoteAddr,
+		})
+
+		// Create new request with modified path
+		r2 := new(http.Request)
+		*r2 = *r
+		r2.URL = new(url.URL)
+		*r2.URL = *r.URL
+		r2.URL.Path = path
+
+		// Serve the file
+		fileServer.ServeHTTP(w, r2)
+	})
+
+	fmt.Printf("✅ Uploads file serving enabled at /uploads/\n")
 }
 
 // SetDashboardFS sets the embedded dashboard filesystem
