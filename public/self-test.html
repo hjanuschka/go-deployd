@@ -2130,6 +2130,7 @@ logOutput('⏳ Attempting username/password authentication...');`
                 
                 try {
                     uploadStatus.textContent = `Uploading ${file.name}...`;
+                    console.log('Starting upload for:', file.name);
                     
                     const response = await fetch('/files', {
                         method: 'POST',
@@ -2137,18 +2138,22 @@ logOutput('⏳ Attempting username/password authentication...');`
                         body: formData
                     });
                     
+                    console.log('Upload response received:', response.status, response.statusText);
+                    
                     if (response.ok) {
                         const result = await response.json();
                         console.log('Upload successful:', result);
+                        uploadStatus.textContent = `✅ Uploaded ${file.name}`;
                         addToRequestHistory('POST', '/files', response.status, 0, file.name);
                     } else {
                         const errorText = await response.text();
                         console.error('Upload failed:', response.statusText, errorText);
-                        uploadStatus.textContent = `Failed: ${file.name} - ${response.statusText}`;
+                        uploadStatus.textContent = `❌ Failed: ${file.name} - ${response.statusText}`;
                         addToRequestHistory('POST', '/files', response.status, 0, `Failed: ${file.name}`);
                     }
                 } catch (error) {
                     console.error('Upload error:', error);
+                    uploadStatus.textContent = `❌ Error: ${file.name} - ${error.message}`;
                     addToRequestHistory('POST', '/files', 0, 0, `Error: ${file.name}`);
                 }
                 
@@ -2193,7 +2198,7 @@ logOutput('⏳ Attempting username/password authentication...');`
                 fileList.innerHTML = '<div style="padding: 20px; text-align: center; color: #4CAF50;">Loading files...</div>';
                 
                 const response = await fetch('/files', {
-                    headers: getFileUploadHeaders()
+                    headers: getDeleteHeaders()
                 });
                 
                 if (response.ok) {
@@ -2252,7 +2257,7 @@ logOutput('⏳ Attempting username/password authentication...');`
         async function downloadFile(fileId, filename) {
             try {
                 const response = await fetch(`/files/${fileId}`, {
-                    headers: getFileUploadHeaders()
+                    headers: getDeleteHeaders()
                 });
                 
                 if (response.ok) {
@@ -2281,7 +2286,7 @@ logOutput('⏳ Attempting username/password authentication...');`
             try {
                 const response = await fetch(`/files/${fileId}`, {
                     method: 'DELETE',
-                    headers: getFileUploadHeaders()
+                    headers: getDeleteHeaders()
                 });
                 
                 if (response.ok) {
@@ -2309,7 +2314,7 @@ logOutput('⏳ Attempting username/password authentication...');`
                 try {
                     await fetch(`/files/${file.id}`, {
                         method: 'DELETE',
-                        headers: getFileUploadHeaders()
+                        headers: getDeleteHeaders()
                     });
                 } catch (error) {
                     console.error('Error deleting file:', error);
@@ -2353,6 +2358,24 @@ logOutput('⏳ Attempting username/password authentication...');`
             return headers;
         }
         
+        // Helper function to get headers for DELETE operations
+        function getDeleteHeaders() {
+            const headers = {};
+            
+            // Add authorization if available
+            if (currentToken) {
+                headers['Authorization'] = 'Bearer ' + currentToken;
+            }
+            
+            // Add master key if available and no auth token
+            const masterKey = document.getElementById('masterKey').value;
+            if (masterKey && !currentToken) {
+                headers['dpd-master-key'] = masterKey;
+            }
+            
+            return headers;
+        }
+        
         // Helper function to get file upload headers (includes master key)
         function getFileUploadHeaders() {
             const headers = {};
@@ -2368,6 +2391,7 @@ logOutput('⏳ Attempting username/password authentication...');`
                 headers['dpd-master-key'] = masterKey;
             }
             
+            // DO NOT set Content-Type for FormData - let browser set it with boundary
             return headers;
         }
     </script>
